@@ -10,4 +10,4 @@ services:
     environment:
       - NEO4J_AUTH=neo4j/admin
     volumes:
-      - ./neo4j-data:/data
+      - ./storage/neo4j:/data
