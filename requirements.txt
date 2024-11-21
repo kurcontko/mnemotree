@@ -1,0 +1,8 @@
+langchain
+langchain_openai
+langchain_community
+
+pydantic
+neo4j
+
+numpy
