@@ -1,8 +1,9 @@
 langchain
-langchain_openai
-langchain_community
+langchain-openai
+langchain-community
 
 pydantic
 neo4j
+openai
 
 numpy
