@@ -36,6 +36,23 @@ Analyze the following conversation or content and classify it:
 Content: {content}
 Context: {context}
 
+Classify the memory type and importance of the content.
+Declarative memory types include:
+- "episodic" - Personal experiences
+- "semantic" - Facts and general knowledge
+- "autobiographical" - Personal life story
+- "prospective" - Future intentions
+
+Non-Declarative (Implicit) Memory include:
+- "procedural" - Skills and procedures
+- "priming" - Influence of prior exposure
+- "conditioning" - Learned associations
+
+Short-term processing memory:
+"working" - Short-term processing
+
+Based on rationale, score the importance of the memory between 0 and 1.
+
 {format_instructions}
 """.strip()
 
