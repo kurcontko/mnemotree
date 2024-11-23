@@ -1,14 +1,28 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "name": "Python: Current File",
-        "type": "debugpy",
-        "request": "launch",
-        "program": "${file}",
-        "console": "integratedTerminal",
-        "justMyCode": true
-      }
-    ]
-  }
-  
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Streamlit: Debug app.py",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": [
+        "run",
+        "${workspaceFolder}/app.py"
+      ],
+      "console": "integratedTerminal",
+      "env": {
+        "STREAMLIT_SERVER_PORT": "8501"
+      },
+      "justMyCode": true
+    }
+  ]
+}

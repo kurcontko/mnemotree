@@ -7,3 +7,5 @@ neo4j
 openai
 
 numpy
+
+streamlit

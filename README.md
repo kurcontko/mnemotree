@@ -30,3 +30,8 @@ pip install -r requirements.txt
 ```bash
 docker-compose up -d
 ```
+
+5. Start
+```bash
+streamlit run app.py
+```
