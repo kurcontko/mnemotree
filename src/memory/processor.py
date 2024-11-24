@@ -115,7 +115,12 @@ Context: {context}
         format_instructions = "Answer only with the summary and nothing else. "
         
         template = """
-Summarize the following interaction for memory analysis:
+Please generate a concise summary of the following chat interaction. 
+The summary should capture the key topics discussed, main decisions made, action items, and the entities involved. 
+Present the summary in a clear and structured format suitable for embedding and storage in a vector graph database. 
+Ensure the information is comprehensive enough to support semantic search queries based on embeddings.
+
+---
 
 Content: {content}
 Context: {context}
