@@ -2,11 +2,12 @@ from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timezone
 import json
 import asyncio
+from functools import lru_cache
 
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.runnables import Runnable
@@ -106,6 +107,29 @@ Context: {context}
         )
 
         return prompt | self.llm | parser
+    
+    async def _create_memory_summary(self, content: str, context: Dict[str, Any]) -> str:
+        """Create a summary of memory content for analysis."""
+        parser = StrOutputParser()
+        
+        format_instructions = "Answer only with the summary and nothing else. "
+        
+        template = """
+Summarize the following interaction for memory analysis:
+
+Content: {content}
+Context: {context}
+
+{format_instructions}        
+""".strip()
+
+        prompt = PromptTemplate(
+            template=template,
+            input_variables=["content", "context"],
+            partial_variables={"format_instructions": format_instructions}
+        )
+        
+        return prompt | self.llm | parser
 
     async def create_memory_from_messages(
         self,
@@ -117,12 +141,15 @@ Context: {context}
         """Create a memory item from an LLM exchange."""
         
         # Combine prompt and response for analysis
-        content = f"User: {prompt}\nAssistant: {response}"
+        raw_content = f"User: {prompt}\nAssistant: {response}"
         context = {
             "conversation_id": conversation_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             **(additional_context or {})
         }
+        
+        # Create memory summary
+        content = await self._create_memory_summary(raw_content, context)
         
         # Run parallel analysis
         results, embeddings = await asyncio.gather(
@@ -133,6 +160,7 @@ Context: {context}
         # Create memory item
         memory = MemoryItem(
             content=content,
+            raw_content=raw_content,
             memory_category=results.memory_category,
             memory_type=results.memory_type,
             importance=results.importance,
@@ -187,6 +215,7 @@ Context: {context}
             context_summary=concepts.context_summary
         )
 
+    @lru_cache(maxsize=10000)
     async def _get_embedding(self, content: str) -> List[float]:
         """Get embedding for content."""
         return await self.embeddings.aembed_query(content)
