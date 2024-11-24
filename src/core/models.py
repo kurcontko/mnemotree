@@ -44,6 +44,7 @@ class EmotionCategory(str, Enum):
 class MemoryItem(BaseModel):
     memory_id: str = Field(default_factory=lambda: str(uuid4()))
     content: str
+    raw_content: Optional[str] = ""
     author: Optional[str] = ""
     memory_category: MemoryCategory
     memory_type: MemoryType
