@@ -7,6 +7,8 @@ class MessageRole(str, Enum):
     """Enum for message roles."""
     USER = "user"
     ASSISTANT = "assistant"
+    SYSTEM = "system"
+    TOOL = "tool"
 
 
 @dataclass
