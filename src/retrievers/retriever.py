@@ -22,7 +22,7 @@ class MemoryRetriever(BaseRetriever):
         description="Type of search to perform"
     )
     score_threshold: float = Field(
-        default=0.7,
+        default=0.6,
         description="Minimum similarity score threshold",
         ge=0.0,
         le=1.0
