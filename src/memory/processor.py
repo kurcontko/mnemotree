@@ -108,7 +108,7 @@ Context: {context}
 
         return prompt | self.llm | parser
     
-    async def _create_memory_summary(self, content: str, context: Dict[str, Any]) -> str:
+    def _create_memory_summary(self, content: str, context: Dict[str, Any]) -> Runnable:
         """Create a summary of memory content for analysis."""
         parser = StrOutputParser()
         
@@ -149,7 +149,11 @@ Context: {context}
         }
         
         # Create memory summary
-        content = await self._create_memory_summary(raw_content, context)
+        llm_chain = self._create_memory_summary(raw_content, context)
+        content = await llm_chain.ainvoke({
+            "content": raw_content,
+            "context": json.dumps(context)
+        })
         
         # Run parallel analysis
         results, embeddings = await asyncio.gather(
