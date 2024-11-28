@@ -3,8 +3,11 @@ langchain-openai
 langchain-community
 
 pydantic
-neo4j
+
 openai
+
+neo4j
+pymilvus
 
 numpy
 
