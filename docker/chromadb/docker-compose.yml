@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  chromadb:
+    image: chromadb/chroma:0.5.20
+    volumes:
+      - ${MNEMOTREE_DATA:-~/.mnemotree}/chromadb:/chroma/data
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+      - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_SERVER_AUTH_CREDENTIALS:-}
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=${CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER:-}
+    ports:
+      - "8000:8000"
+    networks:
+      - mnemotree_net
+
+networks:
+  mnemotree_net:
+    driver: bridge
