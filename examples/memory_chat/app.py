@@ -21,19 +21,24 @@ async def init_memory_core() -> MemoryCore:
     # Initialize store
 
     # Neo4j store
-    # store = Neo4jMemoryStore(
-    #     uri="bolt://localhost:7687",
-    #     user="neo4j",
-    #     password="mnemosyne_admin"
-    # )
-    # await store.initialize()
+    try:
+        store = Neo4jMemoryStore(
+            uri="bolt://localhost:7687",
+            user="neo4j",
+            password="mnemosyne_admin"
+        )
+        await store.initialize()
+    except Exception as e:
+        print(f"Neo4j store failed to initialize: {e}")
+        store = ChromaMemoryStore()
+        await store.initialize()
 
     # Chroma store
-    store = ChromaMemoryStore(
-        host="localhost",
-        port=8000,
-    )
-    await store.initialize()
+    # store = ChromaMemoryStore(
+    #     host="localhost",
+    #     port=8000,
+    # )
+    # await store.initialize()
 
     # Initialize embeddings
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
