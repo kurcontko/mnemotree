@@ -16,7 +16,7 @@
       "module": "streamlit",
       "args": [
         "run",
-        "${workspaceFolder}/app.py"
+        "${workspaceFolder}/examples/memory_chat/app.py"
       ],
       "console": "integratedTerminal",
       "env": {
