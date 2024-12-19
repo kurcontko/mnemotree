@@ -1,167 +1,321 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple, Union, Callable, Awaitable
 from datetime import datetime
 
 from ..core.models import MemoryItem, MemoryType
+from ..core.query import MemoryQuery
 
 
-class BaseMemoryStorage(ABC):
-    """Abstract base class for memory storage implementations."""
-    
-    @abstractmethod
-    def __init__(self, **kwargs):
-        """Initialize the storage connection with provided configuration."""
-        pass
-    
-    @abstractmethod
-    def _setup_database(self):
-        """Set up necessary database structures (tables, collections, indices)."""
-        pass
+class BaseMemoryStore(ABC):
+    """
+    Abstract base class for memory store implementations.
+    Designed to support both vector and graph databases with vector capabilities.
+    """
+
+    # --------------------
+    # CRUD Operations
+    # --------------------
 
     @abstractmethod
-    def store_memory(self, memory: MemoryItem) -> None:
+    async def store_memory(self, memory: MemoryItem) -> None:
         """
-        Store a memory item with all its relationships.
-        
+        Store a single memory item.
+
         Args:
-            memory: MemoryItem to store
+            memory (MemoryItem): The memory item to store.
         """
         pass
 
+    # @abstractmethod
+    # async def batch_store_memories(self, memories: List[MemoryItem]) -> None:
+    #     """
+    #     Store multiple memory items efficiently.
+
+    #     Args:
+    #         memories (List[MemoryItem]): List of memory items to store.
+    #     """
+    #     pass
+
     @abstractmethod
-    def get_memory(self, memory_id: str) -> Optional[MemoryItem]:
+    async def get_memory(self, memory_id: str) -> Optional[MemoryItem]:
         """
         Retrieve a memory item by its ID.
-        
+
         Args:
-            memory_id: Unique identifier of the memory
-            
+            memory_id (str): The unique identifier of the memory.
+
         Returns:
-            MemoryItem if found, None otherwise
+            Optional[MemoryItem]: The retrieved memory item or None if not found.
         """
         pass
 
     @abstractmethod
-    def get_similar_memories(self, query_embedding: List[float], top_k: int = 5) -> List[MemoryItem]:
+    async def delete_memory(
+        self,
+        memory_id: str,
+        *,
+        cascade: bool = False
+    ) -> bool:
         """
-        Retrieve similar memories using vector similarity search.
-        
+        Delete a memory item by its ID.
+
         Args:
-            query_embedding: Vector to compare against
-            top_k: Number of similar memories to retrieve
-            
+            memory_id (str): The unique identifier of the memory.
+            cascade (bool, optional): If True, delete related connections. Defaults to False.
+
         Returns:
-            List of similar MemoryItems
+            bool: True if deletion was successful, False otherwise.
         """
         pass
 
+    # --------------------
+    # Update Operations
+    # --------------------
+
+    # @abstractmethod
+    # async def update_memory_metadata(
+    #     self,
+    #     memory_id: str,
+    #     metadata: Dict[str, Any]
+    # ) -> bool:
+    #     """
+    #     Update metadata of a memory item.
+
+    #     Args:
+    #         memory_id (str): The unique identifier of the memory.
+    #         metadata (Dict[str, Any]): The metadata to update.
+
+    #     Returns:
+    #         bool: True if update was successful, False otherwise.
+    #     """
+    #     pass
+
+    # @abstractmethod
+    # async def update_connections(
+    #     self,
+    #     memory_id: str,
+    #     *,
+    #     related_ids: Optional[List[str]] = None,
+    #     conflict_ids: Optional[List[str]] = None,
+    #     previous_id: Optional[str] = None,
+    #     next_id: Optional[str] = None
+    # ) -> None:
+    #     """
+    #     Update connections of a memory item.
+
+    #     Args:
+    #         memory_id (str): The unique identifier of the memory.
+    #         related_ids (Optional[List[str]], optional): IDs of related memories. Defaults to None.
+    #         conflict_ids (Optional[List[str]], optional): IDs of conflicting memories. Defaults to None.
+    #         previous_id (Optional[str], optional): ID of the previous memory in a sequence. Defaults to None.
+    #         next_id (Optional[str], optional): ID of the next memory in a sequence. Defaults to None.
+    #     """
+    #     pass
+
+    # --------------------
+    # Retrieval Operations
+    # --------------------
+
     @abstractmethod
-    def get_memories_by_type(self, memory_type: MemoryType) -> List[MemoryItem]:
+    async def get_similar_memories(
+        self,
+        query: str,
+        query_embedding: List[float],
+        top_k: int = 5,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> List[MemoryItem]:
         """
-        Retrieve all memories of a specific type.
-        
+        Retrieve memories similar to a given embedding.
+
         Args:
-            memory_type: Type of memories to retrieve
-            
+            query_embedding (List[float]): The embedding vector for similarity comparison.
+            top_k (int, optional): Number of top similar memories to retrieve. Defaults to 5.
+            filters (Optional[Dict[str, Any]], optional): Additional filters to apply. Defaults to None.
+
         Returns:
-            List of matching MemoryItems
+            List[MemoryItem]: List of similar memory items.
         """
         pass
 
-    @abstractmethod
-    def update_memory_importance(self, memory_id: str, current_time: datetime) -> None:
-        """
-        Update memory importance based on decay and access.
-        
-        Args:
-            memory_id: ID of memory to update
-            current_time: Current timestamp for decay calculation
-        """
-        pass
+    # @abstractmethod
+    # async def search_memories(
+    #     self,
+    #     query_embedding: List[float],
+    #     filters: Optional[Dict[str, Any]] = None,
+    #     limit: int = 10
+    # ) -> List[Tuple[MemoryItem, float]]:
+    #     """
+    #     Search memories based on vector similarity with scoring.
+
+    #     Args:
+    #         query_embedding (List[float]): The embedding vector for similarity comparison.
+    #         filters (Optional[Dict[str, Any]], optional): Additional filters to apply. Defaults to None.
+    #         limit (int, optional): Maximum number of results to return. Defaults to 10.
+
+    #     Returns:
+    #         List[Tuple[MemoryItem, float]]: List of tuples containing memory items and their similarity scores.
+    #     """
+    #     pass
 
     @abstractmethod
-    def delete_memory(self, memory_id: str) -> bool:
+    async def query_memories(
+        self,
+        query: MemoryQuery,
+    ) -> List[MemoryItem]:
         """
-        Delete a memory item and all its relationships.
-        
+        Query memories using complex filter conditions and vector similarity.
+
         Args:
-            memory_id: ID of memory to delete
-            
+            query (MemoryQuery): The memory query specifications.
+
         Returns:
-            True if memory was deleted, False otherwise
+            List[MemoryItem]: List of memory items matching the query.
         """
         pass
 
-    @abstractmethod
-    def close(self):
-        """Close the storage connection."""
-        pass
+    # @abstractmethod
+    # async def get_memories_by_type(
+    #     self,
+    #     memory_type: MemoryType,
+    #     limit: Optional[int] = None
+    # ) -> List[MemoryItem]:
+    #     """
+    #     Retrieve memories of a specific type.
 
-    def __enter__(self):
-        """Context manager entry."""
+    #     Args:
+    #         memory_type (MemoryType): The type of memories to retrieve.
+    #         limit (Optional[int], optional): Maximum number of memories to retrieve. Defaults to None.
+
+    #     Returns:
+    #         List[MemoryItem]: List of memory items of the specified type.
+    #     """
+    #     pass
+
+    # --------------------
+    # Connection Management
+    # --------------------
+
+    # @abstractmethod
+    # async def get_connected_memories(
+    #     self,
+    #     memory_id: str,
+    #     *,
+    #     connection_type: Optional[str] = None,
+    #     limit: Optional[int] = None
+    # ) -> List[MemoryItem]:
+    #     """
+    #     Retrieve memories connected to a given memory.
+
+    #     Args:
+    #         memory_id (str): The unique identifier of the memory.
+    #         connection_type (Optional[str], optional): Type of connections to filter. Defaults to None.
+    #         limit (Optional[int], optional): Maximum number of connected memories to retrieve. Defaults to None.
+
+    #     Returns:
+    #         List[MemoryItem]: List of connected memory items.
+    #     """
+    #     pass
+
+    # --------------------
+    # Utility Methods
+    # --------------------
+
+    # async def create_backup(self, backup_path: str) -> bool:
+    #     """
+    #     Create a backup of the storage.
+
+    #     Args:
+    #         backup_path (str): The file path where the backup will be stored.
+
+    #     Returns:
+    #         bool: True if backup was successful, False otherwise.
+    #     """
+    #     raise NotImplementedError("Backup not implemented")
+
+    # async def restore_backup(self, backup_path: str) -> bool:
+    #     """
+    #     Restore storage from a backup.
+
+    #     Args:
+    #         backup_path (str): The file path of the backup to restore.
+
+    #     Returns:
+    #         bool: True if restoration was successful, False otherwise.
+    #     """
+    #     raise NotImplementedError("Restore not implemented")
+
+    # async def get_statistics(self) -> Dict[str, Any]:
+    #     """
+    #     Retrieve statistics about the storage.
+
+    #     Returns:
+    #         Dict[str, Any]: A dictionary containing storage statistics.
+    #     """
+    #     raise NotImplementedError("Statistics not implemented")
+
+    # async def optimize_storage(self) -> bool:
+    #     """
+    #     Optimize the storage for performance (e.g., rebuild indices).
+
+    #     Returns:
+    #         bool: True if optimization was successful, False otherwise.
+    #     """
+    #     raise NotImplementedError("Optimization not implemented")
+
+    # --------------------
+    # Context Management
+    # --------------------
+
+    async def __aenter__(self):
+        """Async context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.close()
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
 
-    # Optional methods that implementations might want to override
-    def batch_store_memories(self, memories: List[MemoryItem]) -> None:
+    @abstractmethod
+    async def close(self):
         """
-        Store multiple memories efficiently.
-        Default implementation calls store_memory for each item.
-        
-        Args:
-            memories: List of MemoryItems to store
+        Close the storage connection gracefully.
         """
-        for memory in memories:
-            self.store_memory(memory)
+        pass
 
-    def get_memories_by_query(self, query: Dict[str, Any]) -> List[MemoryItem]:
-        """
-        Retrieve memories matching a custom query.
-        
-        Args:
-            query: Implementation-specific query parameters
-            
-        Returns:
-            List of matching MemoryItems
-        """
-        raise NotImplementedError("Custom queries not implemented for this storage")
+    # --------------------
+    # Additional Helper Methods
+    # --------------------
 
-    def get_connected_memories(self, memory_id: str, relationship_type: str = None) -> List[MemoryItem]:
-        """
-        Retrieve memories connected to the given memory.
-        
-        Args:
-            memory_id: ID of the source memory
-            relationship_type: Type of relationship to traverse
-            
-        Returns:
-            List of connected MemoryItems
-        """
-        raise NotImplementedError("Connected memory retrieval not implemented")
-        
-    def create_backup(self, backup_path: str) -> bool:
-        """
-        Create a backup of the memory store.
-        
-        Args:
-            backup_path: Path to store the backup
-            
-        Returns:
-            True if backup was successful, False otherwise
-        """
-        raise NotImplementedError("Backup not implemented for this storage")
+    # async def retrieve_and_update(
+    #     self,
+    #     memory_id: str,
+    #     update_func: Callable[[MemoryItem], MemoryItem]
+    # ) -> Optional[MemoryItem]:
+    #     """
+    #     Retrieve a memory, apply an update function, and save the updated memory.
 
-    def restore_backup(self, backup_path: str) -> bool:
-        """
-        Restore from a backup.
-        
-        Args:
-            backup_path: Path to the backup
-            
-        Returns:
-            True if restore was successful, False otherwise
-        """
-        raise NotImplementedError("Restore not implemented for this storage")
+    #     Args:
+    #         memory_id (str): The unique identifier of the memory.
+    #         update_func (Callable[[MemoryItem], MemoryItem]): A function that takes a MemoryItem and returns an updated MemoryItem.
+
+    #     Returns:
+    #         Optional[MemoryItem]: The updated memory item or None if retrieval failed.
+    #     """
+    #     memory = await self.get_memory(memory_id)
+    #     if memory is None:
+    #         return None
+    #     updated_memory = update_func(memory)
+    #     await self.store_memory(updated_memory)
+    #     return updated_memory
+
+    # async def exists(self, memory_id: str) -> bool:
+    #     """
+    #     Check if a memory exists in storage.
+
+    #     Args:
+    #         memory_id (str): The unique identifier of the memory.
+
+    #     Returns:
+    #         bool: True if the memory exists, False otherwise.
+    #     """
+    #     memory = await self.get_memory(memory_id)
+    #     return memory is not None

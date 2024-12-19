@@ -1,0 +1,170 @@
+[project]
+name = "mnemotree"
+version = "0.1.0"
+description = "Advanced memory management and retrieval system for AI Agents"
+authors = [
+    { name = "kurcontko", email = "mikeqrc@gmail.com" }
+]
+dependencies = [
+    # Core
+    "pydantic>=2.0.0,<3.0.0",
+    "numpy>=1.26.0,<2.0.0",
+    "scikit-learn>=1.6.0,<2.0.0",
+    "networkx>=3.4.0,<4.0.0",
+    
+    # Langchain
+    "langchain>=0.3.7,<0.4.0",
+    "langchain-openai>=0.3.19,<0.4.0",
+    "langchain-community>=0.3.7,<0.4.0",
+    "langchain-core>=0.3.19,<0.4.0",
+
+    # Llama-index
+    #"llama-index>=0.12.0,<0.13.0",
+    
+    # LLMs
+    "openai>=1.0.0",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+# Database backends
+neo4j = ["neo4j>=5.26.0"]
+milvus = ["pymilvus>=2.5.0"]
+chroma = ["chromadb>=0.5.23"]
+qdrant = ["qdrant-client>=1.12.1"]
+pinecone = ["pinecone-client>=2.2.0"]
+pgvector = [
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.0"
+]
+
+# Combined sets
+vectors = [
+    "chromadb>=0.5.23",
+    "pymilvus>=2.2.0",
+    "qdrant-client>=1.12.1",
+    "pinecone-client>=2.2.0",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.0"
+]
+
+# UI components
+ui = ["streamlit>=1.40.0"]
+
+# Other llms providers
+google = [
+    "langchain-google-genai>=2.0.7"
+]
+anthropic = [
+    "langchain-anthropic>=0.3.0"
+]
+aws = [
+    "langchain-aws>=0.2.0"
+]
+huggingface = [
+    "langchain-huggingface>=0.1.0"
+]
+
+all = [
+    "neo4j>=5.26.0",
+    "chromadb>=0.5.23",
+    "pymilvus>=2.2.0",
+    "qdrant-client>=1.12.1",
+    "pinecone-client>=2.2.0",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.0",
+    "streamlit>=1.40.0",
+    "langchain-google-genai>=2.0.7",
+    "langchain-anthropic>=0.3.0",
+    "langchain-aws>=0.2.0",
+    "langchain-huggingface>=0.1.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/kurcontko/mnemotree"
+#Documentation = "https://mnemotree.readthedocs.io" 
+Repository = "https://github.com/kurcontko/mnemotree.git"
+Issues = "https://github.com/kurcontko/mnemotree/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["mnemotree"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "neo4j.*",
+    "chromadb.*",
+    "pymilvus.*",
+    "qdrant_client.*",
+    "pinecone.*",
+    "asyncpg.*",
+    "psycopg.*",
+    "streamlit.*"
+]
+ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+
+[project.scripts]
+mnemotree = "mnemotree.cli:main"
