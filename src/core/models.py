@@ -26,6 +26,9 @@ class MemoryType(Enum):
     # Working Memory
     WORKING = "working"               # Short-term processing
     
+    # Additional Types
+    ENTITIES = "entities"             # Entity extraction results
+    
     @property
     def category(self) -> str:
         if self in [self.EPISODIC, self.SEMANTIC, self.AUTOBIOGRAPHICAL, self.PROSPECTIVE]:
@@ -122,6 +125,9 @@ class MemoryItem(BaseModel):
     content: str
     summary: Optional[str] = ""
     tags: Optional[List[str]] = Field(default_factory=list)
+    
+    entities: Optional[Dict[str, str]] =  Field(default_factory=dict) # entity text -> entity type mapping
+    entity_mentions: Optional[Dict[str, List[str]]] =  Field(default_factory=dict) # entity -> contexts where it appears
     author: Optional[str] = ""
     memory_type: MemoryType
     timestamp: str = Field(default_factory=lambda: str(datetime.now(timezone.utc)))
@@ -137,19 +143,20 @@ class MemoryItem(BaseModel):
     confidence: float = 1.0
     fidelity: float = 1.0
     
-    # Emotional Analysis - # TODO: Consider using a separate EmotionalContext class
+    # Emotional Analysis - # TODO: Consider using a separate EmotionalContext class, currently flattened
     emotional_valence: Optional[float] = Field(None, ge=-1.0, le=1.0)  # -1 to 1
     emotional_arousal: Optional[float] = Field(None, ge=0.0, le=1.0)  # 0 to 1
-    emotions: Optional[Union[List[EmotionCategory], List[str]]] = Field(default_factory=list)
+    #emotions: Optional[Union[List[EmotionCategory], List[str]]] = Field(default_factory=list)
+    emotions: Optional[List[str]] = Field(default_factory=list)
     
-    # Connections - # TODO: Consider using a separate Connections class
+    # Connections - # TODO: Consider using a separate Connections class, currently flattened
     linked_concepts: Optional[List[str]] = Field(default_factory=list)
     associations: List[str] = Field(default_factory=list)
     conflicts_with: List[str] = Field(default_factory=list)
     previous_event_id: Optional[str] = None
     next_event_id: Optional[str] = None
     
-    # Source Information - # TODO: Consider using a separate SourceInfo class
+    # Source Information - # TODO: Consider using a separate SourceInfo class, currently flattened
     source: Optional[str] = "conversation"  # Default to conversation
     credibility: Optional[float] = Field(None, ge=0.0, le=1.0)
     
@@ -313,6 +320,10 @@ class MemoryItem(BaseModel):
         # Critical relationships
         if self.linked_concepts:
             parts.append(f"Related Concepts: {', '.join(self.linked_concepts)}")
+            
+        # Entity information if available
+        if self.entities:
+            parts.append(f"Entities: {', '.join([f'{k} ({v})' for k, v in self.entities.items()])}")
         
         # Temporal context if available
         if self.previous_event_id or self.next_event_id:
