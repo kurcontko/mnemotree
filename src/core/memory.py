@@ -4,6 +4,7 @@ import asyncio
 from functools import lru_cache
 from dataclasses import dataclass
 from uuid import uuid4
+from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel, Field
 from langchain.prompts import ChatPromptTemplate
@@ -19,6 +20,8 @@ from ..analysis.models import MemoryAnalysisResult, InsightsResult
 from ..analysis.clustering import MemoryClusterer, ClusteringResult
 from ..analysis.summarizer import Summarizer
 from .query import MemoryQuery, MemoryQueryBuilder, FilterOperator
+from ..ner.base import BaseNER
+from ..ner.spacy import SpacyNER, NERResult
 
 
 
@@ -32,7 +35,8 @@ class MemoryCore:
         embeddings: Optional[Embeddings] = None,
         default_importance: float = 0.5,
         pre_remember_hooks: Optional[List[Callable[[MemoryItem], Awaitable[MemoryItem]]]] = None,
-        memory_scoring: Optional[MemoryScoring] = None
+        memory_scoring: Optional[MemoryScoring] = None,
+        ner: Optional[BaseNER] = SpacyNER()
     ):
         """
         Initializes the MemoryCore.
@@ -64,6 +68,8 @@ class MemoryCore:
             memory_scoring = MemoryScoring()
             
         self.clusterer = MemoryClusterer(self.summarizer)
+        
+        self.ner = ner
         
         self.memory_scoring = memory_scoring
         self.default_importance = default_importance
@@ -105,6 +111,9 @@ class MemoryCore:
         # Always get embedding as it's required
         embedding_task = asyncio.create_task(self.get_embedding(content))
         
+        if self.ner:
+            ner_task = asyncio.create_task(self.ner.extract_entities(content))
+        
         if summarize:
             summary_task = asyncio.create_task(self.summarizer.summarize(content))
             tasks.append(summary_task)
@@ -145,6 +154,14 @@ class MemoryCore:
         # Wait for embedding which we always need
         embedding = await embedding_task
         
+        # Extract entities and their contexts
+        entities = {}
+        entity_mentions = {}
+        if self.ner:
+            ner_result: NERResult = await ner_task
+            entities = ner_result.entities
+            entity_mentions = ner_result.mentions
+        
         # Create initial memory item using Pydantic model
         memory_data = {
             "memory_id": str(uuid4()),
@@ -156,12 +173,15 @@ class MemoryCore:
             "context": context or {},
             "embedding": embedding,
             "emotional_context": analysis.emotions if analysis else None,
-            "linked_concepts": analysis.linked_concepts if analysis else None
+            "linked_concepts": analysis.linked_concepts if analysis else None,
+            "entities": entities,
+            "entity_mentions": entity_mentions,
         }
         
         memory = MemoryItem(**memory_data)
         
         # Process pre-remember hooks concurrently if there are multiple
+        # TODO: Create more efficient way to handle hooks
         if self.pre_remember_hooks:
             if len(self.pre_remember_hooks) == 1:
                 memory = await self.pre_remember_hooks[0](memory)
@@ -193,7 +213,8 @@ class MemoryCore:
         self,
         query: Union[str, MemoryQuery, MemoryQueryBuilder],
         *,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        scoring: bool = True
     ) -> List[MemoryItem]:
         """
         Retrieve memories based on a query string, MemoryQuery or a MemoryQueryBuilder.
@@ -206,13 +227,36 @@ class MemoryCore:
             List of matching MemoryItems
         """
         if isinstance(query, str):
-            # Simple content query
-            query_embedding = await self.get_embedding(query)
-            memories = await self.store.get_similar_memories(
-                query=query,
-                query_embedding=query_embedding,
-                top_k=limit or 10
+            # Create tasks for concurrent execution
+            async def get_memory_results():
+                # Get embedding and similar memories concurrently
+                query_embedding = await self.get_embedding(query)
+                memories = await self.store.get_similar_memories(
+                    query=query,
+                    query_embedding=query_embedding,
+                    top_k=limit or 10
+                )
+                return memories
+
+            async def get_entity_results():
+                if not self.ner:
+                    return []
+                ner_result = await self.ner.extract_entities(query)
+                query_entities = ner_result.entities
+                if not query_entities:
+                    return []
+                return await self.store.query_by_entities(query_entities)
+
+            # Execute both operations concurrently
+            memory_results, entity_results = await asyncio.gather(
+                get_memory_results(),
+                get_entity_results()
             )
+
+            # Combine results
+            memories = memory_results
+            memories.extend(entity_results)
+            
         elif isinstance(query, MemoryQuery):
             # Complex query
             if query.vector is None and not query.filters and not query.relationships:
@@ -224,9 +268,11 @@ class MemoryCore:
         else:
             raise ValueError("Invalid query type")
         
-        memories = self.memory_scoring.filter_memories_by_score(memories)
+        # Apply reranking and filtering
+        if scoring:
+            memories = self.memory_scoring.filter_memories_by_score(memories)
         return memories
-    
+
     async def reflect(
         self,
         query_builder: Optional[MemoryQueryBuilder] = None,
