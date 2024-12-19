@@ -47,18 +47,26 @@ class LangchainMemoryTool:
     def get_tools(self) -> List[Tool]:
         """Get all memory tools configured for LangChain."""
         return [
-            Tool.from_function(
-                func=self.search_memories,
-                coroutine=self.asearch_memories,
-                name="search_memories",
-                description="Search through stored memories using natural language",
-                args_schema=SearchMemoriesInput,
-            ),
-            Tool.from_function(
-                func=self.store_memory,
-                coroutine=self.astore_memory,
-                name="store_memory",
-                description="Store a new memory",
-                args_schema=StoreMemoryInput,
-            ),
+            self.get_search_memories_tool(),
+            self.get_store_memory_tool(),
         ]
+
+    def get_search_memories_tool(self) -> Tool:
+        """Get the search_memories tool."""
+        return Tool.from_function(
+            func=self.search_memories,
+            coroutine=self.asearch_memories,
+            name="search_memories",
+            description="Search through stored memories using natural language",
+            args_schema=SearchMemoriesInput,
+        )
+    
+    def get_store_memory_tool(self) -> Tool:
+        """Get the store_memory tool."""
+        return Tool.from_function(
+            func=self.store_memory,
+            coroutine=self.astore_memory,
+            name="store_memory",
+            description="Store a new memory",
+            args_schema=StoreMemoryInput,
+        )
