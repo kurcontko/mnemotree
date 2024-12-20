@@ -25,7 +25,7 @@ async def init_memory_core() -> MemoryCore:
         store = Neo4jMemoryStore(
             uri="bolt://localhost:7687",
             user="neo4j",
-            password="mnemosyne_admin"
+            password="password"
         )
         await store.initialize()
     except Exception as e:

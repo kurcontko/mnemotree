@@ -28,7 +28,8 @@ class MemoryClassificationResult(BaseModel):
 
     
 class EmotionAnalysisResult(BaseModel):
-    emotions: Union[List[EmotionCategory], List[str]] = Field(description=f"List of emotions, possible values: {[e.value for e in EmotionCategory]}")
+    #emotions: Union[List[EmotionCategory], List[str]] = Field(description=f"List of emotions, possible values: {[e.value for e in EmotionCategory]}")
+    emotions: List[str] = Field(description=f"List of emotions, possible values: {[e.value for e in EmotionCategory]}")
     emotional_valence: float = Field(description="Float between -1 (negative) and 1 (positive)")
     emotional_arousal: float = Field(description="Float between 0 (calm) and 1 (excited)")
     rationale: str = Field(description="Brief explanation of emotional analysis")

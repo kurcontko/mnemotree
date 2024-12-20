@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  pinecone:
+    image: ghcr.io/pinecone-io/pinecone-local:latest
+    container_name: pinecone_local
+    environment:
+      - PORT=5080
+      - PINECONE_HOST=localhost
+    ports:
+      - "5080-6000:5080-6000"
+    platform: linux/amd64

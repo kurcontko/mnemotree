@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:latest
+    container_name: pgvector_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mnemotree
+      POSTGRES_DB: mnemosyne
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${MNEMOTREE_DATA:-~/.mnemotree}/pgvector:/var/lib/postgresql/data
+      - ./init/init.sql:/docker-entrypoint-initdb.d/init.sql  
+
+volumes:
+  pgdata:

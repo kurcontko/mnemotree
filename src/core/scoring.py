@@ -25,6 +25,7 @@ class MemoryScoring:
         emotion_weight: float = 0.2,
         context_weight: float = 0.1,
         novelty_weight: float = 0.1,
+        #query_weight: float = 0.3,  # New weight for query relevance
         decay_function: DecayFunction = DecayFunction.POWER_LAW,
         score_threshold: float = 0.65,
         learning_rate: float = 0.1
@@ -35,7 +36,8 @@ class MemoryScoring:
             "access": access_weight,
             "emotional": emotion_weight,
             "context": context_weight,
-            "novelty": novelty_weight
+            "novelty": novelty_weight,
+            #"query_relevance": query_weight
         }
         self.decay_function = decay_function
         self.score_threshold = score_threshold
@@ -47,7 +49,8 @@ class MemoryScoring:
         current_time: datetime,
         semantic_score: Optional[float] = None,
         context_relevance: Optional[float] = None,
-        all_memories: Optional[List[MemoryItem]] = None
+        all_memories: Optional[List[MemoryItem]] = None,
+        query_embedding: Optional[List[float]] = None
     ) -> float:
         """Calculate comprehensive memory score using multiple factors."""
         memory_time = datetime.strptime(memory.timestamp, "%Y-%m-%d %H:%M:%S.%f%z")
@@ -61,7 +64,8 @@ class MemoryScoring:
             "emotional": self._calculate_emotion_score(memory),
             "context": self._calculate_context_score(memory, context_relevance),
             "connection": self._calculate_connection_score(memory),
-            "novelty": self.calculate_novelty_score(memory, all_memories)
+            "novelty": self.calculate_novelty_score(memory, all_memories),
+            #"query_relevance": self._calculate_query_relevance_score(memory, query_embedding) if query_embedding else 0.5
         }
         
         # Apply adaptive boosting based on memory type
@@ -84,7 +88,9 @@ class MemoryScoring:
         base_importance = memory.importance
         
         # Boost importance based on tags
-        tag_boost = len(memory.tags) * 0.05
+        tag_boost = 0.0
+        if memory.tags:
+            tag_boost = len(memory.tags) * 0.05
         
         # Consider linked concepts
         concept_boost = 0.0
@@ -151,10 +157,12 @@ class MemoryScoring:
         if context_relevance is not None:
             return context_relevance
             
-        # Calculate based on context richness
+        # Calculate based on context richness\
+        if not memory.tags:
+            return 0.5
         context_factors = [
-            len(memory.context) * 0.1,  # Context completeness
-            len(memory.tags) * 0.05,    # Tag relevance
+            #len(memory.context) * 0.1,  # Context completeness
+            len(memory.tags) * 0.1,    # Tag relevance
             0.5  # Base context score
         ]
         
@@ -438,7 +446,8 @@ class MemoryScoring:
         self,
         memories: List[MemoryItem],
         semantic_scores: Optional[List[float]] = None,
-        context_relevance: Optional[List[float]] = None
+        context_relevance: Optional[List[float]] = None,
+        query_embedding: Optional[List[float]] = None
     ) -> List[MemoryItem]:
         """Filter memories based on score threshold."""
         current_time = datetime.now(timezone.utc)
@@ -450,8 +459,31 @@ class MemoryScoring:
                 current_time, 
                 semantic_score,
                 context_relevance,
-                memories
+                memories,
+                query_embedding
             )
             if score >= self.score_threshold:
                 filtered_memories.append(memory)
         return filtered_memories
+    
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """Calculate cosine similarity between two vectors."""
+        if not vec1 or not vec2:
+            return 0.0
+
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
+
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+
+        return dot_product / (norm1 * norm2)
+    
+    def _calculate_query_relevance_score(self, memory: MemoryItem, query_embedding: List[float]) -> float:
+        """Calculate how relevant the memory is to the current query using embeddings."""
+        if not query_embedding or not memory.embedding:
+            return 0.5
+        similarity = self._cosine_similarity(memory.embedding, query_embedding)
+        # Convert similarity [0,1] to a smoother scale if desired
+        return 1 / (1 + math.exp(-5 * (similarity - 0.5)))

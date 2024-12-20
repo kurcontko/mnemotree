@@ -136,6 +136,10 @@ class BaseMemoryStore(ABC):
             List[MemoryItem]: List of similar memory items.
         """
         pass
+    
+    @abstractmethod
+    async def query_by_entities(self, entities: Dict[str, str]) -> List[MemoryItem]:
+        pass
 
     # @abstractmethod
     # async def search_memories(
