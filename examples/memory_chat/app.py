@@ -12,8 +12,6 @@ from examples.memory_chat.chat_ui import MemoryChatUI
 from src.core.memory import MemoryCore
 from src.store.neo4j_store import Neo4jMemoryStore
 from src.store.chromadb_store import ChromaMemoryStore
-from src.store.milvus_store import MilvusMemoryStore
-from src.store.pgvector_store import PGVectorMemoryStore
 
 
 async def init_memory_core() -> MemoryCore:

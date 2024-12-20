@@ -130,15 +130,47 @@ class MemoryChatUI:
             st.session_state.memory_search = ""
 
     def format_memory_display(self, memory: MemoryItem) -> str:
-        """Format memory for inline display in the UI."""
+        """Format memory for inline display in the UI. Returns markdown formatted string."""
         if not memory:
             return ""
-        return f"""
-<div class="memory-container">
-    <div style="font-size: 0.9em; color: #666;">🧠 Memory Created</div>
-    <div style="margin-top: 0.5rem;">{memory.to_str()}</div>
-</div>
-"""
+            
+        def format_rating(value: float) -> str:
+            if value is None:
+                return ""
+            filled = round(value * 5)
+            return "★" * filled + "☆" * (5 - filled)
+        
+        def format_value(value: float) -> str:
+            return f"{value:.2f}" if value is not None else "N/A"
+
+        sections = []
+        
+        # Content Section
+        sections.append(f"> {memory.content.replace(chr(10), chr(10) + '> ')}")  # Quote the content
+        
+        # Key metrics in a concise format
+        sections.append(
+            f"**Importance:** {format_value(memory.importance)} {format_rating(memory.importance)} | "
+            f"**Confidence:** {format_value(memory.confidence)} {format_rating(memory.confidence)}"
+        )
+        
+        # Links and source in condensed format
+        if memory.linked_concepts:
+            sections.append(f"**Links:** {', '.join(memory.linked_concepts)}")
+        if memory.source:
+            sections.append(f"**Source:** {memory.source}")
+
+        return "\n\n".join(sections)
+    
+    def display_memory(self, memory: MemoryItem):
+        with st.expander("🧠 Memory", expanded=True):
+            col1, col2 = st.columns([3, 1])  # Adjust ratio as needed
+            with col1:
+                st.markdown(self.format_memory_display(memory))
+                
+            with col2:
+                st.caption(f"Type: {memory.memory_type.value}")
+                st.caption(f"ID: {memory.memory_id[:8]}")  # Show truncated ID
 
     def filter_memories(self, memories: List, search_term: str) -> List:
         """Filter memories based on search term."""
@@ -361,7 +393,8 @@ class MemoryChatUI:
 
                             if memory:
                                 memory_placeholder.markdown(
-                                    self.format_memory_display(memory),
+                                    #self.format_memory_display(memory),
+                                    self.display_memory(memory),
                                     unsafe_allow_html=True
                                 )
 
