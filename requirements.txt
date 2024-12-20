@@ -1,12 +1,13 @@
 # Core Dependencies
 pydantic>=2.0.0,<3.0.0
-numpy>=1.26.0,<2.0.0
-scikit-learn>=1.6.0,<2.0.0
-networkx>=3.4.0,<4.0.0
+numpy>=2.2.0,<3.0.0
+#scikit-learn>=1.6.0,<2.0.0
+#networkx>=3.4.0,<4.0.0
+spacy>=3.8.0,<4.0.0
 
 # Langchain
 langchain>=0.3.7,<0.4.0
-langchain-openai>=0.3.19,<0.4.0
+langchain-openai>=0.2.14,<0.3.0
 langchain-community>=0.3.7,<0.4.0
 langchain-core>=0.3.19,<0.4.0
 
@@ -18,7 +19,7 @@ openai>=1.0.0
 
 # Vector Store Dependencies (Optional)
 # Uncomment as needed:
-neo4j>=5.26.0
+neo4j==5.25.0
 pymilvus>=2.5.0
 chromadb>=0.5.23
 # qdrant-client>=1.12.1
@@ -36,8 +37,8 @@ streamlit>=1.40.0
 # langchain-huggingface>=0.1.0
 
 # Development Dependencies
-pytest>=6.0.0
-black
-ruff
-mypy
-isort
+# pytest>=6.0.0
+# black
+# ruff
+# mypy
+# isort
