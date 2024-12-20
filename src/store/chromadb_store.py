@@ -56,15 +56,19 @@ class ChromaMemoryStore(BaseMemoryStore):
             
         self.collection_name = collection_name
         self.collection: Optional[Collection] = None
+        self._initialized = False
 
     async def initialize(self):
         """Initialize or get the memories collection"""
+        if self._initialized:
+            return
         try:
             self.collection = self.client.get_or_create_collection(
                 name=self.collection_name,
                 metadata={"hnsw:space": "cosine"}  # Use cosine similarity
             )
             logger.info(f"Successfully initialized ChromaDB collection: {self.collection_name}")
+            self._initialized = True
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB collection: {e}")
             raise
@@ -226,6 +230,9 @@ class ChromaMemoryStore(BaseMemoryStore):
         except Exception as e:
             logger.error(f"Failed to query memories: {e}")
             raise
+        
+    async def query_by_entities(self, entities):
+        return []
 
     async def close(self):
         """Close the database connection"""
