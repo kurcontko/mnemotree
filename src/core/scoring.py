@@ -19,15 +19,15 @@ class MemoryScoring:
     
     def __init__(
         self,
-        importance_weight: float = 0.25,
-        recency_weight: float = 0.2,
+        importance_weight: float = 0.3,
+        recency_weight: float = 0.15,
         access_weight: float = 0.15,
         emotion_weight: float = 0.2,
         context_weight: float = 0.1,
         novelty_weight: float = 0.1,
         #query_weight: float = 0.3,  # New weight for query relevance
         decay_function: DecayFunction = DecayFunction.POWER_LAW,
-        score_threshold: float = 0.65,
+        score_threshold: float = 0.6,
         learning_rate: float = 0.1
     ):
         self.weights = {
