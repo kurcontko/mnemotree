@@ -6,7 +6,7 @@ An Advanced Memory Management and Retrieval System for LLM Agents
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 
 <p align="center">
-  <img src="assets/mnemotree-final.png" alt="Mnemotree Logo" width="300">
+  <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
 </p>
 
 ## Overview
