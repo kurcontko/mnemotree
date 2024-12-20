@@ -94,6 +94,15 @@ class Neo4jMemoryStore(BaseMemoryStore):
                         for k, v in (memory.context or {}).items()
                     }
                     
+                    # Clean and validate entities
+                    valid_entities = {}
+                    if memory.entities and not (len(memory.entities) == 1 and None in memory.entities):
+                        valid_entities = {
+                            text: etype 
+                            for text, etype in memory.entities.items() 
+                            if text is not None and etype is not None
+                        }
+                    
                     # Store the memory node with all flattened properties
                     await tx.run("""
                         CREATE (m:MemoryItem {
@@ -167,7 +176,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                         'embedding': embedding_list,
                         'context': json.dumps(clean_context),
                         
-                        'entities': json.dumps(memory.entities),
+                        'entities': json.dumps(valid_entities),
                         'entity_mentions': json.dumps(memory.entity_mentions)
                     })
 
@@ -221,6 +230,29 @@ class Neo4jMemoryStore(BaseMemoryStore):
                                 {'text': text, 'type': etype}
                                 for text, etype in memory.entities.items()
                             ]
+                        })
+                        
+                    # Handle temporal relationships
+                    if memory.previous_event_id:
+                        await tx.run("""
+                            MATCH (m:MemoryItem {memory_id: $memory_id})
+                            MATCH (p:MemoryItem {memory_id: $prev_id})
+                            MERGE (p)-[r:TEMPORAL_NEXT {timestamp: $timestamp}]->(m)
+                        """, {
+                            'memory_id': memory.memory_id,
+                            'prev_id': memory.previous_event_id,
+                            'timestamp': memory.timestamp
+                        })
+                    
+                    if memory.next_event_id:
+                        await tx.run("""
+                            MATCH (m:MemoryItem {memory_id: $memory_id})
+                            MATCH (n:MemoryItem {memory_id: $next_id})
+                            MERGE (m)-[r:TEMPORAL_NEXT {timestamp: $timestamp}]->(n)
+                        """, {
+                            'memory_id': memory.memory_id,
+                            'next_id': memory.next_event_id,
+                            'timestamp': memory.timestamp
                         })
 
                     await tx.commit()
@@ -425,8 +457,8 @@ class Neo4jMemoryStore(BaseMemoryStore):
                         collect(DISTINCT c.memory_id) as conflicts
                     
                     // Get temporal relationships
-                    OPTIONAL MATCH (m)-[:NEXT]->(n:MemoryItem)
-                    OPTIONAL MATCH (p:MemoryItem)-[:NEXT]->(m)
+                    OPTIONAL MATCH (m)-[:TEMPORAL_NEXT]->(n:MemoryItem)
+                    OPTIONAL MATCH (p:MemoryItem)-[:TEMPORAL_NEXT]->(m)
                     WITH m, score, tags, entity_data, associations, conflicts,
                         n.memory_id as next_id,
                         p.memory_id as prev_id
