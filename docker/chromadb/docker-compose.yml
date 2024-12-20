@@ -4,7 +4,7 @@ services:
   chromadb:
     image: chromadb/chroma:0.5.20
     volumes:
-      - ${MNEMOTREE_DATA:-~/.mnemotree}/chromadb:/chroma/data
+      - .mnemotree/chromadb:/chroma/data
     environment:
       - IS_PERSISTENT=TRUE
       - PERSIST_DIRECTORY=/chroma/chroma

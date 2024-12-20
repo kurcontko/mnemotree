@@ -16,8 +16,7 @@ class Summarizer:
         parser = StrOutputParser()
         prompt = PromptTemplate(
             template=self._summarize_template(),
-            input_variables=["content", "context"],
-            partial_variables={"format_instructions": "Answer only with the summary and nothing else."}
+            input_variables=["content", "context"]
         )
         return prompt | self.llm | parser
     
@@ -28,13 +27,14 @@ class Summarizer:
         The summary should capture the key topics discussed, main decisions made, action items, and the entities involved. 
         Present the summary in a clear and structured format suitable for embedding and storage in a vector graph database. 
         Ensure the information is comprehensive enough to support semantic search queries based on embeddings.
+        Format the summary as a string.
         
         ---
         
         Content: {content}
         Context: {context}
         
-        {format_instructions}        
+        "Answer only with the summary and nothing else."       
         """.strip()
     
     async def summarize(self, content: str, context: str = "") -> str:

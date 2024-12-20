@@ -1,0 +1,36 @@
+services:
+  neo4j_full:
+    image: neo4j
+    container_name: neo4j_full_test
+    ports:
+      - "7687:7687"  # Main implementation port
+      - "7474:7474"
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["graph-data-science", "apoc"]
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      # Disable persistence
+      - NEO4J_dbms_memory_pagecache_size=100M
+      - NEO4J_dbms_memory_heap_initial__size=100M
+      - NEO4J_dbms_memory_heap_max__size=500M
+    tmpfs:
+      - /data
+      - /logs
+
+  neo4j_baseline:
+    image: neo4j
+    container_name: neo4j_baseline_test
+    ports:
+      - "7688:7687"  # Different port for baseline testing
+      - "7475:7474"
+    environment:
+      - NEO4J_AUTH=neo4j/testpassword
+      - NEO4J_PLUGINS=["graph-data-science"]
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      # Disable persistence
+      - NEO4J_dbms_memory_pagecache_size=100M
+      - NEO4J_dbms_memory_heap_initial__size=100M
+      - NEO4J_dbms_memory_heap_max__size=500M
+    tmpfs:
+      - /data
+      - /logs

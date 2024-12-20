@@ -8,13 +8,14 @@ authors = [
 dependencies = [
     # Core
     "pydantic>=2.0.0,<3.0.0",
-    "numpy>=1.26.0,<2.0.0",
+    "numpy>=2.2.0,<3.0.0",
     "scikit-learn>=1.6.0,<2.0.0",
     "networkx>=3.4.0,<4.0.0",
+    "spacy>=3.8.0,<4.0.0",
     
     # Langchain
     "langchain>=0.3.7,<0.4.0",
-    "langchain-openai>=0.3.19,<0.4.0",
+    "langchain-openai>=0.2.14,<0.3.0",
     "langchain-community>=0.3.7,<0.4.0",
     "langchain-core>=0.3.19,<0.4.0",
 

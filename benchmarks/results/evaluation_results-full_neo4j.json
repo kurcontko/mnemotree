@@ -1,0 +1,595 @@
+{
+  "summary": {
+    "num_memories": 0,
+    "num_queries": 17,
+    "avg_metrics": {
+      "precision": 0.40802987861811385,
+      "recall": 0.846078431372549,
+      "mrr": 0.8333333333333333,
+      "ndcg": 0.8497366717478357,
+      "semantic_similarity": 0.5404378180759638,
+      "llm_relevance": 0.8013725490196079
+    }
+  },
+  "per_query_results": [
+    {
+      "query": "What dish reminds you of your childhood?",
+      "description": "Should match all memories related to Culinary Memory Mapping",
+      "metrics": {
+        "precision": 0.375,
+        "recall": 0.75,
+        "mrr": 0.3333333333333333,
+        "ndcg": 0.5833416105149332,
+        "semantic_similarity": 0.4813384382167718,
+        "llm_relevance": 0.9166666666666666
+      },
+      "analysis": {
+        "num_retrieved": 8,
+        "num_expected": 4,
+        "retrieved_memory_types": {
+          "autobiographical": 5,
+          "episodic": 3
+        },
+        "missing_memories": [
+          "I remember the summer I spent in Italy with my grandmother. The sun was blazing, and the air was filled with the sweet scent of ripe tomatoes and fresh basil from her garden. One afternoon, she guided me through the process of making her famous marinara sauce. As we chopped garlic and onions, the sound of the knife hitting the wooden cutting board echoed in the kitchen. The sizzle of the garlic in the hot olive oil was almost musical, and I could hear the faint crackle of the tomatoes being added to the pan. With each stir, the rich aroma enveloped me, reminding me of family gatherings where we would feast on her pasta dishes. I still recall the vibrant red color of the sauce as I watched it bubble on the stove. When it was finally ready, we served the sauce over freshly made spaghetti, topped with a sprinkle of parmesan. Each bite was a burst of flavors, transporting me back to that sun-drenched kitchen, filled with laughter and love. To this day, the scent of garlic and tomatoes brings back that cherished memory of cooking with her."
+        ],
+        "importance_stats": {
+          "mean": 0.85,
+          "std": 0.07071067811865477,
+          "min": 0.7,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.4813384382167718,
+          "std": 0.04918616763243338,
+          "min": 0.4237912605982653,
+          "max": 0.5925599636878298
+        }
+      }
+    },
+    {
+      "query": "Recall a memory associated with a family recipe.",
+      "description": "Should match all memories related to Culinary Memory Mapping",
+      "metrics": {
+        "precision": 0.375,
+        "recall": 0.75,
+        "mrr": 0.5,
+        "ndcg": 0.6653497124326151,
+        "semantic_similarity": 0.5417055346112638,
+        "llm_relevance": 0.9
+      },
+      "analysis": {
+        "num_retrieved": 8,
+        "num_expected": 4,
+        "retrieved_memory_types": {
+          "autobiographical": 5,
+          "episodic": 3
+        },
+        "missing_memories": [
+          "I remember the summer I spent in Italy with my grandmother. The sun was blazing, and the air was filled with the sweet scent of ripe tomatoes and fresh basil from her garden. One afternoon, she guided me through the process of making her famous marinara sauce. As we chopped garlic and onions, the sound of the knife hitting the wooden cutting board echoed in the kitchen. The sizzle of the garlic in the hot olive oil was almost musical, and I could hear the faint crackle of the tomatoes being added to the pan. With each stir, the rich aroma enveloped me, reminding me of family gatherings where we would feast on her pasta dishes. I still recall the vibrant red color of the sauce as I watched it bubble on the stove. When it was finally ready, we served the sauce over freshly made spaghetti, topped with a sprinkle of parmesan. Each bite was a burst of flavors, transporting me back to that sun-drenched kitchen, filled with laughter and love. To this day, the scent of garlic and tomatoes brings back that cherished memory of cooking with her."
+        ],
+        "importance_stats": {
+          "mean": 0.8625,
+          "std": 0.0484122918275927,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5417055346112638,
+          "std": 0.03983278295754237,
+          "min": 0.4729473927597916,
+          "max": 0.6026711434407632
+        }
+      }
+    },
+    {
+      "query": "Describe a time when a specific smell made you remember a meal.",
+      "description": "Should match all memories related to Culinary Memory Mapping",
+      "metrics": {
+        "precision": 0.5,
+        "recall": 0.75,
+        "mrr": 1.0,
+        "ndcg": 0.9060254355346823,
+        "semantic_similarity": 0.5303180280592811,
+        "llm_relevance": 0.9
+      },
+      "analysis": {
+        "num_retrieved": 6,
+        "num_expected": 4,
+        "retrieved_memory_types": {
+          "autobiographical": 5,
+          "episodic": 1
+        },
+        "missing_memories": [
+          "I remember the summer I spent in Italy with my grandmother. The sun was blazing, and the air was filled with the sweet scent of ripe tomatoes and fresh basil from her garden. One afternoon, she guided me through the process of making her famous marinara sauce. As we chopped garlic and onions, the sound of the knife hitting the wooden cutting board echoed in the kitchen. The sizzle of the garlic in the hot olive oil was almost musical, and I could hear the faint crackle of the tomatoes being added to the pan. With each stir, the rich aroma enveloped me, reminding me of family gatherings where we would feast on her pasta dishes. I still recall the vibrant red color of the sauce as I watched it bubble on the stove. When it was finally ready, we served the sauce over freshly made spaghetti, topped with a sprinkle of parmesan. Each bite was a burst of flavors, transporting me back to that sun-drenched kitchen, filled with laughter and love. To this day, the scent of garlic and tomatoes brings back that cherished memory of cooking with her."
+        ],
+        "importance_stats": {
+          "mean": 0.8833333333333334,
+          "std": 0.03726779962499649,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5303180280592811,
+          "std": 0.030611046183688016,
+          "min": 0.48598870884549517,
+          "max": 0.5690671589135786
+        }
+      }
+    },
+    {
+      "query": "What color reminds you of your grandmother's cooking?",
+      "description": "Should match all memories related to Culinary Color Chronicles",
+      "metrics": {
+        "precision": 0.42857142857142855,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "semantic_similarity": 0.582859728504683,
+        "llm_relevance": 0.8166666666666668
+      },
+      "analysis": {
+        "num_retrieved": 7,
+        "num_expected": 3,
+        "retrieved_memory_types": {
+          "autobiographical": 5,
+          "episodic": 2
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8285714285714286,
+          "std": 0.06998542122237653,
+          "min": 0.7,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.582859728504683,
+          "std": 0.023807279334558656,
+          "min": 0.5447981192500551,
+          "max": 0.6149840594600853
+        }
+      }
+    },
+    {
+      "query": "What is your fondest memory involving food and family?",
+      "description": "Tests general association between food and family",
+      "metrics": {
+        "precision": 0.3333333333333333,
+        "recall": 1.0,
+        "mrr": 0.3333333333333333,
+        "ndcg": 0.558226059985166,
+        "semantic_similarity": 0.5217432856511199,
+        "llm_relevance": 0.9166666666666666
+      },
+      "analysis": {
+        "num_retrieved": 9,
+        "num_expected": 3,
+        "retrieved_memory_types": {
+          "autobiographical": 5,
+          "episodic": 4
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8555555555555556,
+          "std": 0.04969039949999532,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5217432856511199,
+          "std": 0.037176307780430067,
+          "min": 0.4424256830847467,
+          "max": 0.5958557482219095
+        }
+      }
+    },
+    {
+      "query": "What emotions do you associate with your grandmother's kitchen?",
+      "description": "Tests ability to retrieve memories based on associated emotions",
+      "metrics": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "mrr": 0.5,
+        "ndcg": 0.6797310500037655,
+        "semantic_similarity": 0.5690279880357739,
+        "llm_relevance": 0.9
+      },
+      "analysis": {
+        "num_retrieved": 6,
+        "num_expected": 3,
+        "retrieved_memory_types": {
+          "episodic": 2,
+          "autobiographical": 4
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8833333333333333,
+          "std": 0.03726779962499649,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5690279880357739,
+          "std": 0.023246069340424252,
+          "min": 0.536380133541448,
+          "max": 0.5999572590663712
+        }
+      }
+    },
+    {
+      "query": "Describe a specific dish your grandmother made that you remember vividly.",
+      "description": "Tests retrieval of memories associated with specific dishes",
+      "metrics": {
+        "precision": 0.42857142857142855,
+        "recall": 0.75,
+        "mrr": 1.0,
+        "ndcg": 0.8710785440003369,
+        "semantic_similarity": 0.5882803215743816,
+        "llm_relevance": 0.9
+      },
+      "analysis": {
+        "num_retrieved": 7,
+        "num_expected": 4,
+        "retrieved_memory_types": {
+          "autobiographical": 5,
+          "episodic": 2
+        },
+        "missing_memories": [
+          "I remember the first time I walked into my grandmother's kitchen during the holidays. The air was thick with the warm, spicy scent of cinnamon and nutmeg. She was preparing her famous pumpkin pie, a recipe passed down through generations. As I entered, she was rolling out the dough on the wooden countertop, her hands dusted with flour. The sound of the rolling pin echoed softly as she worked, and every now and then, she would hum an old tune, her voice blending with the comforting sounds of sizzling butter in a pan nearby. I could see the vibrant orange pumpkin filling bubbling in a bowl, and the sight reminded me of the bright yellow fall leaves outside. Each element\u2014the smell of spices, the sound of cooking, the sight of colorful ingredients\u2014brought back memories of family gatherings, laughter, and the warmth of being together. Even now, the smell of cinnamon instantly transports me back to that kitchen, evoking feelings of nostalgia and love."
+        ],
+        "importance_stats": {
+          "mean": 0.8428571428571431,
+          "std": 0.07284313590846837,
+          "min": 0.7,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5882803215743816,
+          "std": 0.021552959717375943,
+          "min": 0.5506406064586356,
+          "max": 0.6238827702262316
+        }
+      }
+    },
+    {
+      "query": "What ingredients do you associate with your grandmother's cooking?",
+      "description": "Tests ability to recall specific ingredients associated with memories",
+      "metrics": {
+        "precision": 0.6,
+        "recall": 0.75,
+        "mrr": 1.0,
+        "ndcg": 0.9674679834891693,
+        "semantic_similarity": 0.5479344643476179,
+        "llm_relevance": 0.8333333333333334
+      },
+      "analysis": {
+        "num_retrieved": 5,
+        "num_expected": 4,
+        "retrieved_memory_types": {
+          "autobiographical": 3,
+          "episodic": 2
+        },
+        "missing_memories": [
+          "I remember sitting in my grandmother's kitchen during the summer, surrounded by vibrant, sunlit colors. One afternoon, she prepared a large bowl of fresh caprese salad\u2014plump red tomatoes, bright green basil, and creamy white mozzarella. The colors were so vivid that they seemed to pop against the wooden table. As I helped her layer the ingredients, I could feel the warmth of the sun streaming through the window, filling the room with a golden hue. My grandmother smiled and told me stories about her childhood in Italy, where she first learned to make this dish. The rich reds of the tomatoes always remind me of her laughter and the love she infused into her cooking. Whenever I see those colors together, I feel a rush of nostalgia and warmth, as if I am back in that moment, sharing a meal with her, immersed in the flavors and stories that connected us."
+        ],
+        "importance_stats": {
+          "mean": 0.8800000000000001,
+          "std": 0.039999999999999994,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5479344643476179,
+          "std": 0.011745926039656419,
+          "min": 0.5325639762442598,
+          "max": 0.5682780817253177
+        }
+      }
+    },
+    {
+      "query": "Can you describe a memory where the color of a dish was particularly memorable?",
+      "description": "Focuses on the 'Culinary Color Chronicles' aspect",
+      "metrics": {
+        "precision": 0.375,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "semantic_similarity": 0.5513678377945747,
+        "llm_relevance": 0.9
+      },
+      "analysis": {
+        "num_retrieved": 8,
+        "num_expected": 3,
+        "retrieved_memory_types": {
+          "autobiographical": 6,
+          "episodic": 2
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8375000000000001,
+          "std": 0.06959705453537528,
+          "min": 0.7,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5513678377945747,
+          "std": 0.06900318162599987,
+          "min": 0.472719730673275,
+          "max": 0.6780197513682849
+        }
+      }
+    },
+    {
+      "query": "What sounds do you remember from your grandmother's kitchen?",
+      "description": "Tests retrieval based on auditory details",
+      "metrics": {
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "semantic_similarity": 0.5565008703877959,
+        "llm_relevance": 0.8166666666666668
+      },
+      "analysis": {
+        "num_retrieved": 6,
+        "num_expected": 4,
+        "retrieved_memory_types": {
+          "episodic": 3,
+          "autobiographical": 3
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8666666666666667,
+          "std": 0.04714045207910316,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5565008703877959,
+          "std": 0.02373885574211435,
+          "min": 0.5147471534686265,
+          "max": 0.594946690029237
+        }
+      }
+    },
+    {
+      "query": "What memories do you have that involve learning to cook from your grandmother?",
+      "description": "Tests retrieval based on the concept of learning and cooking",
+      "metrics": {
+        "precision": 0.5714285714285714,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "ndcg": 0.8667163765466583,
+        "semantic_similarity": 0.5840494623696048,
+        "llm_relevance": 0.8666666666666667
+      },
+      "analysis": {
+        "num_retrieved": 7,
+        "num_expected": 4,
+        "retrieved_memory_types": {
+          "episodic": 4,
+          "autobiographical": 3
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8571428571428573,
+          "std": 0.04948716593053934,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5840494623696048,
+          "std": 0.030042649530245463,
+          "min": 0.5281982421236981,
+          "max": 0.6339677852234525
+        }
+      }
+    },
+    {
+      "query": "Which of your grandmother's dishes do you associate with holidays?",
+      "description": "Tests association between dishes and holidays",
+      "metrics": {
+        "precision": 0.25,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "semantic_similarity": 0.5065263685995774,
+        "llm_relevance": 0.8333333333333334
+      },
+      "analysis": {
+        "num_retrieved": 8,
+        "num_expected": 2,
+        "retrieved_memory_types": {
+          "episodic": 4,
+          "autobiographical": 4
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8250000000000001,
+          "std": 0.06614378277661478,
+          "min": 0.7,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5065263685995774,
+          "std": 0.022732467291012342,
+          "min": 0.47780393361097456,
+          "max": 0.5449125453617429
+        }
+      }
+    },
+    {
+      "query": "What are some of the spices your grandmother used in her cooking?",
+      "description": "Tests the ability to recall specific spices",
+      "metrics": {
+        "precision": 0.4,
+        "recall": 0.6666666666666666,
+        "mrr": 1.0,
+        "ndcg": 0.9197207891481876,
+        "semantic_similarity": 0.4952139557503232,
+        "llm_relevance": 0.5666666666666667
+      },
+      "analysis": {
+        "num_retrieved": 5,
+        "num_expected": 3,
+        "retrieved_memory_types": {
+          "autobiographical": 3,
+          "episodic": 2
+        },
+        "missing_memories": [
+          "I remember the colorful array of spices in my grandmother's kitchen. The bright yellow turmeric, the deep red paprika, and the vibrant green coriander always caught my eye. She would explain the unique flavor each spice brought to a dish, turning cooking into a sensory adventure."
+        ],
+        "importance_stats": {
+          "mean": 0.8400000000000001,
+          "std": 0.08000000000000002,
+          "min": 0.7,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.4952139557503232,
+          "std": 0.03885897111648146,
+          "min": 0.4535665105204148,
+          "max": 0.5658970230390142
+        }
+      }
+    },
+    {
+      "query": "Can you recall a memory involving your grandmother's garden and cooking?",
+      "description": "Tests the connection between garden and cooking",
+      "metrics": {
+        "precision": 0.2222222222222222,
+        "recall": 1.0,
+        "mrr": 1.0,
+        "ndcg": 0.8772153153380493,
+        "semantic_similarity": 0.5658031104951671,
+        "llm_relevance": 0.7233333333333333
+      },
+      "analysis": {
+        "num_retrieved": 9,
+        "num_expected": 2,
+        "retrieved_memory_types": {
+          "autobiographical": 6,
+          "episodic": 3
+        },
+        "missing_memories": [],
+        "importance_stats": {
+          "mean": 0.8555555555555556,
+          "std": 0.04969039949999532,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5658031104951671,
+          "std": 0.026018515610748714,
+          "min": 0.5319225845860408,
+          "max": 0.6134601745248356
+        }
+      }
+    },
+    {
+      "query": "What dishes did your grandmother make that involved tomatoes?",
+      "description": "Tests entity-based retrieval, specifically for dishes involving tomatoes",
+      "metrics": {
+        "precision": 0.5,
+        "recall": 0.8,
+        "mrr": 1.0,
+        "ndcg": 1.0,
+        "semantic_similarity": 0.5370047811667515,
+        "llm_relevance": 0.5666666666666667
+      },
+      "analysis": {
+        "num_retrieved": 8,
+        "num_expected": 5,
+        "retrieved_memory_types": {
+          "episodic": 3,
+          "autobiographical": 5
+        },
+        "missing_memories": [
+          "My grandmother had a special way of making simple dishes extraordinary. I remember her tomato soup, which was always a vibrant red. She would say the secret was using the ripest tomatoes and a pinch of love. The color was so intense that it seemed to warm you up from the inside even before you tasted it."
+        ],
+        "importance_stats": {
+          "mean": 0.825,
+          "std": 0.06614378277661478,
+          "min": 0.7,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5370047811667515,
+          "std": 0.050138130770929615,
+          "min": 0.47685624974703505,
+          "max": 0.6100039560279771
+        }
+      }
+    },
+    {
+      "query": "Describe a memory related to a market and your grandmother's cooking.",
+      "description": "Tests the connection between market visits and cooking memories",
+      "metrics": {
+        "precision": 0.125,
+        "recall": 0.5,
+        "mrr": 0.5,
+        "ndcg": 0.6309297535714575,
+        "semantic_similarity": 0.5211092217991208,
+        "llm_relevance": 0.6666666666666666
+      },
+      "analysis": {
+        "num_retrieved": 8,
+        "num_expected": 2,
+        "retrieved_memory_types": {
+          "autobiographical": 5,
+          "episodic": 3
+        },
+        "missing_memories": [
+          "I remember the excitement of going to the local market with my grandmother. The vibrant colors of the fresh produce, the smell of spices, and the sounds of vendors calling out their wares created a lively atmosphere. It was there that I learned to appreciate the beauty and variety of ingredients."
+        ],
+        "importance_stats": {
+          "mean": 0.8625,
+          "std": 0.0484122918275927,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5211092217991208,
+          "std": 0.019692049895296257,
+          "min": 0.4979118365209419,
+          "max": 0.5587891626237194
+        }
+      }
+    },
+    {
+      "query": "What baked goods did your grandmother make that you remember?",
+      "description": "Tests retrieval based on the concept of baked goods",
+      "metrics": {
+        "precision": 0.2857142857142857,
+        "recall": 0.6666666666666666,
+        "mrr": 1.0,
+        "ndcg": 0.9197207891481876,
+        "semantic_similarity": 0.5066595099275769,
+        "llm_relevance": 0.6
+      },
+      "analysis": {
+        "num_retrieved": 7,
+        "num_expected": 3,
+        "retrieved_memory_types": {
+          "episodic": 5,
+          "autobiographical": 2
+        },
+        "missing_memories": [
+          "The smell of freshly baked bread always takes me back to my grandmother's kitchen. She had a way of making the crust perfectly golden brown, and the inside soft and fluffy. The warm, yeasty aroma would fill the house, making it feel like home."
+        ],
+        "importance_stats": {
+          "mean": 0.8428571428571429,
+          "std": 0.04948716593053934,
+          "min": 0.8,
+          "max": 0.9
+        },
+        "similarity_stats": {
+          "mean": 0.5066595099275769,
+          "std": 0.03192408935209384,
+          "min": 0.4702072764918658,
+          "max": 0.5547877649359131
+        }
+      }
+    }
+  ]
+}

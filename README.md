@@ -6,7 +6,7 @@ An Advanced Memory Management and Retrieval System for LLM Agents
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 
 <p align="center">
-  <img src="assets/mnemotree-final.png" alt="Mnemotree Logo" width="300">
+  <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
 </p>
 
 ## Overview
@@ -53,6 +53,29 @@ Mnemotree is a framework that enhances Large Language Model (LLM) agents with bi
 - pip or Poetry for dependency management
 - Access to an LLM API (e.g., OpenAI)
 - Vector store (ChromaDB) or graph database (Neo4j) for storage
+```
+
+**Download and Install spaCy's English Model**
+
+To use the default Named Entity Recognition (NER) functionality provided by spaCy, you need to install the English language model. Run the following command:
+
+```bash
+python -m spacy download en_core_web_sm
+```
+
+**Set up OpenAI API or other LLM provider Credentials**
+
+If you plan to use the default OpenAI-based implementation for language-related features, you need to provide your OpenAI API key. To do this:
+
+Create a copy of the provided sample environment file:
+
+```bash
+cp .env.sample .env
+```
+Open the newly created .env file and replace the placeholder with your actual OpenAI API key:
+
+```env
+OPENAI_API_KEY=your-openai-api-key
 ```
 
 ### Installation

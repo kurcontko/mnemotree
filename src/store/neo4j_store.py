@@ -22,9 +22,12 @@ class Neo4jMemoryStore(BaseMemoryStore):
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
         self._memory_locks = {}
         self._global_lock = Lock()
+        self._initialized = False
         
     async def initialize(self):
         """Initialize database with required indexes and constraints"""
+        if self._initialized:
+            return
         async with self.driver.session() as session:
             tx = await session.begin_transaction()
             try:
@@ -59,7 +62,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 
                 await tx.commit()
                 logger.info("Successfully initialized Neo4j schema")
-                
+                self._initialized = True
             except Exception as e:
                 await tx.rollback()
                 logger.error(f"Failed to initialize Neo4j schema: {e}")
