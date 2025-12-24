@@ -50,7 +50,7 @@ Mnemotree is a framework that enhances Large Language Model (LLM) agents with bi
 
 ```bash
 - Python 3.10+
-- pip or Poetry for dependency management
+- uv for dependency management (https://github.com/astral-sh/uv)
 - Access to an LLM API (e.g., OpenAI)
 - Vector store (ChromaDB) or graph database (Neo4j) for storage
 ```
@@ -60,7 +60,7 @@ Mnemotree is a framework that enhances Large Language Model (LLM) agents with bi
 To use the default Named Entity Recognition (NER) functionality provided by spaCy, you need to install the English language model. Run the following command:
 
 ```bash
-python -m spacy download en_core_web_sm
+uv run python -m spacy download en_core_web_sm
 ```
 
 **Set up OpenAI API or other LLM provider Credentials**
@@ -81,7 +81,7 @@ OPENAI_API_KEY=your-openai-api-key
 ### Installation
 
 ```bash
-pip install mnemotree
+uv pip install -e .
 ```
 
 ### Basic Usage
@@ -220,29 +220,26 @@ Since the package is not yet available on PyPI, you'll need to install it from t
 git clone https://github.com/kurcontko/mnemotree.git
 cd mnemotree
 
+# Create a virtual environment
+uv venv .venv
+
 # Basic installation
-pip install -e .
+uv pip install -e .
 
 # With specific database support
-pip install -e ".[neo4j]"     # Neo4j support
-pip install -e ".[chroma]"    # ChromaDB support
-pip install -e ".[vectors]"   # All vector database support
-pip install -e ".[ui]"        # UI components
+uv pip install -e ".[neo4j]"     # Neo4j support
+uv pip install -e ".[chroma]"    # ChromaDB support
+uv pip install -e ".[vectors]"   # All vector database support
+uv pip install -e ".[ui]"        # UI components
 
 # With specific LLM provider support
-pip install -e ".[google]"     # Google AI support
-pip install -e ".[anthropic]"  # Anthropic support
-pip install -e ".[aws]"        # AWS support
-pip install -e ".[huggingface]"# HuggingFace support
+uv pip install -e ".[google]"     # Google AI support
+uv pip install -e ".[anthropic]"  # Anthropic support
+uv pip install -e ".[aws]"        # AWS support
+uv pip install -e ".[huggingface]"# HuggingFace support
 
 # Install all optional dependencies
-pip install -e ".[all]"
-```
-
-or 
-
-```bash
-pip install -r requirements.txt
+uv pip install -e ".[all]"
 ```
 
 ## Roadmap
@@ -297,7 +294,7 @@ This example demonstrates how to integrate Mnemotree with a LangChain agent, all
 
 1. Make sure you have the required dependencies installed (see Installation section).
 2. Set your OpenAI API key as an environment variable: `OPENAI_API_KEY=your_api_key`.
-3. Run the script: `python examples/langchain_agent.py`
+3. Run the script: `uv run python examples/langchain_agent.py`
 
 ### 2. Streamlit Chat Application with Memory
 
@@ -307,10 +304,10 @@ This example demonstrates a Streamlit-based chat application that utilizes Mnemo
 
 **To Run:**
 
-1. Install Streamlit: `pip install streamlit`
+1. Install with UI extras: `uv pip install -e ".[ui]"`
 2. Make sure you have the required database (Neo4j or ChromaDB) running and configured correctly.
 3. Set your OpenAI API key: `OPENAI_API_KEY=your_api_key`
-4. Run the Streamlit app: `streamlit run examples/memory_chat/app.py`
+4. Run the Streamlit app: `uv run streamlit run examples/memory_chat/app.py`
 
 These examples demonstrate the core functionality of Mnemotree and how it can be integrated into different types of applications. You can adapt and extend these examples to build more complex and sophisticated LLM agents with advanced memory capabilities.
 

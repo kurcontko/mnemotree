@@ -97,7 +97,7 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["mnemotree"]
+packages = ["src/mnemotree"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
