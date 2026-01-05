@@ -49,3 +49,11 @@ class InsightsResult(BaseModel):
     insights: List[str] = Field(description="List of insights")
     summary: str = Field(description="Summary of insights")
     rationale: str = Field(description="Brief explanation of insights")
+
+
+class SummaryResult(BaseModel):
+    summary: str = Field(description="Concise summary of the interaction")
+    topics: List[str] = Field(description="Key topics discussed")
+    decisions: List[str] = Field(description="Decisions made, if any")
+    action_items: List[str] = Field(description="Action items, if any")
+    entities: List[str] = Field(description="Named entities mentioned")

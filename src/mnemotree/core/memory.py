@@ -5,6 +5,7 @@ from functools import lru_cache
 from dataclasses import dataclass
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
+import os
 
 from pydantic import BaseModel, Field
 from langchain.prompts import ChatPromptTemplate
@@ -44,7 +45,7 @@ class MemoryCore:
 
         Args:
             storage: The underlying storage for memory items.
-            llm: Optional Language model for analysis if analyzer is not set. Defaults to ChatOpenAI("gpt-4o-mini") if not provided.
+            llm: Optional Language model for analysis if analyzer is not set. Defaults to ChatOpenAI("gpt-4.1-mini") if not provided.
             embeddings: Optional embeddings model for analysis if analyzer is not set. Defaults to OpenAIEmbeddings("text-embedding-3-small") if not provided.
             analyzer: Optional MemoryAnalyzer. If not provided, a default analyzer is created using llm and embeddings.
             default_importance: The default importance value for memories.
@@ -54,10 +55,14 @@ class MemoryCore:
         self.store = store
         
         # Setup analyzer: if not provided, create it using the llm and embeddings if provided, or their defaults
+        openai_base_url = os.getenv("OPENAI_BASE_URL")
+        openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+        openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+        openai_client_kwargs = {"base_url": openai_base_url} if openai_base_url else {}
         if not llm:
-            llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+            llm = ChatOpenAI(model_name=openai_model, temperature=0, **openai_client_kwargs)
         if not embeddings:
-            embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+            embeddings = OpenAIEmbeddings(model=openai_embedding_model, **openai_client_kwargs)
             
         self.analyzer = MemoryAnalyzer(
             llm=llm, 
@@ -230,7 +235,8 @@ class MemoryCore:
         query: Union[str, MemoryQuery, MemoryQueryBuilder],
         *,
         limit: Optional[int] = None,
-        scoring: bool = True
+        scoring: bool = True,
+        update_access: bool = False
     ) -> List[MemoryItem]:
         """
         Retrieve memories based on a query string, MemoryQuery or a MemoryQueryBuilder.
@@ -238,14 +244,17 @@ class MemoryCore:
         Args:
             query: The query string, MemoryQuery object or MemoryQueryBuilder
             limit: Optional max results to return
+            update_access: If True, update access metadata for returned memories
 
         Returns:
             List of matching MemoryItems
         """
+        query_embedding: Optional[List[float]] = None
         if isinstance(query, str):
             # Create tasks for concurrent execution
             async def get_memory_results():
                 # Get embedding and similar memories concurrently
+                nonlocal query_embedding
                 query_embedding = await self.get_embedding(query)
                 memories = await self.store.get_similar_memories(
                     query=query,
@@ -269,9 +278,8 @@ class MemoryCore:
                 get_entity_results()
             )
 
-            # Combine results
-            memories = memory_results
-            memories.extend(entity_results)
+            # Combine results with deduplication
+            memories = self._dedupe_memories(memory_results + entity_results)
             
         elif isinstance(query, MemoryQuery):
             # Complex query
@@ -286,7 +294,16 @@ class MemoryCore:
         
         # Apply reranking and filtering
         if scoring:
-            memories = self.memory_scoring.filter_memories_by_score(memories)
+            memories = self.memory_scoring.filter_memories_by_score(
+                memories,
+                query_embedding=query_embedding
+            )
+
+        if limit is not None:
+            memories = memories[:limit]
+
+        if update_access and memories:
+            await self._update_access_metadata(memories)
         return memories
 
     async def reflect(
@@ -502,3 +519,32 @@ class MemoryCore:
     async def get_embedding(self, text: str) -> Any:
         """Get the embedding for a given text."""
         return await self.embedder.aembed_query(text)
+
+    def _dedupe_memories(self, memories: List[MemoryItem]) -> List[MemoryItem]:
+        """Preserve order while removing duplicate memory IDs."""
+        seen: set[str] = set()
+        deduped: List[MemoryItem] = []
+        for memory in memories:
+            if memory.memory_id in seen:
+                continue
+            seen.add(memory.memory_id)
+            deduped.append(memory)
+        return deduped
+
+    async def _update_access_metadata(self, memories: List[MemoryItem]) -> None:
+        """Update access metadata in-memory and persist if supported."""
+        update_tasks = []
+        for memory in memories:
+            memory.update_access()
+            update_tasks.append(
+                self.store.update_memory_metadata(
+                    memory.memory_id,
+                    {
+                        "last_accessed": memory.last_accessed,
+                        "access_count": memory.access_count,
+                        "access_history": memory.access_history,
+                    },
+                )
+            )
+        if update_tasks:
+            await asyncio.gather(*update_tasks)

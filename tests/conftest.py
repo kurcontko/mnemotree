@@ -20,11 +20,9 @@ def memory_item():
     )
 
 @pytest.fixture
-def temp_chroma_dir():
-    path = Path(".test_chroma")
-    if path.exists():
-        shutil.rmtree(path)
-    path.mkdir()
-    yield str(path)
-    if path.exists():
-        shutil.rmtree(path)
+def temp_chroma_dir(tmp_path):
+    """Use pytest's tmp_path for better isolation between tests"""
+    chroma_dir = tmp_path / "chroma_db"
+    chroma_dir.mkdir()
+    yield str(chroma_dir)
+    # Cleanup is automatic with tmp_path

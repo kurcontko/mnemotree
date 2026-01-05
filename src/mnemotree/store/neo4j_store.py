@@ -695,6 +695,30 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 logger.error(f"Failed to query memories: {e}")
                 raise
 
+    async def update_memory_metadata(self, memory_id: str, metadata: Dict[str, Any]) -> bool:
+        """Update metadata fields for a memory item."""
+        allowed_fields = {"last_accessed", "access_count", "access_history"}
+        updates = {k: v for k, v in metadata.items() if k in allowed_fields}
+        if not updates:
+            return False
+
+        set_clauses = []
+        params: Dict[str, Any] = {"memory_id": memory_id}
+        for key, value in updates.items():
+            set_clauses.append(f"m.{key} = ${key}")
+            params[key] = value
+
+        cypher = f"""
+            MATCH (m:MemoryItem {{memory_id: $memory_id}})
+            SET {", ".join(set_clauses)}
+            RETURN m
+        """
+
+        async with self.driver.session() as session:
+            result = await session.run(cypher, params)
+            record = await result.single()
+            return record is not None
+
     async def close(self):
         """Close the database connection"""
         await self.driver.close()

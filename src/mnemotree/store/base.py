@@ -91,6 +91,18 @@ class BaseMemoryStore(ABC):
     #         bool: True if update was successful, False otherwise.
     #     """
     #     pass
+    async def update_memory_metadata(
+        self,
+        memory_id: str,
+        metadata: Dict[str, Any]
+    ) -> bool:
+        """
+        Optionally update metadata fields for a memory item.
+
+        Returns:
+            bool: True if update was successful, False otherwise.
+        """
+        return False
 
     @abstractmethod
     async def update_connections(

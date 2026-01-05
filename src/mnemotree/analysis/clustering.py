@@ -91,7 +91,8 @@ class MemoryClusterer:
                 m for i, m in enumerate(memories)
                 if clusters.cluster_ids[i] == cluster_id
             ]
-            summary = await self.summarizer.summarize(cluster_memories)
+            memory_texts = [f"- {m.content}" for m in cluster_memories]
+            summary = await self.summarizer.summarize("\n".join(memory_texts))
             cluster_summaries[cluster_id] = summary
             
         return ClusteringResult(

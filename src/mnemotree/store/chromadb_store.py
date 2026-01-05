@@ -98,6 +98,9 @@ class ChromaMemoryStore(BaseMemoryStore):
                 "confidence": str(memory.confidence),
                 "source": memory.source if memory.source else "",
                 "context": json.dumps(memory.context) if memory.context else "",
+                "last_accessed": memory.last_accessed,
+                "access_count": str(memory.access_count),
+                "access_history": json.dumps(memory.access_history) if memory.access_history else "[]",
                 # Store relationships in metadata
                 "associations": ",".join(memory.associations) if memory.associations else "",
                 "linked_concepts": ",".join(memory.linked_concepts) if memory.linked_concepts else "",
@@ -135,24 +138,27 @@ class ChromaMemoryStore(BaseMemoryStore):
             metadata = result["metadatas"][0]
             
             # Convert metadata back to appropriate types
-                memory_data = {
-                    "memory_id": memory_id,
-                    "content": result["documents"][0],
-                    "memory_type": MemoryType(metadata["memory_type"]),
-                    "timestamp": metadata["timestamp"],
-                    "importance": float(metadata["importance"]),
-                    "confidence": float(metadata["confidence"]),
-                    "tags": metadata["tags"].split(",") if metadata["tags"] else [],
-                    "emotions": metadata["emotions"].split(",") if metadata["emotions"] else [],
-                    "source": metadata["source"] if metadata["source"] else None,
-                    "context": _safe_load_context(metadata["context"]),
-                    "embedding": result["embeddings"][0],
-                    # Retrieve relationships
-                    "associations": metadata.get("associations", "").split(",") if metadata.get("associations") else [],
-                    "linked_concepts": metadata.get("linked_concepts", "").split(",") if metadata.get("linked_concepts") else [],
-                    "conflicts_with": metadata.get("conflicts_with", "").split(",") if metadata.get("conflicts_with") else [],
+            memory_data = {
+                "memory_id": memory_id,
+                "content": result["documents"][0],
+                "memory_type": MemoryType(metadata["memory_type"]),
+                "timestamp": metadata["timestamp"],
+                "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
+                "access_count": int(metadata.get("access_count") or 0),
+                "access_history": json.loads(metadata.get("access_history") or "[]"),
+                "importance": float(metadata["importance"]),
+                "confidence": float(metadata["confidence"]),
+                "tags": metadata["tags"].split(",") if metadata["tags"] else [],
+                "emotions": metadata["emotions"].split(",") if metadata["emotions"] else [],
+                "source": metadata["source"] if metadata["source"] else None,
+                "context": _safe_load_context(metadata["context"]),
+                "embedding": result["embeddings"][0],
+                # Retrieve relationships
+                "associations": metadata.get("associations", "").split(",") if metadata.get("associations") else [],
+                "linked_concepts": metadata.get("linked_concepts", "").split(",") if metadata.get("linked_concepts") else [],
+                "conflicts_with": metadata.get("conflicts_with", "").split(",") if metadata.get("conflicts_with") else [],
                 "previous_event_id": metadata.get("previous_event_id") if metadata.get("previous_event_id") else None,
-                "next_event_id": metadata.get("next_event_id") if metadata.get("next_event_id") else None
+                "next_event_id": metadata.get("next_event_id") if metadata.get("next_event_id") else None,
             }
 
             return MemoryItem(**memory_data)
@@ -195,6 +201,9 @@ class ChromaMemoryStore(BaseMemoryStore):
                     "content": results["documents"][0][i],
                     "memory_type": MemoryType(metadata["memory_type"]),
                     "timestamp": metadata["timestamp"],
+                    "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
+                    "access_count": int(metadata.get("access_count") or 0),
+                    "access_history": json.loads(metadata.get("access_history") or "[]"),
                     "importance": float(metadata["importance"]),
                     "confidence": float(metadata["confidence"]),
                     "tags": metadata["tags"].split(",") if metadata["tags"] else [],
@@ -239,6 +248,9 @@ class ChromaMemoryStore(BaseMemoryStore):
                     "content": results["documents"][0][i],
                     "memory_type": MemoryType(metadata["memory_type"]),
                     "timestamp": metadata["timestamp"],
+                    "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
+                    "access_count": int(metadata.get("access_count") or 0),
+                    "access_history": json.loads(metadata.get("access_history") or "[]"),
                     "importance": float(metadata["importance"]),
                     "confidence": float(metadata["confidence"]),
                     "tags": metadata["tags"].split(",") if metadata["tags"] else [],
@@ -296,6 +308,21 @@ class ChromaMemoryStore(BaseMemoryStore):
         # TODO: Implement basic metadata filtering for entities if possible
         logger.warning("query_by_entities not fully implemented for ChromaDB, returning empty list")
         return []
+
+    async def update_memory_metadata(self, memory_id: str, metadata: Dict[str, Any]) -> bool:
+        """Update metadata fields for a memory item."""
+        try:
+            memory = await self.get_memory(memory_id)
+            if not memory:
+                return False
+            for key, value in metadata.items():
+                if hasattr(memory, key):
+                    setattr(memory, key, value)
+            await self.store_memory(memory)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update memory metadata for {memory_id}: {e}")
+            return False
 
     async def close(self):
         """Close the database connection"""

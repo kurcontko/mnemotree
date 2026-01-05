@@ -7,11 +7,11 @@ from typing import Any, AsyncGenerator, List, Optional, Tuple
 import streamlit as st
 from langchain_core.documents import Document
 
-from .inference import LangChainInference
-from .types import MessageRole
-from src.core.memory import MemoryCore
-from src.core.models import MemoryItem
-from src.utils.memory_formatter import MemoryFormatter
+from inference import LangChainInference
+from message_types import MessageRole
+from mnemotree.core.memory import MemoryCore
+from mnemotree.core.models import MemoryItem
+from mnemotree.utils.memory_formatter import MemoryFormatter
 
 
 class MemoryChatUI:
@@ -348,7 +348,7 @@ class MemoryChatUI:
                     with st.spinner("Retrieving memories..."):
                         memories = []
                         if st.session_state.memory_enabled:
-                            memories = await self.memory.recall(prompt)
+                            memories = await self.memory.recall(prompt, limit=20)
                             lc_memories = [m.to_langchain_document() for m in memories]
 
                             # Display memories grouped in accordions

@@ -25,7 +25,7 @@ class MemoryScoring:
         emotion_weight: float = 0.2,
         context_weight: float = 0.1,
         novelty_weight: float = 0.1,
-        #query_weight: float = 0.3,  # New weight for query relevance
+        query_relevance_weight: float = 0.25,
         decay_function: DecayFunction = DecayFunction.POWER_LAW,
         score_threshold: float = 0.6,
         learning_rate: float = 0.1
@@ -37,7 +37,7 @@ class MemoryScoring:
             "emotional": emotion_weight,
             "context": context_weight,
             "novelty": novelty_weight,
-            #"query_relevance": query_weight
+            "query_relevance": query_relevance_weight,
         }
         self.decay_function = decay_function
         self.score_threshold = score_threshold
@@ -65,7 +65,7 @@ class MemoryScoring:
             "context": self._calculate_context_score(memory, context_relevance),
             "connection": self._calculate_connection_score(memory),
             "novelty": self.calculate_novelty_score(memory, all_memories),
-            #"query_relevance": self._calculate_query_relevance_score(memory, query_embedding) if query_embedding else 0.5
+            "query_relevance": self._calculate_query_relevance_score(memory, query_embedding) if query_embedding else 0.5,
         }
         
         # Apply adaptive boosting based on memory type
@@ -76,6 +76,9 @@ class MemoryScoring:
             self.weights[k] * scores[k] 
             for k in self.weights.keys()
         )
+        weight_sum = sum(self.weights.values())
+        if weight_sum > 0:
+            total_score /= weight_sum
         
         # Incorporate semantic score if provided
         if semantic_score is not None:
@@ -446,7 +449,7 @@ class MemoryScoring:
         self,
         memories: List[MemoryItem],
         semantic_scores: Optional[List[float]] = None,
-        context_relevance: Optional[List[float]] = None,
+        context_relevance: Optional[Union[List[float], float]] = None,
         query_embedding: Optional[List[float]] = None
     ) -> List[MemoryItem]:
         """Filter memories based on score threshold."""
@@ -454,11 +457,15 @@ class MemoryScoring:
         filtered_memories = []
         for i, memory in enumerate(memories):
             semantic_score = semantic_scores[i] if semantic_scores else None
+            if isinstance(context_relevance, list):
+                context_score = context_relevance[i] if i < len(context_relevance) else None
+            else:
+                context_score = context_relevance
             score = self.calculate_memory_score(
                 memory, 
                 current_time, 
                 semantic_score,
-                context_relevance,
+                context_score,
                 memories,
                 query_embedding
             )
