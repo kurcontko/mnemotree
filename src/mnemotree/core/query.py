@@ -1,30 +1,31 @@
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any, Union, Callable, Awaitable
+from typing import Any
 
-from pydantic import BaseModel, Field
-
-from ..core.models import MemoryType, EmotionCategory
+from ..core.models import EmotionCategory, MemoryType
 
 
 class FilterOperator(str, Enum):
     """Operators for memory filters."""
-    EQ = "eq"         # Equal
-    NE = "ne"         # Not equal
-    GT = "gt"         # Greater than
-    GTE = "gte"       # Greater than or equal
-    LT = "lt"         # Less than
-    LTE = "lte"       # Less than or equal
-    IN = "in"         # In list
-    NOT_IN = "not_in" # Not in list
-    CONTAINS = "contains"         # Contains string/element
-    NOT_CONTAINS = "not_contains" # Does not contain
-    MATCHES = "matches" # For full text search
+
+    EQ = "eq"  # Equal
+    NE = "ne"  # Not equal
+    GT = "gt"  # Greater than
+    GTE = "gte"  # Greater than or equal
+    LT = "lt"  # Less than
+    LTE = "lte"  # Less than or equal
+    IN = "in"  # In list
+    NOT_IN = "not_in"  # Not in list
+    CONTAINS = "contains"  # Contains string/element
+    NOT_CONTAINS = "not_contains"  # Does not contain
+    MATCHES = "matches"  # For full text search
 
 
 class SortOrder(str, Enum):
     """Sort order options."""
+
     ASC = "asc"
     DESC = "desc"
 
@@ -32,6 +33,7 @@ class SortOrder(str, Enum):
 @dataclass
 class MemoryFilter:
     """Single filter condition for memory queries."""
+
     field: str
     operator: FilterOperator
     value: Any
@@ -39,17 +41,19 @@ class MemoryFilter:
 
 @dataclass
 class MemoryRelationship:
-  """Graph relationship for memory queries."""
-  type: str
-  direction: str # out/in/any
-  node_type: str
-  condition: Optional[MemoryFilter] = None
+    """Graph relationship for memory queries."""
+
+    type: str
+    direction: str  # out/in/any
+    node_type: str
+    condition: MemoryFilter | None = None
+
 
 @dataclass
 class MemoryQuery:
     """
     Memory query specification.
-    
+
     Examples:
         query = MemoryQuery(
             filters=[
@@ -63,25 +67,26 @@ class MemoryQuery:
             sort_order=SortOrder.DESC
         )
     """
+
     # Main query components
-    filters: List[MemoryFilter] = field(default_factory=list)
-    relationships: List[MemoryRelationship] = field(default_factory=list)
-    vector: Optional[List[float]] = None
-    
+    filters: list[MemoryFilter] = field(default_factory=list)
+    relationships: list[MemoryRelationship] = field(default_factory=list)
+    vector: list[float] | None = None
+
     # Query settings
     limit: int = 10
     offset: int = 0
     include_raw: bool = False
-    
+
     # Sorting
-    sort_by: Optional[str] = None
+    sort_by: str | None = None
     sort_order: SortOrder = SortOrder.DESC
 
 
 class MemoryQueryBuilder:
     """
     Builder for memory queries.
-    
+
     Examples:
         query = (MemoryQueryBuilder()
                 .content_contains("project meeting")
@@ -91,41 +96,35 @@ class MemoryQueryBuilder:
                 .limit(5)
                 .build())
     """
-    
-    def __init__(self):
-        self.filters: List[MemoryFilter] = []
-        self.relationships: List[MemoryRelationship] = []
-        self.vector: Optional[List[float]] = None
+
+    def __init__(self) -> None:
+        self.filters: list[MemoryFilter] = []
+        self.relationships: list[MemoryRelationship] = []
+        self.vector: list[float] | None = None
         self.limit_val: int = 10
         self.offset_val: int = 0
         self.include_raw_val: bool = False
-        self.sort_by_val: Optional[str] = None
+        self.sort_by_val: str | None = None
         self.sort_order_val: SortOrder = SortOrder.DESC
-        
-        # Placeholders for database-specific functions
-        self._pre_build_hooks: List[Callable[["MemoryQuery"], Awaitable[None]]] = []
 
-    
+        # Placeholders for database-specific functions
+        self._pre_build_hooks: list[Callable[[MemoryQuery], Awaitable[None]]] = []
+
     def filter(
-        self,
-        field: str,
-        operator: Union[FilterOperator, str],
-        value: Any
+        self, field: str, operator: FilterOperator | str, value: Any
     ) -> "MemoryQueryBuilder":
         """Add a filter condition."""
         if isinstance(operator, str):
             operator = FilterOperator(operator)
-        
+
         self.filters.append(MemoryFilter(field, operator, value))
         return self
 
     def filter_with_callback(
-      self, 
-      callback: Callable[["MemoryQueryBuilder"], "MemoryQueryBuilder"]
-      ) -> "MemoryQueryBuilder":
+        self, callback: Callable[["MemoryQueryBuilder"], "MemoryQueryBuilder"]
+    ) -> "MemoryQueryBuilder":
         """Add filter with callback function"""
         return callback(self)
-
 
     def content_contains(self, text: str) -> "MemoryQueryBuilder":
         """Filter by content text."""
@@ -134,11 +133,9 @@ class MemoryQueryBuilder:
     def content_matches(self, text: str) -> "MemoryQueryBuilder":
         """Filter by content text using full-text search."""
         return self.filter("content", FilterOperator.MATCHES, text)
-    
+
     def similar_to(
-        self,
-        text: Optional[str] = None,
-        vector: Optional[List[float]] = None
+        self, text: str | None = None, vector: list[float] | None = None
     ) -> "MemoryQueryBuilder":
         """Find similar memories by text or vector."""
         if vector is not None:
@@ -146,34 +143,34 @@ class MemoryQueryBuilder:
         if text is not None:
             self.content_contains(text)
         return self
-    
+
     def of_type(self, *types: MemoryType) -> "MemoryQueryBuilder":
         """Filter by memory types."""
         return self.filter("memory_type", FilterOperator.IN, list(types))
-    
-    def with_tags(self, tags: List[str]) -> "MemoryQueryBuilder":
+
+    def with_tags(self, tags: list[str]) -> "MemoryQueryBuilder":
         """Filter by tags."""
         return self.filter("tags", FilterOperator.CONTAINS, tags)
-    
-    def with_emotions(self, emotions: List[EmotionCategory]) -> "MemoryQueryBuilder":
+
+    def with_emotions(self, emotions: list[EmotionCategory]) -> "MemoryQueryBuilder":
         """Filter by emotions."""
         return self.filter("emotions", FilterOperator.CONTAINS, emotions)
 
     def with_relationship(
-      self,
-      relationship_type: str,
-      direction: str, # 'out', 'in', 'any'
-      node_type: str,
-      condition: Optional[MemoryFilter] = None
-    ) -> "MemoryQueryBuilder":
-      """Filter based on graph relationships."""
-      self.relationships.append(MemoryRelationship(relationship_type, direction, node_type, condition))
-      return self
-    
-    def importance_range(
         self,
-        min_value: Optional[float] = None,
-        max_value: Optional[float] = None
+        relationship_type: str,
+        direction: str,  # 'out', 'in', 'any'
+        node_type: str,
+        condition: MemoryFilter | None = None,
+    ) -> "MemoryQueryBuilder":
+        """Filter based on graph relationships."""
+        self.relationships.append(
+            MemoryRelationship(relationship_type, direction, node_type, condition)
+        )
+        return self
+
+    def importance_range(
+        self, min_value: float | None = None, max_value: float | None = None
     ) -> "MemoryQueryBuilder":
         """Filter by importance range."""
         if min_value is not None:
@@ -181,11 +178,9 @@ class MemoryQueryBuilder:
         if max_value is not None:
             self.filter("importance", FilterOperator.LTE, max_value)
         return self
-    
+
     def in_timeframe(
-        self,
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None
+        self, start: datetime | None = None, end: datetime | None = None
     ) -> "MemoryQueryBuilder":
         """Filter by time range."""
         if start:
@@ -193,54 +188,52 @@ class MemoryQueryBuilder:
         if end:
             self.filter("timestamp", FilterOperator.LTE, end)
         return self
-    
-    def sort_by(
-        self,
-        field: str,
-        order: Union[SortOrder, str] = SortOrder.DESC
-    ) -> "MemoryQueryBuilder":
+
+    def sort_by(self, field: str, order: SortOrder | str = SortOrder.DESC) -> "MemoryQueryBuilder":
         """Set sort order."""
         if isinstance(order, str):
             order = SortOrder(order)
-        
+
         self.sort_by_val = field
         self.sort_order_val = order
         return self
-    
+
     def limit(self, limit: int) -> "MemoryQueryBuilder":
         """Set result limit."""
         self.limit_val = limit
         return self
-    
+
     def offset(self, offset: int) -> "MemoryQueryBuilder":
         """Set result offset."""
         self.offset_val = offset
         return self
-    
+
     def include_raw(self, include: bool = True) -> "MemoryQueryBuilder":
         """Include raw content in results."""
         self.include_raw_val = include
         return self
-    
-    def add_pre_build_hook(self, hook: Callable[["MemoryQuery"], Awaitable[None]]) -> "MemoryQueryBuilder":
+
+    def add_pre_build_hook(
+        self, hook: Callable[["MemoryQuery"], Awaitable[None]]
+    ) -> "MemoryQueryBuilder":
         """Register a hook that will be executed on pre build."""
         self._pre_build_hooks.append(hook)
         return self
-    
+
     async def build(self) -> MemoryQuery:
         """Build the query."""
-        query =  MemoryQuery(
+        query = MemoryQuery(
             filters=self.filters,
-            relationships = self.relationships,
+            relationships=self.relationships,
             vector=self.vector,
             limit=self.limit_val,
             offset=self.offset_val,
             include_raw=self.include_raw_val,
             sort_by=self.sort_by_val,
-            sort_order=self.sort_order_val
+            sort_order=self.sort_order_val,
         )
         for hook in self._pre_build_hooks:
-          await hook(query)
+            await hook(query)
         return query
 
 

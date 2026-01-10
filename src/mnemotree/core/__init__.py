@@ -1,37 +1,41 @@
 from __future__ import annotations
 
-from .engine import MemoryEngine
-from .memory import MemoryCore
-from .models import MemoryItem, MemoryType
-from .models_v2 import (
-    MemoryAnnotations,
-    MemoryEdge,
-    MemoryEnvelope,
-    MemoryFilter,
-    MemoryHit,
-    MemoryQuery as MemoryQueryV2,
-    MemoryRecord,
+from .builder import MemoryCoreBuilder
+from .memory import (
+    IngestionConfig,
+    MemoryCore,
+    MemoryMode,
+    ModeDefaultsConfig,
+    NerConfig,
+    RetrievalConfig,
+    RetrievalMode,
+    ScoringConfig,
 )
-from .protocols import DocStore, Embedder, Enricher, GraphStore, VectorIndex
+from .models import MemoryItem, MemoryType
 from .query import MemoryQuery, MemoryQueryBuilder
+from .hybrid_retrieval import FusionStrategy, HybridRetriever, RetrievalStage
+from ..rerankers import CrossEncoderReranker, NoOpReranker
 
 __all__ = [
-    "DocStore",
-    "Embedder",
-    "Enricher",
-    "GraphStore",
-    "MemoryAnnotations",
+    # Core
     "MemoryCore",
-    "MemoryEdge",
-    "MemoryEngine",
-    "MemoryEnvelope",
-    "MemoryFilter",
-    "MemoryHit",
+    "MemoryCoreBuilder",
+    "MemoryMode",
     "MemoryItem",
     "MemoryQuery",
     "MemoryQueryBuilder",
-    "MemoryQueryV2",
-    "MemoryRecord",
     "MemoryType",
-    "VectorIndex",
+    # Config
+    "IngestionConfig",
+    "ModeDefaultsConfig",
+    "NerConfig",
+    "RetrievalConfig",
+    "RetrievalMode",
+    "ScoringConfig",
+    # Retrieval
+    "HybridRetriever",
+    "CrossEncoderReranker",
+    "NoOpReranker",
+    "FusionStrategy",
+    "RetrievalStage",
 ]
