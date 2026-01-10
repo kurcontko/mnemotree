@@ -1,30 +1,37 @@
 from __future__ import annotations
 
-import logging
-from typing import List, Optional, Dict, Any, Union
-from datetime import datetime
 import json
+import logging
+import time
+from datetime import datetime
+from typing import Any
 
-import numpy as np
 from pymilvus import (
-    connections,
     Collection,
     CollectionSchema,
-    FieldSchema,
     DataType,
+    FieldSchema,
+    connections,
     utility,
-    MilvusException
 )
+
+try:
+    from pymilvus.exceptions import MilvusException
+except ImportError:  # pragma: no cover - compatibility fallback
+    MilvusException = Exception
 
 from ..core.models import MemoryItem, MemoryType
 from ..core.query import MemoryQuery
+from ..utils.serialization import json_dumps_safe, json_loads_dict
 from .base import BaseMemoryStore
-
+from .logging import elapsed_ms, store_log_context
 
 logger = logging.getLogger(__name__)
 
 
 class MilvusMemoryStore(BaseMemoryStore):
+    store_type = "milvus"
+
     def __init__(
         self,
         uri: str = "localhost:19530",
@@ -32,11 +39,11 @@ class MilvusMemoryStore(BaseMemoryStore):
         password: str = "",
         collection_name: str = "memories",
         dim: int = 1536,  # Default dimension for embeddings
-        consistency_level: str = "Strong"
+        consistency_level: str = "Strong",
     ):
         """
         Initialize Milvus storage connection
-        
+
         Args:
             uri: Milvus server URI
             user: Username for authentication
@@ -51,23 +58,30 @@ class MilvusMemoryStore(BaseMemoryStore):
         self.collection_name = collection_name
         self.dim = dim
         self.consistency_level = consistency_level
-        self.collection: Optional[Collection] = None
+        self.collection: Collection | None = None
+        self._initialized = False
 
     async def initialize(self):
         """Initialize Milvus connection and create collection if needed"""
+        if self._initialized:
+            return
+        start = time.perf_counter()
         try:
             # Connect to Milvus
             connections.connect(
-                alias="default",
-                uri=self.uri,
-                user=self.user,
-                password=self.password
+                alias="default", uri=self.uri, user=self.user, password=self.password
             )
-            logger.info(f"Connected to Milvus at {self.uri}")
+            logger.info(
+                "Connected to Milvus at %s",
+                self.uri,
+                extra=store_log_context(self.store_type),
+            )
 
             # Define collection schema
             fields = [
-                FieldSchema(name="memory_id", dtype=DataType.VARCHAR, max_length=65535, is_primary=True),
+                FieldSchema(
+                    name="memory_id", dtype=DataType.VARCHAR, max_length=65535, is_primary=True
+                ),
                 FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
                 FieldSchema(name="memory_type", dtype=DataType.VARCHAR, max_length=255),
                 FieldSchema(name="timestamp", dtype=DataType.VARCHAR, max_length=255),
@@ -77,78 +91,107 @@ class MilvusMemoryStore(BaseMemoryStore):
                 FieldSchema(name="emotions", dtype=DataType.VARCHAR, max_length=65535),
                 FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=65535),
                 FieldSchema(name="context", dtype=DataType.VARCHAR, max_length=65535),
-                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=self.dim)
+                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=self.dim),
             ]
 
-            schema = CollectionSchema(
-                fields=fields,
-                description="Memory storage collection"
-            )
+            schema = CollectionSchema(fields=fields, description="Memory storage collection")
 
             # Create collection if it doesn't exist
             if not utility.has_collection(self.collection_name):
                 self.collection = Collection(
                     name=self.collection_name,
                     schema=schema,
-                    consistency_level=self.consistency_level
+                    consistency_level=self.consistency_level,
                 )
 
                 # Create index for vector similarity search
                 index_params = {
                     "metric_type": "COSINE",
                     "index_type": "IVF_FLAT",
-                    "params": {"nlist": 1024}
+                    "params": {"nlist": 1024},
                 }
-                self.collection.create_index(
-                    field_name="embedding",
-                    index_params=index_params
-                )
+                self.collection.create_index(field_name="embedding", index_params=index_params)
             else:
                 self.collection = Collection(self.collection_name)
                 self.collection.load()
 
-            logger.info(f"Successfully initialized Milvus collection: {self.collection_name}")
+            logger.info(
+                "Successfully initialized Milvus collection: %s",
+                self.collection_name,
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            self._initialized = True
 
-        except Exception as e:
-            logger.error(f"Failed to initialize Milvus: {e}")
+        except MilvusException:
+            logger.exception(
+                "Failed to initialize Milvus",
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
     async def store_memory(self, memory: MemoryItem) -> None:
         """Store a single memory"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
+            timestamp = memory.timestamp
+            if isinstance(timestamp, datetime):
+                timestamp = timestamp.isoformat()
+
             # Prepare data for insertion
             data = {
                 "memory_id": [memory.memory_id],
                 "content": [memory.content],
                 "memory_type": [memory.memory_type.value],
-                "timestamp": [memory.timestamp],
+                "timestamp": [timestamp],
                 "importance": [float(memory.importance)],
                 "confidence": [float(memory.confidence)],
                 "tags": [json.dumps(memory.tags)],
                 "emotions": [json.dumps([str(e) for e in memory.emotions])],
                 "source": [memory.source if memory.source else ""],
-                "context": [json.dumps(memory.context) if memory.context else "{}"],
-                "embedding": [memory.embedding]
+                "context": [json_dumps_safe(memory.context) if memory.context else "{}"],
+                "embedding": [memory.embedding],
             }
 
             # Insert into Milvus
             self.collection.insert(data)
             self.collection.flush()
-            logger.info(f"Successfully stored memory {memory.memory_id}")
+            logger.info(
+                "Successfully stored memory %s",
+                memory.memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory.memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
 
-        except Exception as e:
-            logger.error(f"Failed to store memory {memory.memory_id}: {e}")
+        except (MilvusException, TypeError, ValueError):
+            logger.exception(
+                "Failed to store memory %s",
+                memory.memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory.memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
-    async def get_memory(self, memory_id: str) -> Optional[MemoryItem]:
+    async def get_memory(self, memory_id: str) -> MemoryItem | None:
         """Retrieve a memory by ID"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
             # Query by memory_id
             self.collection.load()
-            results = self.collection.query(
-                expr=f'memory_id == "{memory_id}"',
-                output_fields=['*']
-            )
+            results = self.collection.query(expr=f'memory_id == "{memory_id}"', output_fields=["*"])
 
             if not results:
                 return None
@@ -165,32 +208,83 @@ class MilvusMemoryStore(BaseMemoryStore):
                 "tags": json.loads(result["tags"]),
                 "emotions": json.loads(result["emotions"]),
                 "source": result["source"] if result["source"] else None,
-                "context": json.loads(result["context"]),
-                "embedding": result["embedding"]
+                "context": json_loads_dict(result.get("context")),
+                "embedding": result["embedding"],
             }
 
             return MemoryItem(**memory_data)
 
-        except Exception as e:
-            logger.error(f"Failed to retrieve memory {memory_id}: {e}")
+        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to retrieve memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
-    async def delete_memory(self, memory_id: str) -> bool:
-        """Delete a memory by ID"""
+    async def delete_memory(
+        self,
+        memory_id: str,
+        *,
+        cascade: bool = False,
+    ) -> bool:
+        """Delete a memory by ID.
+
+        Note: Milvus is a pure vector store here; `cascade` is accepted for
+        interface compatibility but has no additional effect.
+        """
+        await self.initialize()
+        start = time.perf_counter()
         try:
+            memory = await self.get_memory(memory_id)
+            if not memory:
+                logger.info(
+                    "No memory found to delete",
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return False
             expr = f'memory_id == "{memory_id}"'
             self.collection.delete(expr)
+            logger.info(
+                "Deleted memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             return True
-        except Exception as e:
-            logger.error(f"Failed to delete memory {memory_id}: {e}")
-            return False
+        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to delete memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            raise
 
     async def get_similar_memories(
         self,
-        query_embedding: List[float],
-        top_k: int = 10
-    ) -> List[MemoryItem]:
+        query: str,
+        query_embedding: list[float],
+        top_k: int = 10,
+        filters: dict[str, Any] | None = None,
+    ) -> list[MemoryItem]:
         """Get similar memories using vector similarity"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
             search_params = {
                 "metric_type": "COSINE",
@@ -203,7 +297,7 @@ class MilvusMemoryStore(BaseMemoryStore):
                 anns_field="embedding",
                 param=search_params,
                 limit=top_k,
-                output_fields=['*']
+                output_fields=["*"],
             )
 
             memories = []
@@ -219,19 +313,27 @@ class MilvusMemoryStore(BaseMemoryStore):
                         "tags": json.loads(hit.entity.get("tags")),
                         "emotions": json.loads(hit.entity.get("emotions")),
                         "source": hit.entity.get("source") if hit.entity.get("source") else None,
-                        "context": json.loads(hit.entity.get("context")),
-                        "embedding": hit.entity.get("embedding")
+                        "context": json_loads_dict(hit.entity.get("context")),
+                        "embedding": hit.entity.get("embedding"),
                     }
                     memories.append(MemoryItem(**memory_data))
 
             return memories
 
-        except Exception as e:
-            logger.error(f"Failed to get similar memories: {e}")
+        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to get similar memories",
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
-    async def query_memories(self, query: MemoryQuery) -> List[MemoryItem]:
+    async def query_memories(self, query: MemoryQuery) -> list[MemoryItem]:
         """Execute a complex memory query"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
             # Build Milvus expression for filtering
             expressions = []
@@ -240,7 +342,7 @@ class MilvusMemoryStore(BaseMemoryStore):
                     if isinstance(filter.value, str):
                         expressions.append(f'{filter.field} == "{filter.value}"')
                     else:
-                        expressions.append(f'{filter.field} {filter.operator.value} {filter.value}')
+                        expressions.append(f"{filter.field} {filter.operator.value} {filter.value}")
 
             expr = " && ".join(expressions) if expressions else ""
 
@@ -257,7 +359,7 @@ class MilvusMemoryStore(BaseMemoryStore):
                     param=search_params,
                     limit=query.limit or 10,
                     expr=expr if expr else None,
-                    output_fields=['*']
+                    output_fields=["*"],
                 )
 
                 memories = []
@@ -272,18 +374,18 @@ class MilvusMemoryStore(BaseMemoryStore):
                             "confidence": float(hit.entity.get("confidence")),
                             "tags": json.loads(hit.entity.get("tags")),
                             "emotions": json.loads(hit.entity.get("emotions")),
-                            "source": hit.entity.get("source") if hit.entity.get("source") else None,
-                            "context": json.loads(hit.entity.get("context")),
-                            "embedding": hit.entity.get("embedding")
+                            "source": hit.entity.get("source")
+                            if hit.entity.get("source")
+                            else None,
+                            "context": json_loads_dict(hit.entity.get("context")),
+                            "embedding": hit.entity.get("embedding"),
                         }
                         memories.append(MemoryItem(**memory_data))
 
             else:
                 # Regular query without vector similarity
                 results = self.collection.query(
-                    expr=expr if expr else None,
-                    output_fields=['*'],
-                    limit=query.limit
+                    expr=expr if expr else None, output_fields=["*"], limit=query.limit
                 )
 
                 memories = []
@@ -298,21 +400,35 @@ class MilvusMemoryStore(BaseMemoryStore):
                         "tags": json.loads(result["tags"]),
                         "emotions": json.loads(result["emotions"]),
                         "source": result["source"] if result["source"] else None,
-                        "context": json.loads(result["context"]),
-                        "embedding": result["embedding"]
+                        "context": json_loads_dict(result.get("context")),
+                        "embedding": result["embedding"],
                     }
                     memories.append(MemoryItem(**memory_data))
 
             return memories
 
-        except Exception as e:
-            logger.error(f"Failed to query memories: {e}")
+        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to query memories",
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
     async def close(self):
         """Close the Milvus connection"""
         try:
             connections.disconnect("default")
-            logger.info("Closed Milvus connection")
-        except Exception as e:
-            logger.error(f"Error closing Milvus connection: {e}")
+            logger.info(
+                "Closed Milvus connection",
+                extra=store_log_context(self.store_type),
+            )
+            self.collection = None
+            self._initialized = False
+        except MilvusException:
+            logger.exception(
+                "Error closing Milvus connection",
+                extra=store_log_context(self.store_type),
+            )

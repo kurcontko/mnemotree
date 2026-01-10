@@ -1,42 +1,55 @@
 from __future__ import annotations
 
-import logging
 import json
-from typing import List, Optional, Dict, Any
-import numpy as np
-import chromadb
-from chromadb.config import Settings
+import logging
+import os
+import time
+from typing import Any
+
 from chromadb.api.models.Collection import Collection
 
-from ..core.models import MemoryItem, MemoryType
+try:
+    from chromadb.errors import ChromaError
+except ImportError:  # pragma: no cover - compatibility fallback
+    ChromaError = Exception
+
+from ..core.models import MemoryItem
 from ..core.query import MemoryQuery
+from ..errors import IndexError as MnemotreeIndexError, StoreError
+from ..utils.serialization import json_loads_dict
+from ._queries import build_entity_set, entity_matches
+from ._records import chroma_memory_from_record, chroma_metadata_from_memory
 from .base import BaseMemoryStore
+from .chroma_utils import create_chroma_client
+from .logging import elapsed_ms, store_log_context
+from .query_builders import UnsupportedQueryError, build_chroma_where
+from .sqlite_graph import SQLiteGraphIndex
 
 logger = logging.getLogger(__name__)
 
-def _safe_load_context(context_str: str) -> Dict[str, Any]:
-    if not context_str:
-        return {}
-    try:
-        loaded = json.loads(context_str)
-        return loaded if isinstance(loaded, dict) else {}
-    except Exception:
-        return {}
+
 
 
 class ChromaMemoryStore(BaseMemoryStore):
+    store_type = "chroma"
+
     def __init__(
         self,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        host: str | None = None,
+        port: int | None = None,
         ssl: bool = False,
-        persist_directory: Optional[str] = None,
+        persist_directory: str | None = None,
         collection_name: str = "memories",
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
+        *,
+        enable_graph_index: bool = True,
+        graph_db_path: str | None = None,
+        graph_hops: int = 2,
+        graph_index_strict: bool = False,
     ):
         """Initialize ChromaDB storage with either local persistence or remote connection.
         Selected based on provided arguments. Provide either host/port for remote connection or persist_directory for local persistence.
-        
+
         Args:
             host: Optional host address for remote ChromaDB instance (default: None) e.g. "localhost"
             port: Optional port for remote ChromaDB instance (default: None) e.g. 8000
@@ -44,246 +57,371 @@ class ChromaMemoryStore(BaseMemoryStore):
             collection_name: Name of the collection to use
             ssl: Whether to use SSL for remote connection
             headers: Optional headers for authentication/authorization
+            enable_graph_index: Whether to maintain a local SQLite graph index
+            graph_db_path: Optional path for the graph index SQLite DB
+            graph_hops: Number of hops to traverse in graph-based entity queries
+            graph_index_strict: If True, fail memory operations when graph indexing fails
         """
-        if host and port:
-            # Connect to remote ChromaDB instance
-            self.client = chromadb.HttpClient(
-                host=host,
-                port=port,
-                ssl=ssl,
-                headers=headers or {}
-            )
-            logger.info(f"Initialized remote ChromaDB client at {host}:{port}")
-        elif persist_directory:
-            # Use local persistence
-            self.client = chromadb.PersistentClient(
-                path=persist_directory,
-                settings=Settings(anonymized_telemetry=False)
-            )
-            logger.info(f"Initialized local ChromaDB client at {persist_directory}")
-        else:
-            # In-memory client for testing
-            self.client = chromadb.Client(Settings(anonymized_telemetry=False))
-            logger.info("Initialized in-memory ChromaDB client")
-            
+        self.client = create_chroma_client(
+            host=host,
+            port=port,
+            ssl=ssl,
+            persist_directory=persist_directory,
+            headers=headers,
+            store_type=self.store_type,
+        )
+
         self.collection_name = collection_name
-        self.collection: Optional[Collection] = None
+        self.collection: Collection | None = None
         self._initialized = False
+        self.graph_hops = max(1, int(graph_hops))
+        self.graph_index_strict = bool(graph_index_strict)
+        self.graph_index: SQLiteGraphIndex | None = None
+        if enable_graph_index:
+            resolved_graph_path = graph_db_path
+            if resolved_graph_path is None and persist_directory:
+                resolved_graph_path = os.path.join(persist_directory, "lite_graph.sqlite3")
+            if resolved_graph_path:
+                self.graph_index = SQLiteGraphIndex(resolved_graph_path)
 
     async def initialize(self):
         """Initialize or get the memories collection"""
         if self._initialized:
             return
+        start = time.perf_counter()
         try:
             self.collection = self.client.get_or_create_collection(
                 name=self.collection_name,
-                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+                metadata={"hnsw:space": "cosine"},  # Use cosine similarity
             )
-            logger.info(f"Successfully initialized ChromaDB collection: {self.collection_name}")
+            logger.info(
+                "Successfully initialized ChromaDB collection: %s",
+                self.collection_name,
+                extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start)),
+            )
+            if self.graph_index:
+                try:
+                    self.graph_index.initialize()
+                except Exception as e:
+                    logger.exception(
+                        "Failed to initialize graph index",
+                        extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start)),
+                    )
+                    if self.graph_index_strict:
+                        raise MnemotreeIndexError(
+                            f"Failed to initialize graph index: {e}"
+                        ) from e
+                    logger.warning(
+                        "Continuing without graph index due to initialization failure",
+                        extra=store_log_context(self.store_type),
+                    )
+                    self.graph_index = None
             self._initialized = True
-        except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB collection: {e}")
-            raise
+        except ChromaError as e:
+            logger.exception(
+                "Failed to initialize ChromaDB collection: %s",
+                self.collection_name,
+                extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start)),
+            )
+            raise StoreError(
+                f"Failed to initialize ChromaDB collection: {self.collection_name}",
+                store_type=self.store_type,
+                original_error=e,
+            ) from e
+
+    async def list_memories(
+        self,
+        *,
+        include_embeddings: bool = False,
+    ) -> list[MemoryItem]:
+        """Return all memories stored in the collection."""
+        await self.initialize()
+        include = ["documents", "metadatas"]
+        if include_embeddings:
+            include.append("embeddings")
+        results = self.collection.get(include=include)
+        ids = results.get("ids") or []
+        if not ids:
+            return []
+        embeddings = results.get("embeddings")
+        memories: list[MemoryItem] = []
+        for idx, memory_id in enumerate(ids):
+            memories.append(
+                chroma_memory_from_record(
+                    memory_id=memory_id,
+                    document=results["documents"][idx],
+                    embedding=embeddings[idx] if embeddings is not None else None,
+                    metadata=results["metadatas"][idx],
+                )
+            )
+        return memories
 
     async def store_memory(self, memory: MemoryItem) -> None:
         """Store a single memory"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
-            # Prepare metadata
-            metadata = {
-                "memory_type": memory.memory_type.value,
-                "timestamp": memory.timestamp,
-                "importance": str(memory.importance),  # ChromaDB requires string values
-                "tags": ",".join(memory.tags) if memory.tags else "",
-                "emotions": ",".join(str(e) for e in memory.emotions) if memory.emotions else "",
-                "confidence": str(memory.confidence),
-                "source": memory.source if memory.source else "",
-                "context": json.dumps(memory.context) if memory.context else "",
-                "last_accessed": memory.last_accessed,
-                "access_count": str(memory.access_count),
-                "access_history": json.dumps(memory.access_history) if memory.access_history else "[]",
-                # Store relationships in metadata
-                "associations": ",".join(memory.associations) if memory.associations else "",
-                "linked_concepts": ",".join(memory.linked_concepts) if memory.linked_concepts else "",
-                "conflicts_with": ",".join(memory.conflicts_with) if memory.conflicts_with else "",
-                "previous_event_id": memory.previous_event_id if memory.previous_event_id else "",
-                "next_event_id": memory.next_event_id if memory.next_event_id else ""
-            }
+            metadata = chroma_metadata_from_memory(memory)
 
             # Store in ChromaDB
             self.collection.upsert(
                 ids=[memory.memory_id],
                 embeddings=[memory.embedding],
                 documents=[memory.content],
-                metadatas=[metadata]
+                metadatas=[metadata],
             )
-            
-            logger.info(f"Successfully stored memory {memory.memory_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to store memory {memory.memory_id}: {e}")
-            raise
+            if self.graph_index:
+                try:
+                    self.graph_index.upsert_memory(memory)
+                except Exception as e:
+                    logger.exception(
+                        "Failed to update graph index for memory %s: %s",
+                        memory.memory_id,
+                        e.__class__.__name__,
+                        extra=store_log_context(
+                            self.store_type,
+                            memory_id=memory.memory_id,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                    if self.graph_index_strict:
+                        raise MnemotreeIndexError(
+                            f"Failed to update graph index for memory {memory.memory_id}"
+                        ) from e
 
-    async def get_memory(self, memory_id: str) -> Optional[MemoryItem]:
+            logger.info(
+                "Successfully stored memory %s",
+                memory.memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory.memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+
+        except ChromaError as e:
+            logger.exception(
+                "Failed to store memory %s",
+                memory.memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory.memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            raise StoreError(
+                f"Failed to store memory in ChromaDB",
+                store_type=self.store_type,
+                memory_id=memory.memory_id,
+                original_error=e,
+            ) from e
+
+    async def get_memory(self, memory_id: str) -> MemoryItem | None:
         """Retrieve a memory by ID"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
             result = self.collection.get(
-                ids=[memory_id],
-                include=["embeddings", "documents", "metadatas"]
+                ids=[memory_id], include=["embeddings", "documents", "metadatas"]
             )
 
             if not result["ids"]:
                 return None
 
-            # Extract data from the first (and only) result
-            metadata = result["metadatas"][0]
-            
-            # Convert metadata back to appropriate types
-            memory_data = {
-                "memory_id": memory_id,
-                "content": result["documents"][0],
-                "memory_type": MemoryType(metadata["memory_type"]),
-                "timestamp": metadata["timestamp"],
-                "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
-                "access_count": int(metadata.get("access_count") or 0),
-                "access_history": json.loads(metadata.get("access_history") or "[]"),
-                "importance": float(metadata["importance"]),
-                "confidence": float(metadata["confidence"]),
-                "tags": metadata["tags"].split(",") if metadata["tags"] else [],
-                "emotions": metadata["emotions"].split(",") if metadata["emotions"] else [],
-                "source": metadata["source"] if metadata["source"] else None,
-                "context": _safe_load_context(metadata["context"]),
-                "embedding": result["embeddings"][0],
-                # Retrieve relationships
-                "associations": metadata.get("associations", "").split(",") if metadata.get("associations") else [],
-                "linked_concepts": metadata.get("linked_concepts", "").split(",") if metadata.get("linked_concepts") else [],
-                "conflicts_with": metadata.get("conflicts_with", "").split(",") if metadata.get("conflicts_with") else [],
-                "previous_event_id": metadata.get("previous_event_id") if metadata.get("previous_event_id") else None,
-                "next_event_id": metadata.get("next_event_id") if metadata.get("next_event_id") else None,
-            }
+            return chroma_memory_from_record(
+                memory_id=memory_id,
+                document=result["documents"][0],
+                embedding=result["embeddings"][0],
+                metadata=result["metadatas"][0],
+            )
 
-            return MemoryItem(**memory_data)
-
-        except Exception as e:
-            logger.error(f"Failed to retrieve memory {memory_id}: {e}")
+        except (ChromaError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to retrieve memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
-    async def delete_memory(self, memory_id: str) -> bool:
-        """Delete a memory by ID"""
+    async def delete_memory(
+        self,
+        memory_id: str,
+        *,
+        cascade: bool = False,
+    ) -> bool:
+        """Delete a memory by ID.
+
+        Note: Chroma is a pure vector store here; `cascade` is accepted for
+        interface compatibility but has no additional effect.
+        """
+        await self.initialize()
+        start = time.perf_counter()
         try:
+            memory = await self.get_memory(memory_id)
+            if not memory:
+                logger.info(
+                    "No memory found to delete",
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return False
             self.collection.delete(ids=[memory_id])
+            if self.graph_index:
+                try:
+                    self.graph_index.delete_memory(memory_id)
+                except Exception as e:
+                    logger.exception(
+                        "Failed to update graph index for deleted memory %s: %s",
+                        memory_id,
+                        e.__class__.__name__,
+                        extra=store_log_context(
+                            self.store_type,
+                            memory_id=memory_id,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                    if self.graph_index_strict:
+                        raise MnemotreeIndexError(
+                            f"Failed to delete memory from graph index: {memory_id}"
+                        ) from e
+            logger.info(
+                "Deleted memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             return True
-        except Exception as e:
-            logger.error(f"Failed to delete memory {memory_id}: {e}")
-            return False
+        except (ChromaError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to delete memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            raise
 
     async def get_similar_memories(
         self,
         query: str,
-        query_embedding: List[float],
+        query_embedding: list[float],
         top_k: int = 10,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> List[MemoryItem]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[MemoryItem]:
         """Get similar memories using vector similarity"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
             results = self.collection.query(
                 query_texts=[query],
                 query_embeddings=[query_embedding],
                 n_results=top_k,
-                include=["embeddings", "documents", "metadatas"]
+                include=["embeddings", "documents", "metadatas"],
             )
 
             memories = []
             for i, memory_id in enumerate(results["ids"][0]):
-                metadata = results["metadatas"][0][i]
-                
-                memory_data = {
-                    "memory_id": memory_id,
-                    "content": results["documents"][0][i],
-                    "memory_type": MemoryType(metadata["memory_type"]),
-                    "timestamp": metadata["timestamp"],
-                    "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
-                    "access_count": int(metadata.get("access_count") or 0),
-                    "access_history": json.loads(metadata.get("access_history") or "[]"),
-                    "importance": float(metadata["importance"]),
-                    "confidence": float(metadata["confidence"]),
-                    "tags": metadata["tags"].split(",") if metadata["tags"] else [],
-                    "emotions": metadata["emotions"].split(",") if metadata["emotions"] else [],
-                    "source": metadata["source"] if metadata["source"] else None,
-                    "context": _safe_load_context(metadata["context"]),
-                    "embedding": results["embeddings"][0][i]
-                }
-                
-                memories.append(MemoryItem(**memory_data))
+                memories.append(
+                    chroma_memory_from_record(
+                        memory_id=memory_id,
+                        document=results["documents"][0][i],
+                        embedding=results["embeddings"][0][i],
+                        metadata=results["metadatas"][0][i],
+                    )
+                )
 
             return memories
 
-        except Exception as e:
-            logger.error(f"Failed to get similar memories: {e}")
+        except (ChromaError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to get similar memories",
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
-    async def query_memories(self, query: MemoryQuery) -> List[MemoryItem]:
+    async def query_memories(self, query: MemoryQuery) -> list[MemoryItem]:
         """Execute a complex memory query"""
+        await self.initialize()
+        start = time.perf_counter()
         try:
             # Build where clause for metadata filtering
-            where = {}
+            where: dict[str, str] = {}
             if query.filters:
-                for filter in query.filters:
-                    where[filter.field] = str(filter.value)  # ChromaDB requires string values
+                where = build_chroma_where(query.filters)
 
             # Get results using vector similarity if provided, otherwise use metadata filtering
             results = self.collection.query(
                 query_embeddings=[query.vector] if query.vector is not None else None,
                 where=where if where else None,
                 n_results=query.limit if query.limit else 10,
-                include=["embeddings", "documents", "metadatas"]
+                include=["embeddings", "documents", "metadatas"],
             )
 
             # Convert results to MemoryItems
             memories = []
             for i, memory_id in enumerate(results["ids"][0]):
-                metadata = results["metadatas"][0][i]
-                
-                memory_data = {
-                    "memory_id": memory_id,
-                    "content": results["documents"][0][i],
-                    "memory_type": MemoryType(metadata["memory_type"]),
-                    "timestamp": metadata["timestamp"],
-                    "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
-                    "access_count": int(metadata.get("access_count") or 0),
-                    "access_history": json.loads(metadata.get("access_history") or "[]"),
-                    "importance": float(metadata["importance"]),
-                    "confidence": float(metadata["confidence"]),
-                    "tags": metadata["tags"].split(",") if metadata["tags"] else [],
-                    "emotions": metadata["emotions"].split(",") if metadata["emotions"] else [],
-                    "source": metadata["source"] if metadata["source"] else None,
-                    "context": _safe_load_context(metadata["context"]),
-                    "embedding": results["embeddings"][0][i]
-                }
-                
-                memories.append(MemoryItem(**memory_data))
+                memories.append(
+                    chroma_memory_from_record(
+                        memory_id=memory_id,
+                        document=results["documents"][0][i],
+                        embedding=results["embeddings"][0][i],
+                        metadata=results["metadatas"][0][i],
+                    )
+                )
 
             return memories
 
-        except Exception as e:
-            logger.error(f"Failed to query memories: {e}")
+        except UnsupportedQueryError:
             raise
-        
+        except (ChromaError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to query memories",
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            raise
 
     async def update_connections(
         self,
         memory_id: str,
         *,
-        related_ids: Optional[List[str]] = None,
-        conflict_ids: Optional[List[str]] = None,
-        previous_id: Optional[str] = None,
-        next_id: Optional[str] = None
+        related_ids: list[str] | None = None,
+        conflict_ids: list[str] | None = None,
+        previous_id: str | None = None,
+        next_id: str | None = None,
     ) -> None:
         """Update memory connections"""
+        start = time.perf_counter()
         try:
             # 1. Get existing memory to preserve other fields
             memory = await self.get_memory(memory_id)
             if not memory:
-                logger.warning(f"Attempted to update connections for non-existent memory {memory_id}")
+                logger.warning(
+                    "Attempted to update connections for non-existent memory %s",
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
                 return
 
             # 2. Update fields if provided
@@ -298,33 +436,227 @@ class ChromaMemoryStore(BaseMemoryStore):
 
             # 3. Re-store the memory (this will update metadata)
             await self.store_memory(memory)
-            logger.info(f"Successfully updated connections for memory {memory_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to update connections for memory {memory_id}: {e}")
+            logger.info(
+                "Successfully updated connections for memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+
+        except (ChromaError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to update connections for memory %s",
+                memory_id,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory_id,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
             raise
 
-    async def query_by_entities(self, entities):
-        # TODO: Implement basic metadata filtering for entities if possible
-        logger.warning("query_by_entities not fully implemented for ChromaDB, returning empty list")
-        return []
+    async def query_by_entities(
+        self,
+        entities: dict[str, str] | list[str],
+        limit: int = 10,
+    ) -> list[MemoryItem]:
+        """Query memories by entity names.
 
-    async def update_memory_metadata(self, memory_id: str, metadata: Dict[str, Any]) -> bool:
-        """Update metadata fields for a memory item."""
+        Args:
+            entities: List of entity names (or a dict mapping entity->type; types ignored in Chroma)
+            limit: Maximum number of results to return
+
+        Returns:
+            List of MemoryItem objects containing any of the specified entities
+        """
+        await self.initialize()
+        start = time.perf_counter()
         try:
-            memory = await self.get_memory(memory_id)
-            if not memory:
-                return False
-            for key, value in metadata.items():
-                if hasattr(memory, key):
-                    setattr(memory, key, value)
-            await self.store_memory(memory)
-            return True
+            if not entities:
+                return []
+
+            if self.graph_index:
+                try:
+                    hits = self.graph_index.recall_by_entities(
+                        entities,
+                        limit=limit,
+                        hops=self.graph_hops,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "Failed to query graph index: %s",
+                        e.__class__.__name__,
+                        extra=store_log_context(
+                            self.store_type,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                    if self.graph_index_strict:
+                        raise MnemotreeIndexError(
+                            f"Failed to query graph index by entities"
+                        ) from e
+                    hits = []
+                if not hits:
+                    # Fall back to slower scan when the index is empty/unavailable.
+                    hits = None
+            else:
+                hits = None
+
+            if hits is not None:
+                if not hits:
+                    return []
+                memories_by_id = await self._get_memories_by_ids(
+                    [hit.memory_id for hit in hits]
+                )
+                results: list[MemoryItem] = []
+                for hit in hits:
+                    memory = memories_by_id.get(hit.memory_id)
+                    if memory is None:
+                        continue
+                    context = memory.context if isinstance(memory.context, dict) else {}
+                    if hit.matching_entities:
+                        context = dict(context)
+                        context["matching_entities"] = hit.matching_entities
+                    if hit.depth:
+                        context = dict(context)
+                        context["connection_depth"] = hit.depth
+                    if context:
+                        memory.context = context
+                    results.append(memory)
+                    if len(results) >= limit:
+                        break
+                return results
+
+            entity_set = build_entity_set(entities)
+
+            # Get all memories and filter by entities in memory
+            # ChromaDB doesn't support complex metadata queries on JSON fields,
+            # so we need to retrieve and filter in memory
+            all_results = self.collection.get(include=["embeddings", "documents", "metadatas"])
+
+            if not all_results["ids"]:
+                return []
+
+            matching_memories = []
+
+            for idx, memory_id in enumerate(all_results["ids"]):
+                metadata = all_results["metadatas"][idx]
+                stored_entities = json_loads_dict(metadata.get("entities"))
+
+                # Check if any of the requested entities are in this memory
+                if entity_matches(stored_entities, entity_set):
+                    matching_memories.append(
+                        chroma_memory_from_record(
+                            memory_id=memory_id,
+                            document=all_results["documents"][idx],
+                            embedding=all_results["embeddings"][idx],
+                            metadata=metadata,
+                            entities_override=stored_entities,
+                        )
+                    )
+
+                    if len(matching_memories) >= limit:
+                        break
+
+            return matching_memories
+
+        except (ChromaError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to query by entities",
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            raise
+
+    async def rebuild_graph_index(self) -> int:
+        """Rebuild the SQLite graph index from the current Chroma collection."""
+        if not self.graph_index:
+            return 0
+        await self.initialize()
+        assert self.collection is not None
+
+        try:
+            self.graph_index.reset()
         except Exception as e:
-            logger.error(f"Failed to update memory metadata for {memory_id}: {e}")
-            return False
+            logger.exception(
+                "Failed to reset graph index: %s",
+                e.__class__.__name__,
+                extra=store_log_context(self.store_type),
+            )
+            if self.graph_index_strict:
+                raise MnemotreeIndexError(
+                    "Failed to reset graph index during rebuild"
+                ) from e
+            return 0
+
+        rebuilt = 0
+        batch_size = 1000
+        offset = 0
+        while True:
+            try:
+                batch = self.collection.get(
+                    include=["embeddings", "documents", "metadatas"],
+                    limit=batch_size,
+                    offset=offset,
+                )
+            except TypeError:
+                if offset != 0:
+                    break
+                batch = self.collection.get(include=["embeddings", "documents", "metadatas"])
+            ids = batch.get("ids") or []
+            if not ids:
+                break
+            for idx, memory_id in enumerate(ids):
+                memory = chroma_memory_from_record(
+                    memory_id=memory_id,
+                    document=batch["documents"][idx],
+                    embedding=batch["embeddings"][idx],
+                    metadata=batch["metadatas"][idx],
+                )
+                try:
+                    self.graph_index.upsert_memory(memory)
+                    rebuilt += 1
+                except Exception as e:
+                    logger.warning(
+                        "Failed to index memory %s during rebuild: %s",
+                        memory_id,
+                        e.__class__.__name__,
+                        extra=store_log_context(self.store_type, memory_id=memory_id),
+                    )
+                    if self.graph_index_strict:
+                        raise MnemotreeIndexError(
+                            f"Failed to rebuild graph index for memory {memory_id}"
+                        ) from e
+            if len(ids) < batch_size:
+                break
+            offset += len(ids)
+        return rebuilt
 
     async def close(self):
         """Close the database connection"""
         # ChromaDB handles connection cleanup automatically
-        pass
+        self.collection = None
+        self._initialized = False
+        if self.graph_index:
+            self.graph_index.close()
+
+    async def _get_memories_by_ids(self, memory_ids: list[str]) -> dict[str, MemoryItem]:
+        if not memory_ids:
+            return {}
+        result = self.collection.get(
+            ids=memory_ids, include=["embeddings", "documents", "metadatas"]
+        )
+        memories: dict[str, MemoryItem] = {}
+        for idx, memory_id in enumerate(result["ids"]):
+            memories[memory_id] = chroma_memory_from_record(
+                memory_id=memory_id,
+                document=result["documents"][idx],
+                embedding=result["embeddings"][idx],
+                metadata=result["metadatas"][idx],
+            )
+        return memories
