@@ -11,6 +11,11 @@ from ...core.memory import MemoryCore
 class MemoryLangChainAdapter(BaseMemory):
     """Adapter to use Memory System as LangChain memory."""
 
+    memory: Any
+    memory_key: str = "history"
+    input_key: str = "input"
+    output_key: str = "output"
+
     def __init__(
         self,
         memory_core: MemoryCore,
@@ -18,10 +23,20 @@ class MemoryLangChainAdapter(BaseMemory):
         input_key: str = "input",
         output_key: str = "output",
     ):
-        self.memory = memory_core
-        self.memory_key = memory_key
-        self.input_key = input_key
-        self.output_key = output_key
+        try:
+            super().__init__(
+                memory=memory_core,
+                memory_key=memory_key,
+                input_key=input_key,
+                output_key=output_key,
+            )
+        except TypeError:
+            # Fallback for stubbed BaseMemory without kwargs in __init__.
+            super().__init__()
+            self.memory = memory_core
+            self.memory_key = memory_key
+            self.input_key = input_key
+            self.output_key = output_key
 
     @property
     def memory_variables(self) -> list[str]:

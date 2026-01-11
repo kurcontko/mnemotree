@@ -13,10 +13,14 @@ from ...core.memory import MemoryCore
 class MemoryRetriever(BaseRetriever):
     """Adapter to use Memory System as a LangChain retriever."""
 
-    def __init__(self, memory_core: MemoryCore, search_kwargs: dict[str, Any] = None):
-        super().__init__()
-        self.memory = memory_core
-        self.search_kwargs = search_kwargs or {"limit": 5, "min_importance": 0.6}
+    memory: Any
+    search_kwargs: dict[str, Any]
+
+    def __init__(
+        self, memory_core: MemoryCore, search_kwargs: dict[str, Any] | None = None
+    ) -> None:
+        resolved_search_kwargs = search_kwargs or {"limit": 5, "min_importance": 0.6}
+        super().__init__(memory=memory_core, search_kwargs=resolved_search_kwargs)
 
     async def _aget_relevant_documents(
         self,
