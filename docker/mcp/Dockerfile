@@ -1,7 +1,10 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY . .
+
+# Copy only what is needed
+COPY pyproject.toml uv.lock README.md /app/
+COPY src /app/src
 
 RUN pip install --no-cache-dir uv \
     && uv pip install -e ".[mcp,lite,chroma]"
