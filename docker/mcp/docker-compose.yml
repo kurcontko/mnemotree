@@ -1,0 +1,11 @@
+services:
+  mnemotree-mcp:
+    build:
+      context: ../..
+      dockerfile: docker/mcp/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MNEMOTREE_MCP_PERSIST_DIR: /data/chromadb
+    volumes:
+      - ../../.mnemotree:/data
