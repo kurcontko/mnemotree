@@ -233,24 +233,46 @@ class BaseQueryExpander:
         term_scores: dict[str, float] = {}
 
         for memory_id in top_doc_ids:
-            tf_counter = self.index.term_freqs.get(memory_id)
-            if not tf_counter:
-                continue
-            dl = self.index.doc_len.get(memory_id, 0)
-            if dl <= 0:
-                continue
-            for term, tf in tf_counter.items():
-                if tf <= 0 or term in query_term_set:
-                    continue
-                if term in PRF_STOPWORDS or len(term) < 4 or term.isdigit():
-                    continue
-                df = self.index.doc_freq.get(term, 0)
-                if df <= 0:
-                    continue
-                idf = math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
-                term_scores[term] = term_scores.get(term, 0.0) + idf * (tf / dl)
+            self._score_terms_from_doc(memory_id, query_term_set, n_docs, term_scores)
 
         return term_scores
+
+    def _score_terms_from_doc(
+        self,
+        memory_id: str,
+        query_term_set: set[str],
+        n_docs: int,
+        term_scores: dict[str, float],
+    ) -> None:
+        """Extract and score terms from a single document for PRF."""
+        tf_counter = self.index.term_freqs.get(memory_id)
+        if not tf_counter:
+            return
+        
+        dl = self.index.doc_len.get(memory_id, 0)
+        if dl <= 0:
+            return
+        
+        for term, tf in tf_counter.items():
+            if self._should_skip_term(term, tf, query_term_set):
+                continue
+            
+            df = self.index.doc_freq.get(term, 0)
+            if df <= 0:
+                continue
+            
+            idf = math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
+            term_scores[term] = term_scores.get(term, 0.0) + idf * (tf / dl)
+
+    def _should_skip_term(self, term: str, tf: int, query_term_set: set[str]) -> bool:
+        """Check if term should be skipped for PRF expansion."""
+        return (
+            tf <= 0
+            or term in query_term_set
+            or term in PRF_STOPWORDS
+            or len(term) < 4
+            or term.isdigit()
+        )
 
     def _select_expansion_terms(self, term_scores: dict[str, float]) -> list[str]:
         return [
