@@ -13,6 +13,68 @@ An Advanced Memory Management and Retrieval System for LLM Agents
 
 Mnemotree is a framework that enhances Large Language Model (LLM) agents with biologically-inspired memory capabilities. It provides a unified system for storing, retrieving, and analyzing structured knowledge representations, designed to seamlessly integrate with popular LLM frameworks like LangChain and Autogen.
 
+It includes a ready-to-use **Model Context Protocol (MCP)** server, allowing easy integration with Claude Desktop, Codex CLI, and other MCP-compliant tools with a single command.
+
+## API Stability
+
+The project has a small set of stable public entry points and a larger set of experimental internals.
+See docs/API.md for what is considered public API, what is experimental, and what compatibility guarantees are provided.
+
+## ⚡ MCP Quickstart (FastMCP)
+
+Run the MCP server directly from the project source using `uvx`:
+
+```bash
+# Run via stdio (for Claude Desktop etc)
+uvx --from . --with mnemotree[mcp_server] mnemotree-mcp
+```
+
+Or connect via HTTP (for multiple clients):
+
+```bash
+uvx --from . --with mnemotree[mcp_server] mnemotree-mcp run --transport http --port 8000
+```
+
+### Usage from other tools (Claude Desktop, etc.)
+
+To use this MCP server from other applications while developing locally, reference the absolute path to your repository.
+
+**Claude Desktop Config (`claude_desktop_config.json`):**
+
+```json
+{
+  "mcpServers": {
+    "mnemotree": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "/absolute/path/to/mnemotree",
+        "--with",
+        "mnemotree[mcp_server]",
+        "mnemotree-mcp"
+      ],
+      "env": {
+        "MNEMOTREE_MCP_PERSIST_DIR": "/absolute/path/to/mnemotree/.mnemotree/chromadb"
+      }
+    }
+  }
+}
+```
+
+**Command Line (from any directory):**
+
+```bash
+uvx --from /path/to/mnemotree --with mnemotree[mcp_server] mnemotree-mcp
+```
+
+### Usage directly from GitHub
+
+You can also run the server without cloning the repository locally:
+
+```bash
+uvx --from "git+https://github.com/kurcontko/mnemotree.git" --with "mnemotree[mcp_server]" mnemotree-mcp
+```
+
 ## 🌟 Key Features
 
 ### Memory Management
@@ -36,6 +98,7 @@ Mnemotree is a framework that enhances Large Language Model (LLM) agents with bi
 ### Storage & Retrieval
 - **Flexible Storage Backend**:
   - ChromaDB integration for vector similarity search
+  - SQLite + sqlite-vec for single-file local vector storage
   - Neo4j support for graph-based relationships
   - Extensible architecture for custom storage implementations
 - **Advanced Querying**:
@@ -43,6 +106,9 @@ Mnemotree is a framework that enhances Large Language Model (LLM) agents with bi
   - Complex filtering
   - Relationship-based queries
   - Importance-based filtering
+- **MCP Server (FastMCP)**:
+  - Lightweight MCP wrapper for `MemoryCore`
+  - Works with `uvx` and a single shared server for multiple clients
 
 ## 🚀 Getting Started
 
@@ -52,7 +118,7 @@ Mnemotree is a framework that enhances Large Language Model (LLM) agents with bi
 - Python 3.10+
 - uv for dependency management (https://github.com/astral-sh/uv)
 - Access to an LLM API (e.g., OpenAI)
-- Vector store (ChromaDB) or graph database (Neo4j) for storage
+- Vector store (ChromaDB or SQLite + sqlite-vec) or graph database (Neo4j) for storage
 ```
 
 **Download and Install spaCy's English Model**
@@ -81,7 +147,9 @@ OPENAI_API_KEY=your-openai-api-key
 ### Installation
 
 ```bash
-uv pip install -e .
+# Default mode is `lite` (local embeddings) which requires the `lite` extra.
+# The README examples below also use the Chroma store.
+uv pip install -e ".[lite,chroma]"
 ```
 
 ### Basic Usage
@@ -115,19 +183,115 @@ insights = await memory_core.reflect(
 )
 ```
 
+### Lite Mode (CPU, no LLM)
+
+```python
+from mnemotree import MemoryCore
+from mnemotree.store import ChromaMemoryStore
+
+store = ChromaMemoryStore(persist_directory=".mnemotree/chromadb")
+memory_core = MemoryCore(store=store, mode="lite")
+
+memory = await memory_core.remember(
+    content="Quick capture: met Alex to discuss the roadmap.",
+    tags=["meeting"]
+)
+```
+
+Set `MNEMOTREE_LITE_EMBEDDING_MODEL` to override the local embedding model.
+Lite mode uses spaCy for NER/keywords; install the model with `python -m spacy download en_core_web_sm`.
+To use YAKE keywords, pass `keyword_extractor=YakeKeywordExtractor()` and install `mnemotree[keywords]`.
+
+**Alternative NER backends (optional)**
+
+You can swap out the NER engine by passing `ner=...` into `MemoryCore`:
+
+```python
+from mnemotree import MemoryCore
+from mnemotree.ner import TransformersNER
+
+memory_core = MemoryCore(store=store, mode="lite", ner=TransformersNER(model="dslim/distilbert-NER"))
+```
+
+Extras:
+- Transformers: `mnemotree[ner_hf]` (e.g. `dslim/distilbert-NER`)
+- GLiNER: `mnemotree[ner_gliner]`
+- Flair: `mnemotree[ner_flair]`
+- Stanza: `mnemotree[ner_stanza]`
+
+### MCP Server (FastMCP)
+
+Mnemotree ships with a lightweight MCP server wrapper around `MemoryCore` (lite + Chroma).
+
+**Install MCP + lite + Chroma extras**
+
+```bash
+uv pip install -e ".[mcp,lite,chroma]"
+```
+
+**Run via uvx (stdio, local)**
+
+Use this when a client launches the server process itself (stdio transport).
+
+```bash
+uvx --from . --with mnemotree[mcp_server] mnemotree-mcp
+```
+
+**Run as a separate process (HTTP, shared)**
+
+Use this when multiple Codex instances should share one memory store.
+
+```bash
+uvx --from . --with mnemotree[mcp_server] mnemotree-mcp run --transport http --port 8000
+```
+
+Then connect MCP clients to `http://localhost:8000/mcp`.
+
+**Concurrency note**
+
+For shared memory, prefer a single MCP server process and have all clients connect to it.
+Avoid running multiple MCP processes against the same local Chroma persistence directory.
+If you need multiple MCP servers, set unique `MNEMOTREE_MCP_PERSIST_DIR` values per server,
+or point them at a remote Chroma server.
+
+**Environment variables**
+
+- `MNEMOTREE_MCP_PERSIST_DIR` (default: `.mnemotree/chromadb`)
+- `MNEMOTREE_MCP_COLLECTION` (default: `memories`)
+- `MNEMOTREE_MCP_CHROMA_HOST`, `MNEMOTREE_MCP_CHROMA_PORT`, `MNEMOTREE_MCP_CHROMA_SSL`
+- `MNEMOTREE_MCP_ENABLE_NER`, `MNEMOTREE_MCP_ENABLE_KEYWORDS` (both default to `false`)
+- `MNEMOTREE_MCP_NER_BACKEND` (e.g. `spacy`, `transformers`, `gliner`, `stanza`, `flair`)
+- `MNEMOTREE_MCP_NER_MODEL` (backend-specific model id/path)
+
+**Docker (optional)**
+
+There is a lightweight Docker setup under `docker/mcp`.
+
+Build and run directly:
+
+```bash
+docker build -f docker/mcp/Dockerfile -t mnemotree-mcp .
+docker run --rm -p 8000:8000 -v "$PWD/.mnemotree:/data" mnemotree-mcp
+```
+
+Or use Compose:
+
+```bash
+docker compose -f docker/mcp/docker-compose.yml up --build
+```
+
 ### Advanced Configuration
 
 ```python
 from mnemotree import MemoryCore
-from mnemotree.core.scoring import MemoryScoring, DecayFunction
+from mnemotree.core.scoring import MemoryScoring
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 # Configure custom scoring
 scoring = MemoryScoring(
-    importance_weight=0.3,
-    recency_weight=0.2,
-    emotion_weight=0.2,
-    decay_function=DecayFunction.POWER_LAW
+    importance_weight=0.4,
+    recency_weight=0.4,
+    relevance_weight=0.2
 )
 
 # Initialize with custom components
@@ -229,7 +393,10 @@ uv pip install -e .
 # With specific database support
 uv pip install -e ".[neo4j]"     # Neo4j support
 uv pip install -e ".[chroma]"    # ChromaDB support
+uv pip install -e ".[sqlite_vec]"# SQLite + sqlite-vec support
 uv pip install -e ".[vectors]"   # All vector database support
+uv pip install -e ".[lite]"      # Local CPU embeddings (Lite mode)
+uv pip install -e ".[keywords]"  # YAKE keyword extraction
 uv pip install -e ".[ui]"        # UI components
 
 # With specific LLM provider support
@@ -244,32 +411,6 @@ uv pip install -e ".[all]"
 
 ## Roadmap
 
-### Database Integrations
-- ✅ Neo4j
-- ✅ ChromaDB
-- 🚧 PostgreSQL (pgvector) - In Progress
-- 🚧 Milvus - In Progress
-- 🚧 Qdrant - In Progress
-- 🚧 Azure Cosmos DB - Planned
-- 🚧 Pinecone - Planned
-- 🚧 Weaviate - Planned
-
-### Framework Integrations
-- ✅ LangChain
-- 🚧 Autogen - In Progress
-- 🚧 Llama-Index - Planned
-- 🚧 Semantic Kernel - Planned
-
-### LLM Provider Support
-Framework is tightly coupled with langchain framework so you can use any langchain compatible llms and embeddings for example:
-- OpenAI
-- Google AI
-- Anthropic 
-- AWS Bedrock 
-- HuggingFace 
-
-It might be changed in future
-
 ### Features in Development
 - More advanced relationships
 - Learnable scoring weights
@@ -278,7 +419,6 @@ It might be changed in future
 - Enhanced relationship modeling (especially for vector stores)
 - Advanced clustering algorithms
 - Memory migration utilities
-
 
 ## 💡 Examples
 
@@ -310,6 +450,12 @@ This example demonstrates a Streamlit-based chat application that utilizes Mnemo
 4. Run the Streamlit app: `uv run streamlit run examples/memory_chat/app.py`
 
 These examples demonstrate the core functionality of Mnemotree and how it can be integrated into different types of applications. You can adapt and extend these examples to build more complex and sophisticated LLM agents with advanced memory capabilities.
+
+## Development
+
+- Run checks: `make lint typecheck test`
+- Pre-commit hooks: `make precommit-install` (uses `pre-commit.yaml`)
+- CI template: `ci/github-actions-ci.yml` (copy into your CI system)
 
 ## 🤝 Contributing
 
