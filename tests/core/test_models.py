@@ -41,7 +41,7 @@ def test_update_access_tracks_history_and_caps_importance():
 
     assert memory.access_count == 1
     assert memory.last_accessed == memory.access_history[-1]
-    assert memory.importance == 1.0
+    assert abs(memory.importance - 1.0) < 1e-9
 
 
 def test_decay_importance_uses_last_accessed_value():
@@ -51,7 +51,7 @@ def test_decay_importance_uses_last_accessed_value():
 
     memory.decay_importance(current_time)
 
-    assert memory.importance == 0.5
+    assert abs(memory.importance - 0.5) < 1e-9
 
 
 def test_to_str_includes_key_sections():

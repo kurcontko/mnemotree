@@ -45,6 +45,7 @@ class MockVectorStore(BaseMemoryStore, SupportsVectorSearch):
     """Mock store with vector search support."""
 
     async def store_memory(self, memory):
+        """Mock implementation - no-op for testing."""
         pass
 
     async def get_memory(self, mid):
@@ -69,6 +70,7 @@ class MockVectorStore(BaseMemoryStore, SupportsVectorSearch):
         return []
 
     async def close(self):
+        """Mock implementation - no-op for testing."""
         pass
 
 
@@ -76,6 +78,7 @@ class MockStructuredQueryStore(BaseMemoryStore, SupportsStructuredQuery):
     """Mock store with structured query support."""
 
     async def store_memory(self, memory):
+        """Mock implementation - no-op for testing."""
         pass
 
     async def get_memory(self, mid):
@@ -94,12 +97,14 @@ class MockStructuredQueryStore(BaseMemoryStore, SupportsStructuredQuery):
         return []
 
     async def update_connections(self, memory_id, **kwargs):
+        """Mock implementation - no-op for testing."""
         pass
 
     async def query_by_entities(self, entities, limit=10):
         return []
 
     async def close(self):
+        """Mock implementation - no-op for testing."""
         pass
 
 

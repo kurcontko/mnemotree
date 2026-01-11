@@ -40,29 +40,29 @@ class TestWritePolicy:
     def test_default_values(self):
         """WritePolicy has sensible defaults."""
         policy = WritePolicy()
-        assert policy.min_novelty_score == 0.3
-        assert policy.min_confidence == 0.5
+        assert abs(policy.min_novelty_score - 0.3) < 1e-9
+        assert abs(policy.min_confidence - 0.5) < 1e-9
         assert policy.min_content_length == 10
         assert policy.require_meaningful_content is True
 
     def test_permissive_policy(self):
         """WritePolicy.permissive() creates low thresholds."""
         policy = WritePolicy.permissive()
-        assert policy.min_novelty_score == 0.1
-        assert policy.min_confidence == 0.3
+        assert abs(policy.min_novelty_score - 0.1) < 1e-9
+        assert abs(policy.min_confidence - 0.3) < 1e-9
         assert policy.require_meaningful_content is False
 
     def test_strict_policy(self):
         """WritePolicy.strict() creates high thresholds."""
         policy = WritePolicy.strict()
-        assert policy.min_novelty_score == 0.6
-        assert policy.min_confidence == 0.7
+        assert abs(policy.min_novelty_score - 0.6) < 1e-9
+        assert abs(policy.min_confidence - 0.7) < 1e-9
         assert policy.min_content_length == 20
 
     def test_balanced_policy(self):
         """WritePolicy.balanced() returns default policy."""
         policy = WritePolicy.balanced()
-        assert policy.min_novelty_score == 0.3  # Same as default
+        assert abs(policy.min_novelty_score - 0.3) < 1e-9  # Same as default
 
 
 class TestWriteDecision:
@@ -100,7 +100,7 @@ class TestWriteResult:
             score=0.9,
         )
         assert result.decision == WriteDecision.ACCEPT
-        assert result.score == 0.9
+        assert abs(result.score - 0.9) < 1e-9
 
     def test_optional_fields(self):
         """WriteResult has optional score fields."""
@@ -111,8 +111,8 @@ class TestWriteResult:
             novelty_score=0.1,
             quality_score=0.3,
         )
-        assert result.novelty_score == 0.1
-        assert result.quality_score == 0.3
+        assert abs(result.novelty_score - 0.1) < 1e-9
+        assert abs(result.quality_score - 0.3) < 1e-9
 
 
 class TestContextAwareWriteGate:

@@ -108,7 +108,7 @@ class TestMemoryItemValidationEdgeCases:
             memory_type=MemoryType.SEMANTIC,
             importance=0.0,
         )
-        assert memory.importance == 0.0
+        assert abs(memory.importance - 0.0) < 1e-9
 
     def test_importance_exactly_one_is_valid(self):
         """importance=1.0 should be valid."""
@@ -117,7 +117,7 @@ class TestMemoryItemValidationEdgeCases:
             memory_type=MemoryType.SEMANTIC,
             importance=1.0,
         )
-        assert memory.importance == 1.0
+        assert abs(memory.importance - 1.0) < 1e-9
 
     def test_emotional_valence_at_boundaries(self):
         """Test emotional_valence at exact boundaries [-1, 1]."""
@@ -135,7 +135,7 @@ class TestMemoryItemValidationEdgeCases:
             importance=0.5,
             emotional_valence=1.0,
         )
-        assert mem2.emotional_valence == 1.0
+        assert abs(mem2.emotional_valence - 1.0) < 1e-9
 
     def test_emotional_arousal_at_boundaries(self):
         """Test emotional_arousal at exact boundaries [0, 1]."""
@@ -145,7 +145,7 @@ class TestMemoryItemValidationEdgeCases:
             importance=0.5,
             emotional_arousal=0.0,
         )
-        assert mem1.emotional_arousal == 0.0
+        assert abs(mem1.emotional_arousal - 0.0) < 1e-9
 
         mem2 = MemoryItem(
             content="test",
@@ -153,7 +153,7 @@ class TestMemoryItemValidationEdgeCases:
             importance=0.5,
             emotional_arousal=1.0,
         )
-        assert mem2.emotional_arousal == 1.0
+        assert abs(mem2.emotional_arousal - 1.0) < 1e-9
 
 
 class TestMemoryItemToStrComplexCases:
@@ -409,7 +409,7 @@ class TestMemoryItemAccessTrackingEdgeCases:
             importance=0.3,
             decay_rate=0.05,
         )
-        for i in range(5):
+        for _ in range(5):
             memory.update_access()
 
         assert memory.access_count == 5
@@ -443,7 +443,7 @@ class TestMemoryItemAccessTrackingEdgeCases:
         far_future = datetime.now(timezone.utc) + timedelta(days=1000)
         memory.decay_importance(far_future)
         # Should be floored at 0
-        assert memory.importance == 0.0
+        assert abs(memory.importance - 0.0) < 1e-9
 
 
 class TestMemoryItemLangchainDocumentEdgeCases:

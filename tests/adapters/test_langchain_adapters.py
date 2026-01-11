@@ -42,6 +42,7 @@ def _install_langchain_core_stubs() -> None:
 
     class BaseRetriever:
         def __init__(self, *args, **kwargs) -> None:
+            """Mock implementation for testing."""
             pass
 
     retrievers.BaseRetriever = BaseRetriever

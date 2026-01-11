@@ -21,12 +21,13 @@ class MockStore(BaseMemoryStore):
     """Minimal mock store for builder tests."""
 
     async def store_memory(self, memory):
+        """Mock implementation - no-op for testing."""
         pass
 
     async def get_memory(self, mid):
         return None
 
-    async def delete_memory(self, mid, cascade=False):
+    async def delete_memory(self, mid, *, cascade=False):
         return True
 
     async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
@@ -36,12 +37,14 @@ class MockStore(BaseMemoryStore):
         return []
 
     async def update_connections(self, memory_id, **kwargs):
+        """Mock implementation - no-op for testing."""
         pass
 
     async def query_by_entities(self, entities):
         return []
 
     async def close(self):
+        """Mock implementation - no-op for testing."""
         pass
 
 
@@ -148,7 +151,7 @@ def test_with_embeddings(mock_store, mock_embeddings):
 def test_with_default_importance(mock_store):
     """Test with_default_importance() sets the importance value."""
     builder = MemoryCoreBuilder(mock_store).with_default_importance(0.8)
-    assert builder._scoring_config.default_importance == 0.8
+    assert abs(builder._scoring_config.default_importance - 0.8) < 1e-9
 
 
 def test_with_memory_scoring(mock_store):
@@ -263,15 +266,15 @@ def test_enable_bm25_defaults(mock_store):
     """Test enable_bm25() with default parameters."""
     builder = MemoryCoreBuilder(mock_store).enable_bm25()
     assert builder._retrieval_config.enable_bm25 is True
-    assert builder._retrieval_config.bm25_k1 == 1.2
-    assert builder._retrieval_config.bm25_b == 0.75
+    assert abs(builder._retrieval_config.bm25_k1 - 1.2) < 1e-9
+    assert abs(builder._retrieval_config.bm25_b - 0.75) < 1e-9
 
 
 def test_enable_bm25_custom(mock_store):
     """Test enable_bm25() with custom parameters."""
     builder = MemoryCoreBuilder(mock_store).enable_bm25(k1=1.5, b=0.8)
-    assert builder._retrieval_config.bm25_k1 == 1.5
-    assert builder._retrieval_config.bm25_b == 0.8
+    assert abs(builder._retrieval_config.bm25_k1 - 1.5) < 1e-9
+    assert abs(builder._retrieval_config.bm25_b - 0.8) < 1e-9
 
 
 def test_disable_bm25(mock_store):
@@ -341,7 +344,7 @@ def test_with_option_embeddings(mock_store, mock_embeddings):
 def test_with_option_default_importance(mock_store):
     """Test with_option() for default_importance."""
     builder = MemoryCoreBuilder(mock_store).with_option("default_importance", 0.9)
-    assert builder._scoring_config.default_importance == 0.9
+    assert abs(builder._scoring_config.default_importance - 0.9) < 1e-9
 
 
 def test_with_option_mode_defaults_flags(mock_store):
@@ -407,8 +410,8 @@ def test_with_option_bm25_params(mock_store):
         .with_option("bm25_k1", 1.8)
         .with_option("bm25_b", 0.6)
     )
-    assert builder._retrieval_config.bm25_k1 == 1.8
-    assert builder._retrieval_config.bm25_b == 0.6
+    assert abs(builder._retrieval_config.bm25_k1 - 1.8) < 1e-9
+    assert abs(builder._retrieval_config.bm25_b - 0.6) < 1e-9
 
 
 def test_with_option_prf_params(mock_store):
@@ -505,6 +508,6 @@ def test_build_passes_all_configs(mock_store, mock_llm, mock_embeddings):
     # Verify core attributes
     assert core.store is mock_store
     assert core.embedder is mock_embeddings  # MemoryCore stores embeddings as 'embedder'
-    assert core.default_importance == 0.7
+    assert abs(core.default_importance - 0.7) < 1e-9
     assert core.enable_bm25 is True
     assert core.retrieval_mode == "hybrid"

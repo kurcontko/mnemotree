@@ -85,7 +85,7 @@ def test_serialize_memory_index_fields():
     assert data["summary"] == "summary"
     assert data["snippet"] == "summary"
     assert data["memory_type"] == "semantic"
-    assert data["importance"] == 0.5
+    assert abs(data["importance"] - 0.5) < 1e-9
     assert data["tags"] == ["tag"]
     assert "timestamp" in data
 
@@ -208,6 +208,7 @@ def test_get_mcp_registers_tools(monkeypatch):
             return func
 
         def run(self) -> None:
+            """Mock implementation - no-op for testing."""
             pass
 
     fastmcp_module = types.ModuleType("fastmcp")

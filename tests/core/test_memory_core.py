@@ -27,10 +27,10 @@ class MockStore(BaseMemoryStore):
     async def delete_memory(self, mid, *, cascade=False):
         return True
 
-    async def list_memories(self, *, include_embeddings=False):
+    def list_memories(self, *, include_embeddings=False):
         return []
 
-    async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
+    def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
         return []
 
     async def query_memories(self, query, limit=10):

@@ -16,17 +16,17 @@ class MockStore(BaseMemoryStore):
     async def store_memory(self, memory):
         self.stored_memories[memory.memory_id] = memory
 
-    async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
+    def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
         # Return empty by default, tests will override or populate
         return []
 
-    async def list_memories(self, *, include_embeddings=False):
+    def list_memories(self, *, include_embeddings=False):
         return list(self.stored_memories.values())
 
-    async def query_memories(self, query, limit=10):
+    def query_memories(self, query, limit=10):
         return []
 
-    async def update_connections(self, memory_id, **kwargs):
+    def update_connections(self, memory_id, **kwargs):
         pass
 
     async def query_by_entities(self, entities, limit=10):
