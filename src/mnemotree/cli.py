@@ -11,17 +11,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as e:
+        # argparse calls sys.exit on parse errors
+        return e.code if isinstance(e.code, int) else 1
 
     if args.version:
         try:
             from importlib.metadata import PackageNotFoundError, version
 
             print(version("mnemotree"))
+            return 0
         except PackageNotFoundError:
             print("mnemotree")
-        return 0
+            return 0
 
+    # Show help when no command is provided
     parser.print_help()
     return 0
 
