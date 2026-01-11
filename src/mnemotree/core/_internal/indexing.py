@@ -130,35 +130,46 @@ class BM25Index:
         self._remove(memory_id)
 
     def search(self, query_tokens: list[str], top_k: int) -> list[tuple[str, float]]:
-        if not query_tokens or not self.term_freqs:
-            return []
-
-        n_docs = len(self.term_freqs)
-        if n_docs <= 0:
-            return []
-        avgdl = self.total_len / n_docs if n_docs else 0.0
-        if avgdl <= 0:
+        avgdl, n_docs = self._resolve_search_stats(query_tokens)
+        if avgdl <= 0 or n_docs <= 0:
             return []
 
         query_terms = Counter(query_tokens)
         scores: dict[str, float] = {}
 
         for term in query_terms:
-            df = self.doc_freq.get(term, 0)
-            if df <= 0:
+            idf = self._term_idf(term, n_docs)
+            if idf is None:
                 continue
-            idf = math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
-            for memory_id, tf_counter in self.term_freqs.items():
-                tf = tf_counter.get(term, 0)
-                if tf <= 0:
-                    continue
-                dl = self.doc_len.get(memory_id, 0)
-                denom = tf + self.k1 * (1 - self.b + self.b * (dl / avgdl))
-                score = idf * (tf * (self.k1 + 1)) / denom if denom else 0.0
-                scores[memory_id] = scores.get(memory_id, 0.0) + score
+            self._accumulate_term_scores(term, idf, avgdl, scores)
 
         ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
         return ranked[:top_k]
+
+    def _resolve_search_stats(self, query_tokens: list[str]) -> tuple[float, int]:
+        if not query_tokens or not self.term_freqs:
+            return 0.0, 0
+        n_docs = len(self.term_freqs)
+        avgdl = self.total_len / n_docs if n_docs else 0.0
+        return avgdl, n_docs
+
+    def _term_idf(self, term: str, n_docs: int) -> float | None:
+        df = self.doc_freq.get(term, 0)
+        if df <= 0:
+            return None
+        return math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
+
+    def _accumulate_term_scores(
+        self, term: str, idf: float, avgdl: float, scores: dict[str, float]
+    ) -> None:
+        for memory_id, tf_counter in self.term_freqs.items():
+            tf = tf_counter.get(term, 0)
+            if tf <= 0:
+                continue
+            dl = self.doc_len.get(memory_id, 0)
+            denom = tf + self.k1 * (1 - self.b + self.b * (dl / avgdl))
+            score = idf * (tf * (self.k1 + 1)) / denom if denom else 0.0
+            scores[memory_id] = scores.get(memory_id, 0.0) + score
 
 
 class BaseQueryExpander:
@@ -170,23 +181,53 @@ class BaseQueryExpander:
         self.top_terms = top_terms
 
     def expand(self, tokens: list[str], top_k_docs: list[tuple[str, float]]) -> list[str]:
-        if not self.index or not top_k_docs or self.top_docs <= 0 or self.top_terms <= 0:
+        if not self._can_expand(tokens, top_k_docs):
             return tokens
 
-        content_query_terms = [
-            term
-            for term in tokens
-            if len(term) >= 4 and term not in PRF_STOPWORDS and not term.isdigit()
-        ]
-        if not content_query_terms:
-            return tokens
-        if not any(self.index.doc_freq.get(term, 0) > 0 for term in content_query_terms):
+        content_query_terms = self._filter_content_terms(tokens)
+        if not self._has_index_terms(content_query_terms):
             return tokens
 
         n_docs = len(self.index.term_freqs)
         if n_docs <= 0:
             return tokens
 
+        term_scores = self._collect_prf_scores(
+            tokens=tokens,
+            top_k_docs=top_k_docs,
+            n_docs=n_docs,
+        )
+        if not term_scores:
+            return tokens
+
+        expansion_terms = self._select_expansion_terms(term_scores)
+        if not expansion_terms:
+            return tokens
+        return list(dict.fromkeys(tokens + expansion_terms))
+
+    def _can_expand(self, tokens: list[str], top_k_docs: list[tuple[str, float]]) -> bool:
+        return bool(self.index and top_k_docs and self.top_docs > 0 and self.top_terms > 0 and tokens)
+
+    @staticmethod
+    def _filter_content_terms(tokens: list[str]) -> list[str]:
+        return [
+            term
+            for term in tokens
+            if len(term) >= 4 and term not in PRF_STOPWORDS and not term.isdigit()
+        ]
+
+    def _has_index_terms(self, content_terms: list[str]) -> bool:
+        if not content_terms:
+            return False
+        return any(self.index.doc_freq.get(term, 0) > 0 for term in content_terms)
+
+    def _collect_prf_scores(
+        self,
+        *,
+        tokens: list[str],
+        top_k_docs: list[tuple[str, float]],
+        n_docs: int,
+    ) -> dict[str, float]:
         top_doc_ids = [mid for mid, _ in top_k_docs[: self.top_docs]]
         query_term_set = set(tokens)
         term_scores: dict[str, float] = {}
@@ -199,13 +240,9 @@ class BaseQueryExpander:
             if dl <= 0:
                 continue
             for term, tf in tf_counter.items():
-                if tf <= 0:
+                if tf <= 0 or term in query_term_set:
                     continue
-                if term in query_term_set:
-                    continue
-                if term in PRF_STOPWORDS:
-                    continue
-                if len(term) < 4 or term.isdigit():
+                if term in PRF_STOPWORDS or len(term) < 4 or term.isdigit():
                     continue
                 df = self.index.doc_freq.get(term, 0)
                 if df <= 0:
@@ -213,18 +250,15 @@ class BaseQueryExpander:
                 idf = math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
                 term_scores[term] = term_scores.get(term, 0.0) + idf * (tf / dl)
 
-        if not term_scores:
-            return tokens
+        return term_scores
 
-        expansion_terms = [
+    def _select_expansion_terms(self, term_scores: dict[str, float]) -> list[str]:
+        return [
             term
             for term, _ in sorted(term_scores.items(), key=lambda item: item[1], reverse=True)[
                 : self.top_terms
             ]
         ]
-        if not expansion_terms:
-            return tokens
-        return list(dict.fromkeys(tokens + expansion_terms))
 
 
 class IndexManager:

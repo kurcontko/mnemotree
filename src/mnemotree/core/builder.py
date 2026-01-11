@@ -180,101 +180,81 @@ class MemoryCoreBuilder:
         return self
 
     def with_option(self, name: str, value: Any) -> MemoryCoreBuilder:
-        if name == "mode_defaults" and isinstance(value, ModeDefaultsConfig):
-            self._mode_defaults = value
+        typed_options = {
+            "mode_defaults": (ModeDefaultsConfig, lambda v: setattr(self, "_mode_defaults", v)),
+            "ner_config": (NerConfig, lambda v: setattr(self, "_ner_config", v)),
+            "scoring_config": (ScoringConfig, lambda v: setattr(self, "_scoring_config", v)),
+            "retrieval_config": (RetrievalConfig, lambda v: setattr(self, "_retrieval_config", v)),
+            "ingestion_config": (IngestionConfig, lambda v: setattr(self, "_ingestion_config", v)),
+        }
+        option = typed_options.get(name)
+        if option and isinstance(value, option[0]):
+            option[1](value)
             return self
-        if name == "ner_config" and isinstance(value, NerConfig):
-            self._ner_config = value
+
+        simple_setters = {
+            "llm": lambda v: setattr(self, "_llm", v),
+            "embeddings": lambda v: setattr(self, "_embeddings", v),
+        }
+        setter = simple_setters.get(name)
+        if setter:
+            setter(value)
             return self
-        if name == "scoring_config" and isinstance(value, ScoringConfig):
-            self._scoring_config = value
+
+        mode_defaults_fields = {
+            "mode": "mode",
+            "default_analyze": "default_analyze",
+            "default_summarize": "default_summarize",
+            "enable_keywords": "enable_keywords",
+            "keyword_extractor": "keyword_extractor",
+        }
+        mode_field = mode_defaults_fields.get(name)
+        if mode_field:
+            self._mode_defaults = replace(self._mode_defaults, **{mode_field: value})
             return self
-        if name == "retrieval_config" and isinstance(value, RetrievalConfig):
-            self._retrieval_config = value
+
+        ner_fields = {"ner": "ner", "enable_ner": "enable_ner"}
+        ner_field = ner_fields.get(name)
+        if ner_field:
+            self._ner_config = replace(self._ner_config, **{ner_field: value})
             return self
-        if name == "ingestion_config" and isinstance(value, IngestionConfig):
-            self._ingestion_config = value
+
+        scoring_fields = {
+            "default_importance": "default_importance",
+            "pre_remember_hooks": "pre_remember_hooks",
+            "memory_scoring": "memory_scoring",
+        }
+        scoring_field = scoring_fields.get(name)
+        if scoring_field:
+            self._scoring_config = replace(self._scoring_config, **{scoring_field: value})
             return self
-        if name == "llm":
-            self._llm = value
+
+        retrieval_fields = {
+            "retrieval_mode": "retrieval_mode",
+            "enable_bm25": "enable_bm25",
+            "bm25_k1": "bm25_k1",
+            "bm25_b": "bm25_b",
+            "rrf_k": "rrf_k",
+            "enable_prf": "enable_prf",
+            "prf_docs": "prf_docs",
+            "prf_terms": "prf_terms",
+            "enable_rrf_signal_rerank": "enable_rrf_signal_rerank",
+            "reranker_backend": "reranker_backend",
+            "reranker_model": "reranker_model",
+            "rerank_candidates": "rerank_candidates",
+        }
+        retrieval_field = retrieval_fields.get(name)
+        if retrieval_field:
+            self._retrieval_config = replace(self._retrieval_config, **{retrieval_field: value})
             return self
-        if name == "embeddings":
-            self._embeddings = value
-            return self
-        if name == "mode":
-            self._mode_defaults = replace(self._mode_defaults, mode=value)
-            return self
-        if name == "default_analyze":
-            self._mode_defaults = replace(self._mode_defaults, default_analyze=value)
-            return self
-        if name == "default_summarize":
-            self._mode_defaults = replace(self._mode_defaults, default_summarize=value)
-            return self
-        if name == "enable_keywords":
-            self._mode_defaults = replace(self._mode_defaults, enable_keywords=value)
-            return self
-        if name == "keyword_extractor":
-            self._mode_defaults = replace(self._mode_defaults, keyword_extractor=value)
-            return self
-        if name == "ner":
-            self._ner_config = replace(self._ner_config, ner=value)
-            return self
-        if name == "enable_ner":
-            self._ner_config = replace(self._ner_config, enable_ner=value)
-            return self
-        if name == "default_importance":
-            self._scoring_config = replace(self._scoring_config, default_importance=value)
-            return self
-        if name == "pre_remember_hooks":
-            self._scoring_config = replace(self._scoring_config, pre_remember_hooks=value)
-            return self
-        if name == "memory_scoring":
-            self._scoring_config = replace(self._scoring_config, memory_scoring=value)
-            return self
-        if name == "retrieval_mode":
-            self._retrieval_config = replace(self._retrieval_config, retrieval_mode=value)
-            return self
-        if name == "enable_bm25":
-            self._retrieval_config = replace(self._retrieval_config, enable_bm25=value)
-            return self
-        if name == "bm25_k1":
-            self._retrieval_config = replace(self._retrieval_config, bm25_k1=value)
-            return self
-        if name == "bm25_b":
-            self._retrieval_config = replace(self._retrieval_config, bm25_b=value)
-            return self
-        if name == "rrf_k":
-            self._retrieval_config = replace(self._retrieval_config, rrf_k=value)
-            return self
-        if name == "enable_prf":
-            self._retrieval_config = replace(self._retrieval_config, enable_prf=value)
-            return self
-        if name == "prf_docs":
-            self._retrieval_config = replace(self._retrieval_config, prf_docs=value)
-            return self
-        if name == "prf_terms":
-            self._retrieval_config = replace(self._retrieval_config, prf_terms=value)
-            return self
-        if name == "enable_rrf_signal_rerank":
-            self._retrieval_config = replace(
-                self._retrieval_config,
-                enable_rrf_signal_rerank=value,
-            )
-            return self
-        if name == "reranker_backend":
-            self._retrieval_config = replace(self._retrieval_config, reranker_backend=value)
-            return self
-        if name == "reranker_model":
-            self._retrieval_config = replace(self._retrieval_config, reranker_model=value)
-            return self
-        if name == "rerank_candidates":
-            self._retrieval_config = replace(self._retrieval_config, rerank_candidates=value)
-            return self
-        if name == "async_ingest":
-            self._ingestion_config = replace(self._ingestion_config, async_ingest=value)
-            return self
-        if name == "ingestion_queue_size":
-            self._ingestion_config = replace(self._ingestion_config, ingestion_queue_size=value)
+
+        ingestion_fields = {
+            "async_ingest": "async_ingest",
+            "ingestion_queue_size": "ingestion_queue_size",
+        }
+        ingestion_field = ingestion_fields.get(name)
+        if ingestion_field:
+            self._ingestion_config = replace(self._ingestion_config, **{ingestion_field: value})
             return self
         raise ValueError(f"Unknown MemoryCore option: {name}")
 

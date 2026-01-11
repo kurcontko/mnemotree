@@ -24,7 +24,7 @@ from ..store.protocols import (
     SupportsStructuredQuery,
     SupportsVectorSearch,
 )
-from ._internal.enrichment import StandardEnrichmentPipeline
+from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
@@ -263,10 +263,7 @@ class MemoryCore:
         memory_id: str | None = None,
         timestamp: datetime | None = None,
     ) -> MemoryItem:
-        if analyze is None:
-            analyze = self.default_analyze
-        if summarize is None:
-            summarize = self.default_summarize
+        analyze, summarize = self._resolve_analysis_flags(analyze, summarize)
 
         enrichment = await self.enrichment.enrich(
             content, context, analyze=analyze, summarize=summarize
@@ -279,6 +276,41 @@ class MemoryCore:
         )
         all_tags = self._resolve_tags(tags, enrichment.analysis, enrichment.keywords)
 
+        emotions, emotional_valence, emotional_arousal = self._extract_emotions(enrichment)
+        memory_data = self._build_memory_data(
+            memory_id=memory_id,
+            content=content,
+            memory_type=memory_type,
+            importance=importance,
+            tags=all_tags,
+            context=context,
+            enrichment=enrichment,
+            emotions=emotions,
+            emotional_valence=emotional_valence,
+            emotional_arousal=emotional_arousal,
+            timestamp=timestamp,
+        )
+
+        memory = MemoryItem(**memory_data)
+        memory = await self._apply_pre_remember_hooks(memory)
+        await self._persist_memory(memory, references, skip_store)
+        return memory
+
+    def _resolve_analysis_flags(
+        self,
+        analyze: bool | None,
+        summarize: bool | None,
+    ) -> tuple[bool, bool]:
+        if analyze is None:
+            analyze = self.default_analyze
+        if summarize is None:
+            summarize = self.default_summarize
+        return analyze, summarize
+
+    @staticmethod
+    def _extract_emotions(
+        enrichment: EnrichmentResult,
+    ) -> tuple[list[str], float | None, float | None]:
         emotions: list[str] = []
         emotional_valence = None
         emotional_arousal = None
@@ -287,14 +319,30 @@ class MemoryCore:
                 emotions = [str(e) for e in enrichment.analysis.emotions]
             emotional_valence = enrichment.analysis.emotional_valence
             emotional_arousal = enrichment.analysis.emotional_arousal
+        return emotions, emotional_valence, emotional_arousal
 
-        memory_data = {
+    def _build_memory_data(
+        self,
+        *,
+        memory_id: str | None,
+        content: str,
+        memory_type: MemoryType,
+        importance: float,
+        tags: list[str],
+        context: dict[str, Any] | None,
+        enrichment: EnrichmentResult,
+        emotions: list[str],
+        emotional_valence: float | None,
+        emotional_arousal: float | None,
+        timestamp: datetime | None,
+    ) -> dict[str, Any]:
+        data = {
             "memory_id": memory_id or str(uuid4()),
             "content": content,
             "summary": enrichment.summary,
             "memory_type": memory_type,
             "importance": importance,
-            "tags": list(all_tags),
+            "tags": list(tags),
             "context": context or {},
             "embedding": enrichment.embedding,
             "emotions": emotions,
@@ -309,21 +357,28 @@ class MemoryCore:
             "entity_mentions": enrichment.entity_mentions or {},
         }
         if timestamp is not None:
-            memory_data["timestamp"] = timestamp
+            data["timestamp"] = timestamp
+        return data
 
-        memory = MemoryItem(**memory_data)
-
-        if self.pre_remember_hooks:
-            for hook in self.pre_remember_hooks:
-                memory = await hook(memory)
-
-        if not skip_store:
-            store_tasks = [self.persistence.save(memory)]
-            if references:
-                store_tasks.append(self.connect(memory.memory_id, related_to=references))
-            await asyncio.gather(*store_tasks)
-
+    async def _apply_pre_remember_hooks(self, memory: MemoryItem) -> MemoryItem:
+        if not self.pre_remember_hooks:
+            return memory
+        for hook in self.pre_remember_hooks:
+            memory = await hook(memory)
         return memory
+
+    async def _persist_memory(
+        self,
+        memory: MemoryItem,
+        references: list[str] | None,
+        skip_store: bool,
+    ) -> None:
+        if skip_store:
+            return
+        store_tasks = [self.persistence.save(memory)]
+        if references:
+            store_tasks.append(self.connect(memory.memory_id, related_to=references))
+        await asyncio.gather(*store_tasks)
 
     async def recall(
         self,
@@ -493,33 +548,12 @@ class MemoryCore:
         """
         # Prefer lexical search when BM25 is enabled and no filters are requested.
         # This keeps MemoryCore as a thin facade and routes lexical concerns to IndexManager.
-        if (
-            self.index_manager
-            and getattr(self.index_manager, "enable_bm25", False)
-            and not filters
-            and self.index_manager.doc_count > 0
-        ):
-            ranked = self.index_manager.search(query, k=limit)
-            if ranked:
-                memories: list[MemoryItem] = []
-                for memory_id, _score in ranked:
-                    memory = self.index_manager.get_memory(memory_id)
-                    if memory is None:
-                        memory = await self.store.get_memory(memory_id)
-                    if memory is not None:
-                        memories.append(memory)
-                        if len(memories) >= limit:
-                            break
-                if memories:
-                    return memories
+        bm25_results = await self._maybe_bm25_search(query, limit=limit, filters=filters)
+        if bm25_results is not None:
+            return bm25_results
 
         query_embedding = await self.get_embedding(query)
-        filter_list = []
-        if filters:
-            filter_list = [
-                MemoryFilter(field=field, operator=FilterOperator.EQ, value=value)
-                for field, value in filters.items()
-            ]
+        filter_list = self._build_filter_list(filters)
 
         if filter_list and not isinstance(self.store, SupportsStructuredQuery):
             raise NotImplementedError(
@@ -527,22 +561,78 @@ class MemoryCore:
             )
 
         if isinstance(self.store, SupportsStructuredQuery):
-            memory_query = MemoryQuery(
-                vector=query_embedding,
-                filters=filter_list,
-                limit=limit,
-            )
-            return await self.store.query_memories(memory_query)
+            return await self._query_structured(query_embedding, filter_list, limit)
 
         if not filter_list and isinstance(self.store, SupportsVectorSearch):
-            return await self.store.get_similar_memories(
-                query=query,
-                query_embedding=query_embedding,
-                top_k=limit,
-                filters=None,
-            )
+            return await self._query_vector(query, query_embedding, limit)
 
         raise NotImplementedError("This store does not support search().")
+
+    async def _maybe_bm25_search(
+        self,
+        query: str,
+        *,
+        limit: int,
+        filters: dict[str, Any] | None,
+    ) -> list[MemoryItem] | None:
+        if (
+            not self.index_manager
+            or not getattr(self.index_manager, "enable_bm25", False)
+            or filters
+            or self.index_manager.doc_count <= 0
+        ):
+            return None
+
+        ranked = self.index_manager.search(query, k=limit)
+        if not ranked:
+            return None
+
+        memories: list[MemoryItem] = []
+        for memory_id, _score in ranked:
+            memory = self.index_manager.get_memory(memory_id)
+            if memory is None:
+                memory = await self.store.get_memory(memory_id)
+            if memory is not None:
+                memories.append(memory)
+                if len(memories) >= limit:
+                    break
+
+        return memories or None
+
+    @staticmethod
+    def _build_filter_list(filters: dict[str, Any] | None) -> list[MemoryFilter]:
+        if not filters:
+            return []
+        return [
+            MemoryFilter(field=field, operator=FilterOperator.EQ, value=value)
+            for field, value in filters.items()
+        ]
+
+    async def _query_structured(
+        self,
+        query_embedding: Any,
+        filter_list: list[MemoryFilter],
+        limit: int,
+    ) -> list[MemoryItem]:
+        memory_query = MemoryQuery(
+            vector=query_embedding,
+            filters=filter_list,
+            limit=limit,
+        )
+        return await self.store.query_memories(memory_query)
+
+    async def _query_vector(
+        self,
+        query: str,
+        query_embedding: Any,
+        limit: int,
+    ) -> list[MemoryItem]:
+        return await self.store.get_similar_memories(
+            query=query,
+            query_embedding=query_embedding,
+            top_k=limit,
+            filters=None,
+        )
 
     async def cluster(
         self,

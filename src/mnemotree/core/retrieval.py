@@ -204,49 +204,12 @@ class VectorEntityRetriever(BaseRetriever):
         update_access: bool,
     ) -> list[MemoryItem]:
         started = time.perf_counter()
-        memories: list[MemoryItem] = []
-        query_embedding: list[float] | None = None
         query_keywords: list[str] = []
         entity_memory_ids: set[str] = set()
-
         if isinstance(query, str):
             logger.debug("vector_entity recall start limit=%s scoring=%s", limit, scoring)
-            vector_task = asyncio.create_task(self._retrieve_vector_candidates(query, limit))
-            entity_task = asyncio.create_task(self._retrieve_entity_candidates(query))
-            keywords_task = (
-                asyncio.create_task(self.keyword_extractor.extract(query))
-                if self.keyword_extractor
-                else None
-            )
-
-            (vector_memories, query_embedding), entity_memories = await asyncio.gather(
-                vector_task,
-                entity_task,
-            )
-            query_keywords = await keywords_task if keywords_task else []
-
-            if entity_memories and query_embedding:
-                min_entity_similarity = 0.15
-                scored_entities: list[tuple[float, MemoryItem]] = []
-                for memory in entity_memories:
-                    similarity = cosine_similarity(memory.embedding, query_embedding)
-                    scored_entities.append((similarity, memory))
-
-                entity_memories = [
-                    memory
-                    for similarity, memory in scored_entities
-                    if similarity >= min_entity_similarity
-                ]
-                entity_memory_ids = {memory.memory_id for memory in entity_memories}
-
-            memories = self._dedupe_memories(vector_memories + entity_memories)
-
-            logger.debug(
-                "vector_entity recall staged vector=%d entity=%d keywords=%d deduped=%d",
-                len(vector_memories),
-                len(entity_memories),
-                len(query_keywords),
-                len(memories),
+            memories, query_embedding, query_keywords, entity_memory_ids = (
+                await self._recall_from_text(query, limit)
             )
         else:
             memories, query_embedding = await self._query_store(query)
@@ -282,6 +245,55 @@ class VectorEntityRetriever(BaseRetriever):
 
         return memories
 
+    async def _recall_from_text(
+        self, query: str, limit: int | None
+    ) -> tuple[list[MemoryItem], list[float] | None, list[str], set[str]]:
+        vector_task = asyncio.create_task(self._retrieve_vector_candidates(query, limit))
+        entity_task = asyncio.create_task(self._retrieve_entity_candidates(query))
+        keywords_task = (
+            asyncio.create_task(self.keyword_extractor.extract(query))
+            if self.keyword_extractor
+            else None
+        )
+
+        (vector_memories, query_embedding), entity_memories = await asyncio.gather(
+            vector_task,
+            entity_task,
+        )
+        query_keywords = await keywords_task if keywords_task else []
+        entity_memories, entity_memory_ids = self._filter_entity_candidates(
+            entity_memories, query_embedding
+        )
+        memories = self._dedupe_memories(vector_memories + entity_memories)
+
+        logger.debug(
+            "vector_entity recall staged vector=%d entity=%d keywords=%d deduped=%d",
+            len(vector_memories),
+            len(entity_memories),
+            len(query_keywords),
+            len(memories),
+        )
+        return memories, query_embedding, query_keywords, entity_memory_ids
+
+    @staticmethod
+    def _filter_entity_candidates(
+        entity_memories: list[MemoryItem],
+        query_embedding: list[float] | None,
+        *,
+        min_entity_similarity: float = 0.15,
+    ) -> tuple[list[MemoryItem], set[str]]:
+        if not entity_memories or not query_embedding:
+            return entity_memories, set()
+
+        scored_entities: list[tuple[float, MemoryItem]] = []
+        for memory in entity_memories:
+            similarity = cosine_similarity(memory.embedding, query_embedding)
+            scored_entities.append((similarity, memory))
+
+        filtered = [memory for similarity, memory in scored_entities if similarity >= min_entity_similarity]
+        entity_memory_ids = {memory.memory_id for memory in filtered}
+        return filtered, entity_memory_ids
+
 
 class HybridFusionRetriever(BaseRetriever):
     def __init__(
@@ -308,26 +320,13 @@ class HybridFusionRetriever(BaseRetriever):
     ) -> list[MemoryItem]:
         started = time.perf_counter()
         if not isinstance(query, str):
-            memories, query_embedding = await self._query_store(query)
-
-            if scoring:
-                memories = self.memory_scorer.rank(
-                    memories,
-                    query_embedding,
-                    extra_signals=None,
-                )
-
-            if limit is not None:
-                memories = memories[:limit]
-            if update_access and memories:
-                await self._update_access(memories)
-
-            logger.debug(
-                "rrf recall done (structured) returned=%d duration_ms=%.2f",
-                len(memories),
-                (time.perf_counter() - started) * 1000.0,
+            return await self._recall_structured(
+                query=query,
+                limit=limit,
+                scoring=scoring,
+                update_access=update_access,
+                started=started,
             )
-            return memories
 
         resolved_limit = limit if limit is not None else 10
         logger.debug(
@@ -343,47 +342,14 @@ class HybridFusionRetriever(BaseRetriever):
             max(resolved_limit, cache_len or resolved_limit),
         )
 
-        vector_task = asyncio.create_task(
-            self._retrieve_vector_candidates(query, candidate_k)
-        )
-        entity_task = asyncio.create_task(self._retrieve_entity_candidates(query))
-        keyword_task = (
-            asyncio.create_task(self.keyword_extractor.extract(query))
-            if self.enable_rrf_signal_rerank and self.keyword_extractor
-            else None
-        )
-
-        (vector_memories, query_embedding), entity_memories = await asyncio.gather(
-            vector_task, entity_task
-        )
-
-        entity_memory_ids: set[str] = set()
-        if entity_memories and query_embedding:
-            min_entity_similarity = 0.15
-            scored = []
-            for memory in entity_memories:
-                similarity = cosine_similarity(memory.embedding, query_embedding)
-                if similarity >= min_entity_similarity:
-                    scored.append((similarity, memory))
-            scored.sort(key=lambda item: item[0], reverse=True)
-            entity_memories = [memory for _, memory in scored]
-            entity_memory_ids = {memory.memory_id for memory in entity_memories}
-
-        bm25_memories: list[MemoryItem] = []
-        if self.index_manager:
-            ranked = self.index_manager.search(query, k=candidate_k)
-            for memory_id, _ in ranked:
-                cached_memory = self.index_manager.get_memory(memory_id)
-                if cached_memory:
-                    bm25_memories.append(cached_memory)
-
-        logger.debug(
-            "rrf recall staged vector=%d entity=%d bm25=%d candidate_k=%d",
-            len(vector_memories),
-            len(entity_memories),
-            len(bm25_memories),
-            candidate_k,
-        )
+        (
+            vector_memories,
+            entity_memories,
+            bm25_memories,
+            query_embedding,
+            entity_memory_ids,
+            keyword_task,
+        ) = await self._collect_rrf_candidates(query, candidate_k)
 
         memories, rrf_scores = self._rrf_fuse_with_scores(
             vector_memories=vector_memories,
@@ -411,13 +377,7 @@ class HybridFusionRetriever(BaseRetriever):
                 },
             )
 
-        if self.reranker and self.rerank_candidates > 0:
-            rerank_limit = min(self.rerank_candidates, len(memories))
-            if rerank_limit > 0:
-                rerank_slice = memories[:rerank_limit]
-                reranked_tuples = await self.reranker.rerank(query, rerank_slice)
-                reranked = [memory for memory, _score in reranked_tuples]
-                memories = reranked + memories[rerank_limit:]
+        memories = await self._maybe_rerank(query, memories)
 
         if limit is not None:
             memories = memories[:limit]
@@ -431,6 +391,104 @@ class HybridFusionRetriever(BaseRetriever):
         )
 
         return memories
+
+    async def _recall_structured(
+        self,
+        *,
+        query: MemoryQuery | MemoryQueryBuilder,
+        limit: int | None,
+        scoring: bool,
+        update_access: bool,
+        started: float,
+    ) -> list[MemoryItem]:
+        memories, query_embedding = await self._query_store(query)
+        if scoring:
+            memories = self.memory_scorer.rank(
+                memories,
+                query_embedding,
+                extra_signals=None,
+            )
+
+        if limit is not None:
+            memories = memories[:limit]
+        if update_access and memories:
+            await self._update_access(memories)
+
+        logger.debug(
+            "rrf recall done (structured) returned=%d duration_ms=%.2f",
+            len(memories),
+            (time.perf_counter() - started) * 1000.0,
+        )
+        return memories
+
+    async def _collect_rrf_candidates(
+        self, query: str, candidate_k: int
+    ) -> tuple[
+        list[MemoryItem],
+        list[MemoryItem],
+        list[MemoryItem],
+        list[float] | None,
+        set[str],
+        asyncio.Task[list[str]] | None,
+    ]:
+        vector_task = asyncio.create_task(
+            self._retrieve_vector_candidates(query, candidate_k)
+        )
+        entity_task = asyncio.create_task(self._retrieve_entity_candidates(query))
+        keyword_task = (
+            asyncio.create_task(self.keyword_extractor.extract(query))
+            if self.enable_rrf_signal_rerank and self.keyword_extractor
+            else None
+        )
+
+        (vector_memories, query_embedding), entity_memories = await asyncio.gather(
+            vector_task, entity_task
+        )
+
+        entity_memories, entity_memory_ids = VectorEntityRetriever._filter_entity_candidates(
+            entity_memories, query_embedding
+        )
+        if query_embedding:
+            entity_memories = sorted(
+                entity_memories,
+                key=lambda memory: cosine_similarity(memory.embedding, query_embedding),
+                reverse=True,
+            )
+
+        bm25_memories: list[MemoryItem] = []
+        if self.index_manager:
+            ranked = self.index_manager.search(query, k=candidate_k)
+            for memory_id, _ in ranked:
+                cached_memory = self.index_manager.get_memory(memory_id)
+                if cached_memory:
+                    bm25_memories.append(cached_memory)
+
+        logger.debug(
+            "rrf recall staged vector=%d entity=%d bm25=%d candidate_k=%d",
+            len(vector_memories),
+            len(entity_memories),
+            len(bm25_memories),
+            candidate_k,
+        )
+        return (
+            vector_memories,
+            entity_memories,
+            bm25_memories,
+            query_embedding,
+            entity_memory_ids,
+            keyword_task,
+        )
+
+    async def _maybe_rerank(self, query: str, memories: list[MemoryItem]) -> list[MemoryItem]:
+        if not self.reranker or self.rerank_candidates <= 0:
+            return memories
+        rerank_limit = min(self.rerank_candidates, len(memories))
+        if rerank_limit <= 0:
+            return memories
+        rerank_slice = memories[:rerank_limit]
+        reranked_tuples = await self.reranker.rerank(query, rerank_slice)
+        reranked = [memory for memory, _score in reranked_tuples]
+        return reranked + memories[rerank_limit:]
 
     def _rrf_fuse_with_scores(
         self,

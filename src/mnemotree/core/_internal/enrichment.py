@@ -144,27 +144,39 @@ class StandardEnrichmentPipeline:
         normalized: dict[str, list[str]] = {}
 
         for entity_text, values in mentions_raw.items():
-            if not isinstance(values, list):
-                normalized[entity_text] = []
-                continue
-            resolved: list[str] = []
-            for value in values:
-                if isinstance(value, str):
-                    resolved.append(value)
-                    continue
-                if (
-                    isinstance(value, (tuple, list))
-                    and len(value) == 2
-                    and isinstance(value[0], int)
-                    and isinstance(value[1], int)
-                ):
-                    start, end = int(value[0]), int(value[1])
-                    if text:
-                        context_start = max(0, start - context_window)
-                        context_end = min(len(text), end + context_window)
-                        resolved.append(text[context_start:context_end])
-                    else:
-                        resolved.append(f"{start}:{end}")
-            normalized[entity_text] = resolved
+            normalized[entity_text] = self._resolve_entity_mentions(
+                values,
+                text=text,
+                context_window=context_window,
+            )
 
         return entities, normalized
+
+    @staticmethod
+    def _resolve_entity_mentions(
+        values: Any,
+        *,
+        text: str | None,
+        context_window: int,
+    ) -> list[str]:
+        if not isinstance(values, list):
+            return []
+        resolved: list[str] = []
+        for value in values:
+            if isinstance(value, str):
+                resolved.append(value)
+                continue
+            if (
+                isinstance(value, (tuple, list))
+                and len(value) == 2
+                and isinstance(value[0], int)
+                and isinstance(value[1], int)
+            ):
+                start, end = int(value[0]), int(value[1])
+                if text:
+                    context_start = max(0, start - context_window)
+                    context_end = min(len(text), end + context_window)
+                    resolved.append(text[context_start:context_end])
+                else:
+                    resolved.append(f"{start}:{end}")
+        return resolved
