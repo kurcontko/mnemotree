@@ -232,114 +232,131 @@ class MemoryItem(BaseModel):
         """
         Creates a concise, formatted string representation of the MemoryItem.
         """
+        sections = [
+            f"### Memory: {self.memory_id}",
+            self._format_content(),
+            self._format_summary(),
+            self._format_details(),
+            self._format_metrics(),
+            self._format_emotional(),
+            self._format_connections(),
+            self._format_timeline(),
+            self._format_source(),
+        ]
+        sections.extend(self._format_extra())
+        return "\n".join(s for s in sections if s)
 
-        def format_time(value: datetime | str | None) -> str:
-            if value is None:
-                return "N/A"
-            dt = coerce_datetime(value)
-            if dt is None:
-                return str(value)
-            return dt.strftime("%Y-%m-%d %H:%M UTC")
+    def _format_content(self) -> str | None:
+        return f"```\n{self.content}\n```" if self.content else None
 
-        def format_float(value: float) -> str:
-            return f"{value:.2f}" if value is not None else "N/A"
+    def _format_summary(self) -> str | None:
+        return f"**Summary:** {self.summary}" if self.summary else None
 
-        def get_rating(value: float) -> str:
-            if value is None:
-                return ""
-            filled = round(value * 5)
-            return f"[{'|' * filled}{'-' * (5 - filled)}]"
+    @staticmethod
+    def _format_time(value: datetime | str | None) -> str:
+        if value is None:
+            return "N/A"
+        dt = coerce_datetime(value)
+        if dt is None:
+            return str(value)
+        return dt.strftime("%Y-%m-%d %H:%M UTC")
 
-        # Core Information
-        output = [f"### Memory: {self.memory_id}"]
+    @staticmethod
+    def _format_float(value: float | None) -> str:
+        return f"{value:.2f}" if value is not None else "N/A"
 
-        if self.content:
-            output.append(f"```\n{self.content}\n```")
+    @staticmethod
+    def _format_rating(value: float | None) -> str:
+        if value is None:
+            return ""
+        filled = round(value * 5)
+        return f"[{'|' * filled}{'-' * (5 - filled)}]"
 
-        if self.summary:
-            output.append(f"**Summary:** {self.summary}")
-
-        # Key Details
+    def _format_details(self) -> str:
         details = [
             f"**Type:** {self.memory_type}",
-            f"**Created:** {format_time(self.timestamp)}",
+            f"**Created:** {self._format_time(self.timestamp)}",
         ]
         if self.tags:
             details.append(f"**Tags:** {', '.join(self.tags)}")
-        output.append(" | ".join(details))
+        return " | ".join(details)
 
-        # Metrics (single line)
+    def _format_metrics(self) -> str | None:
         metrics = []
         if self.importance is not None:
             metrics.append(
-                f"**Imp:** {format_float(self.importance)} {get_rating(self.importance)}"
+                f"**Imp:** {self._format_float(self.importance)} {self._format_rating(self.importance)}"
             )
         if self.confidence is not None:
             metrics.append(
-                f"**Conf:** {format_float(self.confidence)} {get_rating(self.confidence)}"
+                f"**Conf:** {self._format_float(self.confidence)} {self._format_rating(self.confidence)}"
             )
         if self.fidelity is not None:
-            metrics.append(f"**Fid:** {format_float(self.fidelity)} {get_rating(self.fidelity)}")
-        if metrics:
-            output.append(" | ".join(metrics))
+            metrics.append(
+                f"**Fid:** {self._format_float(self.fidelity)} {self._format_rating(self.fidelity)}"
+            )
+        return " | ".join(metrics) if metrics else None
 
-        # Emotional Context (if present)
+    def _format_emotional(self) -> str | None:
+        if self.emotional_valence is None and self.emotional_arousal is None:
+            return None
         emotional = []
-        if self.emotional_valence is not None or self.emotional_arousal is not None:
-            if self.emotional_valence is not None:
-                sentiment = (
-                    "(+)"
-                    if self.emotional_valence > 0
-                    else "(-)"
-                    if self.emotional_valence < 0
-                    else "(=)"
-                )
-                emotional.append(f"**Val:** {format_float(self.emotional_valence)}{sentiment}")
-            if self.emotional_arousal is not None:
-                emotional.append(f"**Aro:** {format_float(self.emotional_arousal)}")
-            if self.emotions:
-                emotional.append(f"**Emo:** {', '.join(self.emotions)}")
-            output.append(" | ".join(emotional))
+        if self.emotional_valence is not None:
+            sentiment = (
+                "(+)"
+                if self.emotional_valence > 0
+                else "(-)"
+                if self.emotional_valence < 0
+                else "(=)"
+            )
+            emotional.append(f"**Val:** {self._format_float(self.emotional_valence)}{sentiment}")
+        if self.emotional_arousal is not None:
+            emotional.append(f"**Aro:** {self._format_float(self.emotional_arousal)}")
+        if self.emotions:
+            emotional.append(f"**Emo:** {', '.join(self.emotions)}")
+        return " | ".join(emotional) if emotional else None
 
-        # Connections (if present)
-        if any([self.associations, self.linked_concepts, self.conflicts_with]):
-            connections = []
-            if self.associations:
-                connections.append(f"**Assoc:** {', '.join(self.associations)}")
-            if self.linked_concepts:
-                connections.append(f"**Links:** {', '.join(self.linked_concepts)}")
-            if self.conflicts_with:
-                connections.append(f"**Conflicts:** {', '.join(self.conflicts_with)}")
-            output.append(" | ".join(connections))
+    def _format_connections(self) -> str | None:
+        if not (self.associations or self.linked_concepts or self.conflicts_with):
+            return None
+        connections = []
+        if self.associations:
+            connections.append(f"**Assoc:** {', '.join(self.associations)}")
+        if self.linked_concepts:
+            connections.append(f"**Links:** {', '.join(self.linked_concepts)}")
+        if self.conflicts_with:
+            connections.append(f"**Conflicts:** {', '.join(self.conflicts_with)}")
+        return " | ".join(connections)
 
-        # Timeline (if present)
-        if self.previous_event_id or self.next_event_id:
-            timeline = []
-            if self.previous_event_id:
-                timeline.append(f"← {self.previous_event_id}")
-            if self.next_event_id:
-                timeline.append(f"{self.next_event_id} →")
-            output.append("**Timeline:** " + " | ".join(timeline))
+    def _format_timeline(self) -> str | None:
+        if not (self.previous_event_id or self.next_event_id):
+            return None
+        timeline = []
+        if self.previous_event_id:
+            timeline.append(f"← {self.previous_event_id}")
+        if self.next_event_id:
+            timeline.append(f"{self.next_event_id} →")
+        return "**Timeline:** " + " | ".join(timeline)
 
-        # Source and Credibility (if present)
-        if self.source or self.credibility is not None:
-            source_info = []
-            if self.source:
-                source_info.append(f"**Source:** {self.source}")
-            if self.credibility is not None:
-                source_info.append(
-                    f"**Cred:** {format_float(self.credibility)} {get_rating(self.credibility)}"
-                )
-            output.append(" | ".join(source_info))
+    def _format_source(self) -> str | None:
+        if not (self.source or self.credibility is not None):
+            return None
+        source_info = []
+        if self.source:
+            source_info.append(f"**Source:** {self.source}")
+        if self.credibility is not None:
+            source_info.append(
+                f"**Cred:** {self._format_float(self.credibility)} {self._format_rating(self.credibility)}"
+            )
+        return " | ".join(source_info)
 
-        # Additional Data (if present, in collapsed form)
-        if self.context or self.metadata:
-            if self.context:
-                output.append(f"**Context:** ```{json.dumps(self.context)}```")
-            if self.metadata:
-                output.append(f"**Metadata:** ```{json.dumps(self.metadata)}```")
-
-        return "\n".join(output)
+    def _format_extra(self) -> list[str]:
+        extra: list[str] = []
+        if self.context:
+            extra.append(f"**Context:** ```{json.dumps(self.context)}```")
+        if self.metadata:
+            extra.append(f"**Metadata:** ```{json.dumps(self.metadata)}```")
+        return extra
 
     def to_str_llm(self) -> str:
         """
