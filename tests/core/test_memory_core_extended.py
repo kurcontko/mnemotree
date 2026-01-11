@@ -64,6 +64,7 @@ class MockVectorStore(BaseMemoryStore, SupportsVectorSearch):
         return []
 
     async def update_connections(self, memory_id, **kwargs):
+        # Intentionally empty: Mock method for test fixture
         pass
 
     async def query_by_entities(self, entities, limit=10):
@@ -98,14 +99,14 @@ class MockStructuredQueryStore(BaseMemoryStore, SupportsStructuredQuery):
 
     async def update_connections(self, memory_id, **kwargs):
         """Mock implementation - no-op for testing."""
-        pass
+        # Intentionally empty: Mock method for test fixture
 
     async def query_by_entities(self, entities, limit=10):
         return []
 
     async def close(self):
         """Mock implementation - no-op for testing."""
-        pass
+        # Intentionally empty: Mock method for test fixture
 
 
 @pytest.fixture
@@ -252,6 +253,7 @@ class TestReflectMethod:
     @pytest.mark.asyncio
     async def test_reflect_with_query_builder(self, pro_memory_core):
         """Test reflect with custom query builder."""
+        # TODO: Implement full test - currently validates basic call flow
         pro_memory_core.store.query_memories = AsyncMock(return_value=[])
         
         query_builder = MemoryQueryBuilder().with_tags(["important"])
@@ -265,14 +267,20 @@ class TestReflectMethod:
         """Test reflect raises error when store doesn't support structured queries."""
         # Create a store that explicitly does NOT implement SupportsStructuredQuery (no query_memories)
         class MockVectorOnlyStore(BaseMemoryStore, SupportsVectorSearch):
-            async def store_memory(self, memory): pass
+            async def store_memory(self, memory):
+                # Intentionally empty: Mock method for inner test class
+                pass
             async def get_memory(self, mid): return None
             async def delete_memory(self, mid, *, cascade=False): return True
             async def list_memories(self, *, include_embeddings=False): return []
             async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
-            async def update_connections(self, memory_id, **kwargs): pass
+            async def update_connections(self, memory_id, **kwargs):
+                # Intentionally empty: Mock method for inner test class
+                pass
             async def query_by_entities(self, entities, limit=10): return []
-            async def close(self): pass
+            async def close(self):
+                # Intentionally empty: Mock method for inner test class
+                pass
             
         store = MockVectorOnlyStore()  # Doesn't support SupportsStructuredQuery
         
@@ -375,6 +383,7 @@ class TestBatchRemember:
     @pytest.mark.asyncio
     async def test_batch_remember_with_shared_context(self, basic_memory_core):
         """Test batch_remember with shared context."""
+        # TODO: Expand test with more context validation scenarios
         contents = ["First", "Second"]
         context = {"source": "batch_import"}
         
@@ -395,14 +404,20 @@ class TestSearchMethod:
         """Test search with filters on non-structured store raises error."""
         # Create a store that explicitly does NOT implement SupportsStructuredQuery
         class MockVectorOnlyStore(BaseMemoryStore, SupportsVectorSearch):
-            async def store_memory(self, memory): pass
+            async def store_memory(self, memory):
+                # Intentionally empty: Mock method for test
+                pass
             async def get_memory(self, mid): return None
             async def delete_memory(self, mid, *, cascade=False): return True
             async def list_memories(self, *, include_embeddings=False): return []
             async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
-            async def update_connections(self, memory_id, **kwargs): pass
+            async def update_connections(self, memory_id, **kwargs):
+                # Intentionally empty: Mock method for test
+                pass
             async def query_by_entities(self, entities, limit=10): return []
-            async def close(self): pass
+            async def close(self):
+                # Intentionally empty: Mock method for test
+                pass
 
         store = MockVectorOnlyStore()  # Only supports vector search
         
@@ -442,12 +457,16 @@ class TestSearchMethod:
         # Use a pure object that does NOT inherit from BaseMemoryStore to avoid
         # accidentally matching SupportsStructuredQuery protocol via inherited methods
         class PureVectorStore:
-            async def store_memory(self, memory): pass
+            async def store_memory(self, memory):
+                # Intentionally empty: Mock method for test
+                pass
             async def get_memory(self, mid): return None
             async def delete_memory(self, mid, *, cascade=False): return True
             async def list_memories(self, *, include_embeddings=False): return []
             async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
-            async def close(self): pass
+            async def close(self):
+                # Intentionally empty: Mock method for test
+                pass
             
         store = PureVectorStore()
         store.get_similar_memories = AsyncMock(return_value=[])
@@ -467,10 +486,14 @@ class TestSearchMethod:
     async def test_search_without_vector_support_raises_error(self, mock_embeddings):
         """Test search raises error when store doesn't support any search method."""
         class ConcreteBaseStore(BaseMemoryStore):
-            async def store_memory(self, memory): pass
+            async def store_memory(self, memory):
+                # Intentionally empty: Mock method for test
+                pass
             async def get_memory(self, mid): return None
             async def delete_memory(self, mid, *, cascade=False): return True
-            async def close(self): pass
+            async def close(self):
+                # Intentionally empty: Mock method for test
+                pass
 
         store = ConcreteBaseStore()
         
@@ -492,12 +515,16 @@ class TestSearchMethod:
         """Test search with BM25 but empty index falls back to vector search."""
         # Use a pure object to avoid protocol confusion
         class PureVectorStore:
-            async def store_memory(self, memory): pass
+            async def store_memory(self, memory):
+                # Intentionally empty: Mock method for test
+                pass
             async def get_memory(self, mid): return None
             async def delete_memory(self, mid, *, cascade=False): return True
             async def list_memories(self, *, include_embeddings=False): return []
             async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
-            async def close(self): pass
+            async def close(self):
+                # Intentionally empty: Mock method for test
+                pass
 
         store = PureVectorStore()
         store.get_similar_memories = AsyncMock(return_value=[])
@@ -762,6 +789,7 @@ class TestModeConfiguration:
     @pytest.mark.asyncio
     async def test_pro_mode_with_env_vars_creates_llm(self, mock_embeddings):
         """Test pro mode creates LLM from environment variables."""
+        # TODO: Mock LLM creation to avoid external dependencies
         store = MockVectorStore()
         
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
