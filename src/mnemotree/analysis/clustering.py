@@ -118,7 +118,7 @@ class MemoryClusterer:
 
     async def _kmeans_clustering(self, embeddings: np.ndarray, n_clusters: int) -> ClusteringResult:
         """Perform K-means clustering on memory embeddings."""
-        kmeans = KMeans(n_clusters=n_clusters)
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
         cluster_ids = kmeans.fit_predict(embeddings)
 
         return ClusteringResult(
