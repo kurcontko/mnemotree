@@ -279,7 +279,7 @@ class MilvusMemoryStore(BaseMemoryStore):
         self,
         query: str,
         query_embedding: list[float],
-        top_k: int = 10,
+        top_k: int = 5,
         filters: dict[str, Any] | None = None,
     ) -> list[MemoryItem]:
         """Get similar memories using vector similarity"""
@@ -300,25 +300,7 @@ class MilvusMemoryStore(BaseMemoryStore):
                 output_fields=["*"],
             )
 
-            memories = []
-            for hits in results:
-                for hit in hits:
-                    memory_data = {
-                        "memory_id": hit.entity.get("memory_id"),
-                        "content": hit.entity.get("content"),
-                        "memory_type": MemoryType(hit.entity.get("memory_type")),
-                        "timestamp": hit.entity.get("timestamp"),
-                        "importance": float(hit.entity.get("importance")),
-                        "confidence": float(hit.entity.get("confidence")),
-                        "tags": json.loads(hit.entity.get("tags")),
-                        "emotions": json.loads(hit.entity.get("emotions")),
-                        "source": hit.entity.get("source") if hit.entity.get("source") else None,
-                        "context": json_loads_dict(hit.entity.get("context")),
-                        "embedding": hit.entity.get("embedding"),
-                    }
-                    memories.append(MemoryItem(**memory_data))
-
-            return memories
+            return self._process_search_results(results)
 
         except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
             logger.exception(
@@ -335,77 +317,82 @@ class MilvusMemoryStore(BaseMemoryStore):
         await self.initialize()
         start = time.perf_counter()
         try:
-            # Build Milvus expression for filtering
-            expressions = []
-            if query.filters:
-                for filter in query.filters:
-                    if isinstance(filter.value, str):
-                        expressions.append(f'{filter.field} == "{filter.value}"')
-                    else:
-                        expressions.append(f"{filter.field} {filter.operator.value} {filter.value}")
-
-            expr = " && ".join(expressions) if expressions else ""
+            expr = self._build_milvus_expression(query)
 
             # If vector similarity is requested
             if query.vector is not None:
-                search_params = {
-                    "metric_type": "COSINE",
-                    "params": {"nprobe": 10},
-                }
+                return self._search_vector_query(query, expr)
+            
+            return self._search_scalar_query(query, expr)
 
-                results = self.collection.search(
-                    data=[query.vector],
-                    anns_field="embedding",
-                    param=search_params,
-                    limit=query.limit or 10,
-                    expr=expr if expr else None,
-                    output_fields=["*"],
-                )
+        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            logger.exception(
+                "Failed to query memories",
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            raise
 
-                memories = []
-                for hits in results:
-                    for hit in hits:
-                        memory_data = {
-                            "memory_id": hit.entity.get("memory_id"),
-                            "content": hit.entity.get("content"),
-                            "memory_type": MemoryType(hit.entity.get("memory_type")),
-                            "timestamp": hit.entity.get("timestamp"),
-                            "importance": float(hit.entity.get("importance")),
-                            "confidence": float(hit.entity.get("confidence")),
-                            "tags": json.loads(hit.entity.get("tags")),
-                            "emotions": json.loads(hit.entity.get("emotions")),
-                            "source": hit.entity.get("source")
-                            if hit.entity.get("source")
-                            else None,
-                            "context": json_loads_dict(hit.entity.get("context")),
-                            "embedding": hit.entity.get("embedding"),
-                        }
-                        memories.append(MemoryItem(**memory_data))
+    def _build_milvus_expression(self, query: MemoryQuery) -> str:
+        expressions = []
+        if query.filters:
+            for filter in query.filters:
+                if isinstance(filter.value, str):
+                    expressions.append(f'{filter.field} == "{filter.value}"')
+                else:
+                    expressions.append(f"{filter.field} {filter.operator.value} {filter.value}")
+        return " && ".join(expressions) if expressions else ""
 
-            else:
-                # Regular query without vector similarity
-                results = self.collection.query(
-                    expr=expr if expr else None, output_fields=["*"], limit=query.limit
-                )
+    def _search_vector_query(self, query: MemoryQuery, expr: str) -> list[MemoryItem]:
+        search_params = {
+            "metric_type": "COSINE",
+            "params": {"nprobe": 10},
+        }
 
-                memories = []
-                for result in results:
-                    memory_data = {
-                        "memory_id": result["memory_id"],
-                        "content": result["content"],
-                        "memory_type": MemoryType(result["memory_type"]),
-                        "timestamp": result["timestamp"],
-                        "importance": float(result["importance"]),
-                        "confidence": float(result["confidence"]),
-                        "tags": json.loads(result["tags"]),
-                        "emotions": json.loads(result["emotions"]),
-                        "source": result["source"] if result["source"] else None,
-                        "context": json_loads_dict(result.get("context")),
-                        "embedding": result["embedding"],
-                    }
-                    memories.append(MemoryItem(**memory_data))
+        results = self.collection.search(
+            data=[query.vector],
+            anns_field="embedding",
+            param=search_params,
+            limit=query.limit or 10,
+            expr=expr if expr else None,
+            output_fields=["*"],
+        )
+        return self._process_search_results(results)
 
-            return memories
+    def _search_scalar_query(self, query: MemoryQuery, expr: str) -> list[MemoryItem]:
+        results = self.collection.query(
+            expr=expr if expr else None, output_fields=["*"], limit=query.limit
+        )
+        return [self._parse_memory_record(result) for result in results]
+
+    def _process_search_results(self, results: Any) -> list[MemoryItem]:
+        memories = []
+        for hits in results:
+            for hit in hits:
+                memories.append(self._parse_memory_record(hit.entity))
+        return memories
+
+    def _parse_memory_record(self, record: Any) -> MemoryItem:
+        # Handle difference between search result (entity object/dict-like) and query result (dict)
+        # Assuming record acts like a dict in both cases or normalized before calling
+        get_field = record.get if isinstance(record, dict) else lambda k: record.get(k)
+        
+        memory_data = {
+            "memory_id": get_field("memory_id"),
+            "content": get_field("content"),
+            "memory_type": MemoryType(get_field("memory_type")),
+            "timestamp": get_field("timestamp"),
+            "importance": float(get_field("importance")),
+            "confidence": float(get_field("confidence")),
+            "tags": json.loads(get_field("tags")),
+            "emotions": json.loads(get_field("emotions")),
+            "source": get_field("source") if get_field("source") else None,
+            "context": json_loads_dict(get_field("context")),
+            "embedding": get_field("embedding"),
+        }
+        return MemoryItem(**memory_data)
 
         except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
             logger.exception(

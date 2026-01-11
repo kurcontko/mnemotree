@@ -170,24 +170,8 @@ class ChromaMemoryStore(BaseMemoryStore):
                 documents=[memory.content],
                 metadatas=[metadata],
             )
-            if self.graph_index:
-                try:
-                    self.graph_index.upsert_memory(memory)
-                except Exception as e:
-                    logger.exception(
-                        "Failed to update graph index for memory %s: %s",
-                        memory.memory_id,
-                        e.__class__.__name__,
-                        extra=store_log_context(
-                            self.store_type,
-                            memory_id=memory.memory_id,
-                            duration_ms=elapsed_ms(start),
-                        ),
-                    )
-                    if self.graph_index_strict:
-                        raise MnemotreeIndexError(
-                            f"Failed to update graph index for memory {memory.memory_id}"
-                        ) from e
+            
+            await self._update_graph_index_safe(memory, start)
 
             logger.info(
                 "Successfully stored memory %s",
@@ -215,6 +199,29 @@ class ChromaMemoryStore(BaseMemoryStore):
                 memory_id=memory.memory_id,
                 original_error=e,
             ) from e
+
+    async def _update_graph_index_safe(self, memory: MemoryItem, start_time: float) -> None:
+        """Safely update the graph index, handling errors based on strictness setting."""
+        if not self.graph_index:
+            return
+
+        try:
+            self.graph_index.upsert_memory(memory)
+        except Exception as e:
+            logger.exception(
+                "Failed to update graph index for memory %s: %s",
+                memory.memory_id,
+                e.__class__.__name__,
+                extra=store_log_context(
+                    self.store_type,
+                    memory_id=memory.memory_id,
+                    duration_ms=elapsed_ms(start_time),
+                ),
+            )
+            if self.graph_index_strict:
+                raise MnemotreeIndexError(
+                    f"Failed to update graph index for memory {memory.memory_id}"
+                ) from e
 
     async def get_memory(self, memory_id: str) -> MemoryItem | None:
         """Retrieve a memory by ID"""

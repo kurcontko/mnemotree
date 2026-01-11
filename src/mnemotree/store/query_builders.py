@@ -55,55 +55,59 @@ def build_neo4j_where_clause(filters: list[MemoryFilter]) -> tuple[str, dict[str
         param_name = f"filter_{i}"
         field = f"m.{filter_cond.field}"
         value = normalize_filter_value(filter_cond.value)
-
-        if filter_cond.operator in op_map:
-            where_clauses.append(f"{field} {op_map[filter_cond.operator]} ${param_name}")
-            params[param_name] = value
-            continue
-
-        if filter_cond.operator == FilterOperator.CONTAINS:
-            if filter_cond.field in _NEO4J_LIST_FIELDS:
-                where_clauses.append(f"${param_name} IN {field}")
-                params[param_name] = value
-                continue
-            where_clauses.append(f"{field} CONTAINS ${param_name}")
-            params[param_name] = value
-            continue
-
-        if filter_cond.operator == FilterOperator.NOT_CONTAINS:
-            if filter_cond.field in _NEO4J_LIST_FIELDS:
-                where_clauses.append(f"NOT (${param_name} IN {field})")
-                params[param_name] = value
-                continue
-            where_clauses.append(f"NOT ({field} CONTAINS ${param_name})")
-            params[param_name] = value
-            continue
-
-        if filter_cond.operator == FilterOperator.IN:
-            if not isinstance(value, list):
-                raise ValueError("FilterOperator.IN requires a list value.")
-            where_clauses.append(f"{field} IN ${param_name}")
-            params[param_name] = value
-            continue
-
-        if filter_cond.operator == FilterOperator.NOT_IN:
-            if not isinstance(value, list):
-                raise ValueError("FilterOperator.NOT_IN requires a list value.")
-            where_clauses.append(f"NOT ({field} IN ${param_name})")
-            params[param_name] = value
-            continue
-
-        if filter_cond.operator == FilterOperator.MATCHES:
-            raise UnsupportedQueryError(
-                "Neo4j full-text search (FilterOperator.MATCHES) is not supported by "
-                "`query_memories()` yet."
-            )
-
-        raise UnsupportedQueryError(f"Unsupported operator for Neo4j: {filter_cond.operator}")
+        clause, param_value = _neo4j_clause_for_filter(
+            filter_cond=filter_cond,
+            field=field,
+            param_name=param_name,
+            value=value,
+            op_map=op_map,
+        )
+        where_clauses.append(clause)
+        params[param_name] = param_value
 
     if not where_clauses:
         return "", {}
     return "WHERE " + " AND ".join(where_clauses), params
+
+
+def _neo4j_clause_for_filter(
+    *,
+    filter_cond: MemoryFilter,
+    field: str,
+    param_name: str,
+    value: Any,
+    op_map: dict[FilterOperator, str],
+) -> tuple[str, Any]:
+    if filter_cond.operator in op_map:
+        return f"{field} {op_map[filter_cond.operator]} ${param_name}", value
+
+    if filter_cond.operator == FilterOperator.CONTAINS:
+        if filter_cond.field in _NEO4J_LIST_FIELDS:
+            return f"${param_name} IN {field}", value
+        return f"{field} CONTAINS ${param_name}", value
+
+    if filter_cond.operator == FilterOperator.NOT_CONTAINS:
+        if filter_cond.field in _NEO4J_LIST_FIELDS:
+            return f"NOT (${param_name} IN {field})", value
+        return f"NOT ({field} CONTAINS ${param_name})", value
+
+    if filter_cond.operator == FilterOperator.IN:
+        if not isinstance(value, list):
+            raise ValueError("FilterOperator.IN requires a list value.")
+        return f"{field} IN ${param_name}", value
+
+    if filter_cond.operator == FilterOperator.NOT_IN:
+        if not isinstance(value, list):
+            raise ValueError("FilterOperator.NOT_IN requires a list value.")
+        return f"NOT ({field} IN ${param_name})", value
+
+    if filter_cond.operator == FilterOperator.MATCHES:
+        raise UnsupportedQueryError(
+            "Neo4j full-text search (FilterOperator.MATCHES) is not supported by "
+            "`query_memories()` yet."
+        )
+
+    raise UnsupportedQueryError(f"Unsupported operator for Neo4j: {filter_cond.operator}")
 
 
 def build_chroma_where(filters: list[MemoryFilter]) -> dict[str, str]:

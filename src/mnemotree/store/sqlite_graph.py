@@ -9,6 +9,10 @@ from ..core.models import MemoryItem
 from .serialization import normalize_entity_text
 
 
+_DELETE_EDGE_BY_SOURCE_SQL = "DELETE FROM memory_edge WHERE source_id = ? AND kind = ?"
+
+
+
 @dataclass(frozen=True)
 class GraphMemoryHit:
     memory_id: str
@@ -190,96 +194,132 @@ class SQLiteGraphIndex:
         if not resolved.entity_ids:
             return []
         with self._connect() as conn:
-            direct_scores = conn.execute(
-                """
-                SELECT memory_id, SUM(mention_count) AS score
-                FROM memory_entity
-                WHERE entity_id IN ({placeholders})
-                GROUP BY memory_id
-                ORDER BY score DESC
-                """.format(placeholders=",".join("?" * len(resolved.entity_ids))),
-                resolved.entity_ids,
-            ).fetchall()
-
-            matching_entities = self._matching_entities_for_memories(
-                conn, resolved.entity_ids
-            )
-
-            results: dict[str, GraphMemoryHit] = {}
-            for row in direct_scores:
-                memory_id = row["memory_id"]
-                results[memory_id] = GraphMemoryHit(
-                    memory_id=memory_id,
-                    score=float(row["score"] or 0.0),
-                    depth=1,
-                    matching_entities=matching_entities.get(memory_id),
-                )
+            direct_scores = self._fetch_direct_scores(conn, resolved.entity_ids)
+            matching_entities = self._matching_entities_for_memories(conn, resolved.entity_ids)
+            results = self._build_direct_results(direct_scores, matching_entities)
 
             if hops > 1:
-                related_entities = self._related_entities(conn, resolved.entity_ids, limit)
-                if related_entities:
-                    values_placeholders = ",".join("(?, ?)" for _ in related_entities)
-                    memory_scores = conn.execute(
-                        f"""
-                        WITH w(entity_id, weight) AS (
-                            VALUES {values_placeholders}
-                        )
-                        SELECT me.memory_id,
-                               SUM(me.mention_count * w.weight) AS score
-                        FROM memory_entity me
-                        JOIN w ON w.entity_id = me.entity_id
-                        GROUP BY me.memory_id
-                        ORDER BY score DESC
-                        """,
-                        [
-                            val
-                            for row in related_entities
-                            for val in (row["entity_id"], row["weight"])
-                        ],
-                    ).fetchall()
-
-                    for row in memory_scores:
-                        memory_id = row["memory_id"]
-                        if memory_id in results:
-                            continue
-                        results[memory_id] = GraphMemoryHit(
-                            memory_id=memory_id,
-                            score=float(row["score"] or 0.0) * 0.5,
-                            depth=2,
-                            matching_entities=None,
-                        )
-
-                edge_seed_limit = min(max(limit * 5, 25), 200)
-                direct_ids = [row["memory_id"] for row in direct_scores[:edge_seed_limit]]
-                if direct_ids:
-                    edge_neighbors = conn.execute(
-                        """
-                        SELECT DISTINCT
-                            CASE
-                                WHEN source_id IN ({placeholders}) THEN target_id
-                                ELSE source_id
-                            END AS neighbor_id
-                        FROM memory_edge
-                        WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})
-                        """.format(placeholders=",".join("?" * len(direct_ids))),
-                        direct_ids * 3,
-                    ).fetchall()
-                    for row in edge_neighbors:
-                        neighbor_id = row["neighbor_id"]
-                        if neighbor_id in results:
-                            continue
-                        results[neighbor_id] = GraphMemoryHit(
-                            memory_id=neighbor_id,
-                            score=0.5,
-                            depth=2,
-                            matching_entities=None,
-                        )
+                self._add_related_entity_results(
+                    conn=conn,
+                    resolved=resolved,
+                    results=results,
+                    limit=limit,
+                )
+                self._add_edge_neighbor_results(
+                    conn=conn,
+                    direct_scores=direct_scores,
+                    results=results,
+                    limit=limit,
+                )
 
         hits = sorted(
             results.values(),
             key=lambda hit: (-hit.score, hit.depth, hit.memory_id),
         )
         return hits[:limit]
+
+    def _fetch_direct_scores(
+        self, conn: sqlite3.Connection, entity_ids: list[int]
+    ) -> list[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT memory_id, SUM(mention_count) AS score
+            FROM memory_entity
+            WHERE entity_id IN ({placeholders})
+            GROUP BY memory_id
+            ORDER BY score DESC
+            """.format(placeholders=",".join("?" * len(entity_ids))),
+            entity_ids,
+        ).fetchall()
+
+    def _build_direct_results(
+        self,
+        direct_scores: list[sqlite3.Row],
+        matching_entities: dict[str, list[dict[str, str]]],
+    ) -> dict[str, GraphMemoryHit]:
+        results: dict[str, GraphMemoryHit] = {}
+        for row in direct_scores:
+            memory_id = row["memory_id"]
+            results[memory_id] = GraphMemoryHit(
+                memory_id=memory_id,
+                score=float(row["score"] or 0.0),
+                depth=1,
+                matching_entities=matching_entities.get(memory_id),
+            )
+        return results
+
+    def _add_related_entity_results(
+        self,
+        *,
+        conn: sqlite3.Connection,
+        resolved: _ResolvedEntities,
+        results: dict[str, GraphMemoryHit],
+        limit: int,
+    ) -> None:
+        related_entities = self._related_entities(conn, resolved.entity_ids, limit)
+        if not related_entities:
+            return
+        values_placeholders = ",".join("(?, ?)" for _ in related_entities)
+        memory_scores = conn.execute(
+            f"""
+            WITH w(entity_id, weight) AS (
+                VALUES {values_placeholders}
+            )
+            SELECT me.memory_id,
+                   SUM(me.mention_count * w.weight) AS score
+            FROM memory_entity me
+            JOIN w ON w.entity_id = me.entity_id
+            GROUP BY me.memory_id
+            ORDER BY score DESC
+            """,
+            [val for row in related_entities for val in (row["entity_id"], row["weight"])],
+        ).fetchall()
+
+        for row in memory_scores:
+            memory_id = row["memory_id"]
+            if memory_id in results:
+                continue
+            results[memory_id] = GraphMemoryHit(
+                memory_id=memory_id,
+                score=float(row["score"] or 0.0) * 0.5,
+                depth=2,
+                matching_entities=None,
+            )
+
+    def _add_edge_neighbor_results(
+        self,
+        *,
+        conn: sqlite3.Connection,
+        direct_scores: list[sqlite3.Row],
+        results: dict[str, GraphMemoryHit],
+        limit: int,
+    ) -> None:
+        edge_seed_limit = min(max(limit * 5, 25), 200)
+        direct_ids = [row["memory_id"] for row in direct_scores[:edge_seed_limit]]
+        if not direct_ids:
+            return
+        edge_neighbors = conn.execute(
+            """
+            SELECT DISTINCT
+                CASE
+                    WHEN source_id IN ({placeholders}) THEN target_id
+                    ELSE source_id
+                END AS neighbor_id
+            FROM memory_edge
+            WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})
+            """.format(placeholders=",".join("?" * len(direct_ids))),
+            direct_ids * 3,
+        ).fetchall()
+        for row in edge_neighbors:
+            neighbor_id = row["neighbor_id"]
+            if neighbor_id in results:
+                continue
+            results[neighbor_id] = GraphMemoryHit(
+                memory_id=neighbor_id,
+                score=0.5,
+                depth=2,
+                matching_entities=None,
+            )
 
     def _fetch_entity_ids_for_memory(
         self, conn: sqlite3.Connection, memory_id: str
@@ -343,15 +383,15 @@ class SQLiteGraphIndex:
 
     def _update_memory_edges(self, conn: sqlite3.Connection, memory: MemoryItem) -> None:
         conn.execute(
-            "DELETE FROM memory_edge WHERE source_id = ? AND kind = ?",
+            _DELETE_EDGE_BY_SOURCE_SQL,
             (memory.memory_id, "association"),
         )
         conn.execute(
-            "DELETE FROM memory_edge WHERE source_id = ? AND kind = ?",
+            _DELETE_EDGE_BY_SOURCE_SQL,
             (memory.memory_id, "conflict"),
         )
         conn.execute(
-            "DELETE FROM memory_edge WHERE source_id = ? AND kind = ?",
+            _DELETE_EDGE_BY_SOURCE_SQL,
             (memory.memory_id, "temporal_next"),
         )
         conn.execute(
@@ -446,6 +486,18 @@ class SQLiteGraphIndex:
     def _resolve_seed_entities(
         self, entities: dict[str, str] | list[str]
     ) -> _ResolvedEntities:
+        typed, name_only = self._partition_seed_entities(entities)
+        entity_rows: list[sqlite3.Row] = []
+        with self._connect() as conn:
+            entity_rows.extend(self._fetch_name_only_entities(conn, name_only))
+            entity_rows.extend(self._fetch_typed_entities(conn, typed))
+
+        ids = sorted({int(row["id"]) for row in entity_rows})
+        return _ResolvedEntities(entity_ids=ids, entities=entity_rows)
+
+    def _partition_seed_entities(
+        self, entities: dict[str, str] | list[str]
+    ) -> tuple[list[tuple[str, str]], list[str]]:
         if isinstance(entities, dict):
             typed = []
             name_only = []
@@ -459,59 +511,71 @@ class SQLiteGraphIndex:
                     typed.append((normalized, str(entity_type)))
                 else:
                     name_only.append(normalized)
-        else:
-            typed = []
-            name_only = [
-                normalize_entity_text(str(text)) for text in entities if text and str(text).strip()
-            ]
+            return typed, name_only
 
+        typed = []
+        name_only = [
+            normalize_entity_text(str(text)) for text in entities if text and str(text).strip()
+        ]
+        return typed, name_only
+
+    def _fetch_name_only_entities(
+        self, conn: sqlite3.Connection, name_only: list[str]
+    ) -> list[sqlite3.Row]:
+        if not name_only:
+            return []
         entity_rows: list[sqlite3.Row] = []
-        with self._connect() as conn:
-            if name_only:
-                rows = conn.execute(
-                    """
-                    SELECT id, name, type
-                    FROM entity
-                    WHERE name IN ({placeholders})
-                    """.format(placeholders=",".join("?" * len(name_only))),
-                    name_only,
-                ).fetchall()
-                entity_rows.extend(rows)
-                for term in name_only:
-                    if len(term) < 4:
-                        continue
-                    rows = conn.execute(
-                        """
-                        SELECT id, name, type
-                        FROM entity
-                        WHERE name LIKE ?
-                        """,
-                        (f"%{term}%",),
-                    ).fetchall()
-                    entity_rows.extend(rows)
-            for name, entity_type in typed:
-                row = conn.execute(
-                    """
-                    SELECT id, name, type
-                    FROM entity
-                    WHERE name = ? AND type = ?
-                    """,
-                    (name, entity_type),
-                ).fetchall()
-                entity_rows.extend(row)
-                if len(name) >= 4:
-                    row = conn.execute(
-                        """
-                        SELECT id, name, type
-                        FROM entity
-                        WHERE name LIKE ? AND type = ?
-                        """,
-                        (f"%{name}%", entity_type),
-                    ).fetchall()
-                    entity_rows.extend(row)
+        rows = conn.execute(
+            """
+            SELECT id, name, type
+            FROM entity
+            WHERE name IN ({placeholders})
+            """.format(placeholders=",".join("?" * len(name_only))),
+            name_only,
+        ).fetchall()
+        entity_rows.extend(rows)
+        for term in name_only:
+            if len(term) < 4:
+                continue
+            rows = conn.execute(
+                """
+                SELECT id, name, type
+                FROM entity
+                WHERE name LIKE ?
+                """,
+                (f"%{term}%",),
+            ).fetchall()
+            entity_rows.extend(rows)
+        return entity_rows
 
-        ids = sorted({int(row["id"]) for row in entity_rows})
-        return _ResolvedEntities(entity_ids=ids, entities=entity_rows)
+    def _fetch_typed_entities(
+        self, conn: sqlite3.Connection, typed: list[tuple[str, str]]
+    ) -> list[sqlite3.Row]:
+        if not typed:
+            return []
+        entity_rows: list[sqlite3.Row] = []
+        for name, entity_type in typed:
+            rows = conn.execute(
+                """
+                SELECT id, name, type
+                FROM entity
+                WHERE name = ? AND type = ?
+                """,
+                (name, entity_type),
+            ).fetchall()
+            entity_rows.extend(rows)
+            if len(name) < 4:
+                continue
+            rows = conn.execute(
+                """
+                SELECT id, name, type
+                FROM entity
+                WHERE name LIKE ? AND type = ?
+                """,
+                (f"%{name}%", entity_type),
+            ).fetchall()
+            entity_rows.extend(rows)
+        return entity_rows
 
 
 @dataclass(frozen=True)

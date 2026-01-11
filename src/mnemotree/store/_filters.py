@@ -15,6 +15,9 @@ _SQLITE_LIST_FIELDS = {
     "conflicts_with",
 }
 
+_SQL_FALSE = "1 = 0"
+_SQL_TRUE = "1 = 1"
+
 
 def normalize_filter_value(value: Any) -> Any:
     if isinstance(value, MemoryType):
@@ -79,7 +82,7 @@ def build_sqlite_filter_clauses(
             continue
         if operator in {FilterOperator.IN, FilterOperator.NOT_IN}:
             if not values:
-                clauses.append("1 = 0" if operator == FilterOperator.IN else "1 = 1")
+                clauses.append(_SQL_FALSE if operator == FilterOperator.IN else _SQL_TRUE)
                 continue
             placeholders = ", ".join("?" for _ in values)
             op = "IN" if operator == FilterOperator.IN else "NOT IN"
@@ -92,7 +95,7 @@ def build_sqlite_filter_clauses(
                 for item in values:
                     sub_clauses.append("content LIKE ?")
                     params.append(f"%{item}%")
-                joined = " OR ".join(sub_clauses) if sub_clauses else "1 = 0"
+                joined = " OR ".join(sub_clauses) if sub_clauses else _SQL_FALSE
                 if operator == FilterOperator.NOT_CONTAINS:
                     clauses.append(f"NOT ({joined})")
                 else:
@@ -103,7 +106,7 @@ def build_sqlite_filter_clauses(
                 for item in values:
                     sub_clauses.append(f"(',' || {column} || ',') LIKE ?")
                     params.append(f"%,{item},%")
-                joined = " OR ".join(sub_clauses) if sub_clauses else "1 = 0"
+                joined = " OR ".join(sub_clauses) if sub_clauses else _SQL_FALSE
                 if operator == FilterOperator.NOT_CONTAINS:
                     clauses.append(f"NOT ({joined})")
                 else:
