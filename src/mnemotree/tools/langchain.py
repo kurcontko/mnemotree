@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional
 
 from langchain.tools import Tool
 from pydantic import BaseModel, Field
@@ -37,16 +36,17 @@ class LangchainMemoryTool:
         return asyncio.run(self.asearch_memories(query))
 
     async def asearch_memories(self, query: str) -> str:
-        memories: List[MemoryItem] = await self.memory_core.recall(query)
-        return [memory.to_str_llm() for memory in memories]
+        memories: list[MemoryItem] = await self.memory_core.recall(query)
+        return self.memory_formatter.format_memories(memories)
 
     def store_memory(self, data: str) -> str:
         return asyncio.run(self.astore_memory(data))
 
     async def astore_memory(self, data: str) -> str:
-        return await self.memory_core.remember(data)
+        memory = await self.memory_core.remember(data)
+        return memory.memory_id
 
-    def get_tools(self) -> List[Tool]:
+    def get_tools(self) -> list[Tool]:
         """Get all memory tools configured for LangChain."""
         return [
             self.get_search_memories_tool(),
@@ -62,7 +62,7 @@ class LangchainMemoryTool:
             description="Search through stored memories using natural language",
             args_schema=SearchMemoriesInput,
         )
-    
+
     def get_store_memory_tool(self) -> Tool:
         """Get the store_memory tool."""
         return Tool.from_function(
