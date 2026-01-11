@@ -200,7 +200,7 @@ class ChromaMemoryStore(BaseMemoryStore):
                 original_error=e,
             ) from e
 
-    async def _update_graph_index_safe(self, memory: MemoryItem, start_time: float) -> None:
+    def _update_graph_index_safe(self, memory: MemoryItem, start_time: float) -> None:
         """Safely update the graph index, handling errors based on strictness setting."""
         if not self.graph_index:
             return

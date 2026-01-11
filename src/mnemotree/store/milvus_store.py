@@ -394,16 +394,6 @@ class MilvusMemoryStore(BaseMemoryStore):
         }
         return MemoryItem(**memory_data)
 
-        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
-            logger.exception(
-                "Failed to query memories",
-                extra=store_log_context(
-                    self.store_type,
-                    duration_ms=elapsed_ms(start),
-                ),
-            )
-            raise
-
     async def close(self):
         """Close the Milvus connection"""
         try:
