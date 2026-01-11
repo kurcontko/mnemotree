@@ -5,18 +5,35 @@ set -e
 VENV_PATH=${VENV_PATH:-.venv}
 PORT_STREAMLIT=${STREAMLIT_PORT:-7860}
 
-if ! command -v uv >/dev/null 2>&1; then
-  echo "uv is not installed. Install it from https://github.com/astral-sh/uv"
-  exit 1
+# Check if virtual environment exists
+if [ ! -d "$VENV_PATH" ]; then
+    echo "Virtual environment not found at $VENV_PATH"
+    echo "Creating virtual environment..."
+    python3 -m venv "$VENV_PATH"
 fi
 
-# Create Python virtual environment
-echo "Creating uv virtual environment \"$VENV_PATH\" in root directory..."
-uv venv "$VENV_PATH"
+# Activate virtual environment
+source "$VENV_PATH/bin/activate"
 
-# Install dependencies with UI extras
-echo "Installing project dependencies with UI extras..."
-uv pip install -e ".[ui]" --python "$VENV_PATH/bin/python"
+# Install dependencies with UI extras if not already installed
+if ! python -c "import streamlit" 2>/dev/null; then
+    echo "Installing project dependencies with UI extras..."
+    pip install -e ".[ui]"
+fi
 
-# Run the Streamlit app
-uv run --python "$VENV_PATH/bin/python" streamlit run examples/memory_chat/app.py --server.port "$PORT_STREAMLIT"
+# Load environment variables from .env if it exists
+if [ -f ".env" ]; then
+    echo "Loading environment variables from .env..."
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
+# Check for OPENAI_API_KEY
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo "Warning: OPENAI_API_KEY is not set. Please set it to use the app."
+    echo "Example: export OPENAI_API_KEY='your-api-key'"
+fi
+
+# Run the Streamlit app from the examples/memory_chat directory
+echo "Starting Streamlit app on port $PORT_STREAMLIT..."
+cd examples/memory_chat
+streamlit run app.py --server.port "$PORT_STREAMLIT"
