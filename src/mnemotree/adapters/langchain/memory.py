@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-from typing import Dict, List, Any
-from datetime import datetime
 import asyncio
+from typing import Any
 
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.documents import Document
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.memory import BaseMemory
 
 from ...core.memory import MemoryCore
-from ...core.query import MemoryQueryBuilder
 
 
 class MemoryLangChainAdapter(BaseMemory):
@@ -21,7 +16,7 @@ class MemoryLangChainAdapter(BaseMemory):
         memory_core: MemoryCore,
         memory_key: str = "history",
         input_key: str = "input",
-        output_key: str = "output"
+        output_key: str = "output",
     ):
         self.memory = memory_core
         self.memory_key = memory_key
@@ -29,21 +24,15 @@ class MemoryLangChainAdapter(BaseMemory):
         self.output_key = output_key
 
     @property
-    def memory_variables(self) -> List[str]:
+    def memory_variables(self) -> list[str]:
         """Return memory variables."""
         return [self.memory_key]
 
-    def load_memory_variables(
-        self,
-        inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def load_memory_variables(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Load memory variables."""
-        asyncio.run(self.aload_memory_variables(inputs))
+        return asyncio.run(self.aload_memory_variables(inputs))
 
-    async def aload_memory_variables(
-        self,
-        inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def aload_memory_variables(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Load memory variables."""
         # Get current input
         query = inputs.get(self.input_key, "")
@@ -55,40 +44,25 @@ class MemoryLangChainAdapter(BaseMemory):
         )
 
         # Format memories for chat context
-        if memories:
-            history = [memory.to_str_llm() for memory in memories]
-        else:
-            history = ""
+        history = "\n\n".join(memory.to_str_llm() for memory in memories) if memories else ""
 
         return {self.memory_key: history}
 
-    def save_context(
-        self,
-        inputs: Dict[str, Any],
-        outputs: Dict[str, Any]
-    ) -> None:
+    def save_context(self, inputs: dict[str, Any], outputs: dict[str, Any]) -> None:
         """Save context from conversation."""
         asyncio.run(self.asave_context(inputs, outputs))
 
-    async def asave_context(
-        self,
-        inputs: Dict[str, Any],
-        outputs: Dict[str, Any]
-    ) -> None:
+    async def asave_context(self, inputs: dict[str, Any], outputs: dict[str, Any]) -> None:
         """Save context from conversation."""
         # Get input/output
         input_str = inputs.get(self.input_key, "")
         output_str = outputs.get(self.output_key, "")
 
         # Store as memory
-        await self.memory.remember(
-            content=f"User: {input_str}\nAssistant: {output_str}"
-        )
+        await self.memory.remember(content=f"User: {input_str}\nAssistant: {output_str}")
 
     def clear(self) -> None:
         """Clear memory (optional)."""
-        pass
 
     async def aclear(self) -> None:
         """Clear memory (optional)."""
-        pass
