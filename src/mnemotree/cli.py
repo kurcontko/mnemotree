@@ -15,10 +15,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.version:
         try:
-            from importlib.metadata import version
+            from importlib.metadata import PackageNotFoundError, version
 
             print(version("mnemotree"))
-        except Exception:
+        except PackageNotFoundError:
             print("mnemotree")
         return 0
 

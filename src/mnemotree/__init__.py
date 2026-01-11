@@ -1,5 +1,29 @@
 from __future__ import annotations
 
-from .core.memory import MemoryCore
+from .core.builder import MemoryCoreBuilder
+from .core.memory import MemoryCore, MemoryMode
+from .errors import (
+    ConfigurationError,
+    DependencyError,
+    IndexError,
+    InvalidQueryError,
+    MemoryNotFoundError,
+    MnemotreeError,
+    SerializationError,
+    StoreError,
+)
 
-__all__ = ["MemoryCore"]
+__all__ = [
+    "MemoryCore",
+    "MemoryCoreBuilder",
+    "MemoryMode",
+    # Error types
+    "MnemotreeError",
+    "StoreError",
+    "SerializationError",
+    "InvalidQueryError",
+    "DependencyError",
+    "MemoryNotFoundError",
+    "ConfigurationError",
+    "IndexError",
+]
