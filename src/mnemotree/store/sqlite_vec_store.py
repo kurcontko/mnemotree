@@ -249,7 +249,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 )
                 conn.execute(
                     f'INSERT INTO "{self._vector_table}" (rowid, embedding) VALUES (?, ?)',
-                    (memory_row_id, sqlite_vec.serialize(memory.embedding)),
+                    (memory_row_id, sqlite_vec.serialize_float32(memory.embedding)),
                 )
                 self._update_entity_index(conn, memory.memory_id, memory.entities)
                 conn.commit()
@@ -381,7 +381,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 offset = query.offset or 0
 
                 if query.vector is not None:
-                    vector_blob = sqlite_vec.serialize(query.vector)
+                    vector_blob = sqlite_vec.serialize_float32(query.vector)
                     sql = (
                         f'SELECT m.*, distance(v.embedding, ?) AS distance '
                         f'FROM "{self._vector_table}" v '
@@ -437,7 +437,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                         params.append(normalize_filter_value(value))
                 where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
-                vector_blob = sqlite_vec.serialize(query_embedding)
+                vector_blob = sqlite_vec.serialize_float32(query_embedding)
                 sql = (
                     f'SELECT m.*, distance(v.embedding, ?) AS distance '
                     f'FROM "{self._vector_table}" v '
