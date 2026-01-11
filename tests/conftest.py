@@ -1,12 +1,9 @@
+from datetime import datetime, timezone
 
 import pytest
-import shutil
-import asyncio
-from datetime import datetime, timezone
-from pathlib import Path
-from uuid import uuid4
 
 from mnemotree.core.models import MemoryItem, MemoryType
+
 
 @pytest.fixture
 def memory_item():
@@ -16,8 +13,9 @@ def memory_item():
         memory_type=MemoryType.SEMANTIC,
         importance=0.5,
         timestamp=str(datetime.now(timezone.utc)),
-        embedding=[0.1] * 1536  # Mock embedding
+        embedding=[0.1] * 1536,  # Mock embedding
     )
+
 
 @pytest.fixture
 def temp_chroma_dir(tmp_path):
