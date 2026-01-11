@@ -235,6 +235,7 @@ class BaselineNeo4jMemoryStore(BaseMemoryStore):
     async def update_connections(
         self,
         memory_id: str,
+        *,
         related_ids: list[str] | None = None,
         conflict_ids: list[str] | None = None,
         previous_id: str | None = None,

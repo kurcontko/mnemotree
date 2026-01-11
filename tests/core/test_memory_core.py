@@ -24,19 +24,22 @@ class MockStore(BaseMemoryStore):
     async def get_memory(self, mid):
         return None
 
-    async def delete_memory(self, mid, cascade=False):
+    async def delete_memory(self, mid, *, cascade=False):
         return True
+
+    async def list_memories(self, *, include_embeddings=False):
+        return []
 
     async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
         return []
 
-    async def query_memories(self, query):
+    async def query_memories(self, query, limit=10):
         return []
 
     async def update_connections(self, memory_id, **kwargs):
         pass
 
-    async def query_by_entities(self, entities):
+    async def query_by_entities(self, entities, limit=10):
         return []
 
     async def close(self):

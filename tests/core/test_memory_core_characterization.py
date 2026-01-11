@@ -20,19 +20,22 @@ class MockStore(BaseMemoryStore):
         # Return empty by default, tests will override or populate
         return []
 
-    async def query_memories(self, query):
+    async def list_memories(self, *, include_embeddings=False):
+        return list(self.stored_memories.values())
+
+    async def query_memories(self, query, limit=10):
         return []
 
     async def update_connections(self, memory_id, **kwargs):
         pass
 
-    async def query_by_entities(self, entities):
+    async def query_by_entities(self, entities, limit=10):
         return []
 
     async def update_memory_metadata(self, memory_id, metadata):
         pass
 
-    async def delete_memory(self, mid, cascade=False):
+    async def delete_memory(self, mid, *, cascade=False):
         return True
 
     async def get_memory(self, mid):
