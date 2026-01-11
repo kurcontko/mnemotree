@@ -13,9 +13,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     try:
         args = parser.parse_args(argv)
-    except SystemExit:
-        # argparse calls sys.exit on parse errors; re-raise to preserve behavior.
-        raise
+    except SystemExit as e:
+        # Preserve argparse's exit code
+        return e.code if e.code is not None else 1
 
     if args.version:
         try:
