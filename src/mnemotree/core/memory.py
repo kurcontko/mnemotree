@@ -759,13 +759,21 @@ class MemoryCore:
         self.default_analyze = self.mode_config.analyze_default
         self.default_summarize = self.mode_config.summarize_default
         self.enable_keywords = self.mode_config.enable_keywords
-        self.keyword_extractor = (
-            keyword_extractor
-            if keyword_extractor is not None
-            else SpacyKeywordExtractor()
-            if self.enable_keywords
-            else None
+        self.keyword_extractor = self._resolve_keyword_extractor(
+            keyword_extractor, self.enable_keywords
         )
+
+    def _resolve_keyword_extractor(
+        self,
+        keyword_extractor: KeywordExtractor | None,
+        enable_keywords: bool,
+    ) -> KeywordExtractor | None:
+        """Resolve keyword extractor based on configuration."""
+        if keyword_extractor is not None:
+            return keyword_extractor
+        if enable_keywords:
+            return SpacyKeywordExtractor()
+        return None
 
     def _init_embeddings_and_analysis(
         self,
