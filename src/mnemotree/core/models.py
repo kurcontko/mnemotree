@@ -358,52 +358,65 @@ class MemoryItem(BaseModel):
             extra.append(f"**Metadata:** ```{json.dumps(self.metadata)}```")
         return extra
 
+    def _format_emotional_context_llm(self) -> str | None:
+        """Format emotional context for LLM consumption."""
+        has_emotional_data = (
+            self.emotional_valence is not None
+            or self.emotional_arousal is not None
+            or self.emotions
+        )
+        if not has_emotional_data:
+            return None
+
+        emotion_parts = []
+        if self.emotional_valence is not None:
+            emotion_parts.append(f"valence: {self.emotional_valence:+.2f}")
+        if self.emotional_arousal is not None:
+            emotion_parts.append(f"arousal: {self.emotional_arousal:.2f}")
+        if self.emotions:
+            emotion_parts.append(f"emotions: {', '.join(self.emotions)}")
+        return f"Emotional Context: {' | '.join(emotion_parts)}"
+
+    def _format_timeline_llm(self) -> str | None:
+        """Format temporal context for LLM consumption."""
+        if not (self.previous_event_id or self.next_event_id):
+            return None
+
+        timeline = []
+        if self.previous_event_id:
+            timeline.append(f"previous: {self.previous_event_id}")
+        if self.next_event_id:
+            timeline.append(f"next: {self.next_event_id}")
+        return f"Timeline: {' | '.join(timeline)}"
+
     def to_str_llm(self) -> str:
         """
         Creates a simplified string representation optimized for LLM consumption.
         Focuses on core information and critical context while maintaining a clean format.
         """
-        parts = []
-
-        # Core information with essential context
-        parts.append(f"Memory ({self.memory_type.value}):")
-        parts.append(f"Content: {self.content}")
+        parts = [
+            f"Memory ({self.memory_type.value}):",
+            f"Content: {self.content}",
+        ]
 
         if self.summary:
             parts.append(f"Summary: {self.summary}")
 
-        # Important metadata that might influence LLM understanding
         parts.append(f"Importance: {self.importance:.2f}")
 
-        # Emotional context if available
-        if any(
-            [self.emotional_valence is not None, self.emotional_arousal is not None, self.emotions]
-        ):
-            emotion_parts = []
-            if self.emotional_valence is not None:
-                emotion_parts.append(f"valence: {self.emotional_valence:+.2f}")
-            if self.emotional_arousal is not None:
-                emotion_parts.append(f"arousal: {self.emotional_arousal:.2f}")
-            if self.emotions:
-                emotion_parts.append(f"emotions: {', '.join(self.emotions)}")
-            parts.append(f"Emotional Context: {' | '.join(emotion_parts)}")
+        emotional_context = self._format_emotional_context_llm()
+        if emotional_context:
+            parts.append(emotional_context)
 
-        # Critical relationships
         if self.linked_concepts:
             parts.append(f"Related Concepts: {', '.join(self.linked_concepts)}")
 
-        # Entity information if available
         if self.entities:
             parts.append(f"Entities: {', '.join([f'{k} ({v})' for k, v in self.entities.items()])}")
 
-        # Temporal context if available
-        if self.previous_event_id or self.next_event_id:
-            timeline = []
-            if self.previous_event_id:
-                timeline.append(f"previous: {self.previous_event_id}")
-            if self.next_event_id:
-                timeline.append(f"next: {self.next_event_id}")
-            parts.append(f"Timeline: {' | '.join(timeline)}")
+        timeline = self._format_timeline_llm()
+        if timeline:
+            parts.append(timeline)
 
         return "\n".join(parts)
 
