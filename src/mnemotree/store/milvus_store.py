@@ -214,7 +214,7 @@ class MilvusMemoryStore(BaseMemoryStore):
 
             return MemoryItem(**memory_data)
 
-        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        except (MilvusException, KeyError, TypeError, ValueError):
             logger.exception(
                 "Failed to retrieve memory %s",
                 memory_id,
@@ -263,7 +263,7 @@ class MilvusMemoryStore(BaseMemoryStore):
                 ),
             )
             return True
-        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        except (MilvusException, KeyError, TypeError, ValueError):
             logger.exception(
                 "Failed to delete memory %s",
                 memory_id,
@@ -302,7 +302,7 @@ class MilvusMemoryStore(BaseMemoryStore):
 
             return self._process_search_results(results)
 
-        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        except (MilvusException, KeyError, TypeError, ValueError):
             logger.exception(
                 "Failed to get similar memories",
                 extra=store_log_context(
@@ -325,7 +325,7 @@ class MilvusMemoryStore(BaseMemoryStore):
             
             return self._search_scalar_query(query, expr)
 
-        except (MilvusException, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        except (MilvusException, KeyError, TypeError, ValueError):
             logger.exception(
                 "Failed to query memories",
                 extra=store_log_context(
