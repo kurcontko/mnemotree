@@ -40,7 +40,7 @@ class MockStore(BaseMemoryStore):
         """Mock implementation - no-op for testing."""
         pass
 
-    async def query_by_entities(self, entities):
+    async def query_by_entities(self, entities, limit=10):
         return []
 
     async def close(self):

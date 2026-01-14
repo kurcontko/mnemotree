@@ -15,6 +15,7 @@ This file adds tests for uncovered edge cases in:
 """
 
 from datetime import datetime, timedelta, timezone
+import math
 
 import pytest
 from pydantic import ValidationError
@@ -482,7 +483,7 @@ class TestMemoryItemLangchainDocumentEdgeCases:
         doc = memory.to_langchain_document()
         assert doc.metadata["string_field"] == "value"
         assert doc.metadata["int_field"] == 42
-        assert doc.metadata["float_field"] == 3.14
+        assert math.isclose(doc.metadata["float_field"], 3.14)
         assert doc.metadata["bool_field"] is True
         assert doc.metadata["list_field"] == [1, 2, 3]
         assert doc.metadata["dict_field"] == {"nested": "data"}

@@ -1,6 +1,7 @@
 """Tests for MemoryQuery and MemoryQueryBuilder."""
 
 from datetime import datetime, timezone
+import math
 
 import pytest
 
@@ -118,7 +119,7 @@ class TestMemoryQueryBuilder:
         assert len(query.filters) == 1
         assert query.filters[0].field == "importance"
         assert query.filters[0].operator == FilterOperator.GTE
-        assert query.filters[0].value == 0.7
+        assert math.isclose(query.filters[0].value, 0.7)
 
     @pytest.mark.asyncio
     async def test_filter_with_string_operator(self):

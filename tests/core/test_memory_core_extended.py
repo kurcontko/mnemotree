@@ -16,6 +16,7 @@ Focuses on untested code paths including:
 """
 
 import asyncio
+import math
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -175,7 +176,7 @@ class TestAsyncIngestion:
         stub = await memory_core.remember("Async content", importance=0.7)
         
         assert stub.content == "Async content"
-        assert stub.importance == 0.7
+        assert math.isclose(stub.importance, 0.7)
         assert stub.metadata.get("queued") is True
         assert stub.memory_id is not None
 
@@ -626,7 +627,7 @@ class TestResolverMethods:
         )
         
         assert mem_type == MemoryType.EPISODIC
-        assert importance == 0.9
+        assert math.isclose(importance, 0.9)
 
     def test_resolve_importance_and_type_overrides_analysis(self, basic_memory_core):
         """Test that explicit values override analysis."""
@@ -650,7 +651,7 @@ class TestResolverMethods:
         )
         
         assert mem_type == MemoryType.PROCEDURAL
-        assert importance == 0.3
+        assert math.isclose(importance, 0.3)
 
     def test_resolve_importance_and_type_without_analysis(self, basic_memory_core):
         """Test resolution uses defaults when no analysis."""
@@ -661,7 +662,7 @@ class TestResolverMethods:
         )
         
         assert mem_type == MemoryType.SEMANTIC
-        assert importance == 0.5  # default
+        assert math.isclose(importance, 0.5)  # default
 
     def test_resolve_tags_combines_all_sources(self, basic_memory_core):
         """Test tag resolution combines tags from all sources."""
