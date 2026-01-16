@@ -4,14 +4,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 import sys
 import types
-import importlib.util
 from dataclasses import dataclass
 from unittest.mock import MagicMock
 
 import pytest
-import asyncio
 
 
 def _install_langchain_stubs() -> None:

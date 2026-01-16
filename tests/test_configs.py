@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from mnemotree.configs import (
     ConfiguredMemorySystem,
     MemorySystemConfig,
@@ -16,7 +14,7 @@ from mnemotree.configs import (
     research_assistant_config,
 )
 from mnemotree.core.hybrid_retrieval import FusionStrategy
-from mnemotree.experimental import ConsolidationConfig, DecayParameters, WritePolicy
+from mnemotree.experimental import DecayParameters, WritePolicy
 
 
 class TestMemorySystemConfig:
@@ -270,7 +268,7 @@ class TestBuildMemorySystem:
             enable_adaptive_decay=False,
             enable_write_gate=False,
         )
-        system = config.build_memory_system(mock_store)
+        config.build_memory_system(mock_store)
 
         # Should not create new instances
         mock_llm_cls.assert_not_called()

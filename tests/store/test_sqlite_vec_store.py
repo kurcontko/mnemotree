@@ -1,10 +1,8 @@
 import sqlite3
+from datetime import datetime, timezone
 
 import pytest
 
-from datetime import datetime, timezone
-
-from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.core.query import FilterOperator, MemoryFilter, MemoryQuery, SortOrder
 from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
 

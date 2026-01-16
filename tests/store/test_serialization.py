@@ -3,8 +3,6 @@
 from datetime import datetime, timezone
 from enum import Enum
 
-import pytest
-
 from mnemotree.store.serialization import (
     normalize_entity_text,
     normalize_filter_value,

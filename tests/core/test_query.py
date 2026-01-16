@@ -1,7 +1,7 @@
 """Tests for MemoryQuery and MemoryQueryBuilder."""
 
-from datetime import datetime, timezone
 import math
+from datetime import datetime, timezone
 
 import pytest
 

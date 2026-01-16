@@ -4,8 +4,7 @@ pytest.importorskip("chromadb")
 
 from datetime import datetime, timezone
 
-from mnemotree.core.models import MemoryItem, MemoryType
-from mnemotree.core.query import FilterOperator, MemoryFilter, MemoryQuery, SortOrder
+from mnemotree.core.query import MemoryQuery
 from mnemotree.store.chromadb_store import ChromaMemoryStore
 
 

@@ -20,11 +20,11 @@ class TestLocalSentenceTransformerEmbeddings:
         mock_st = MagicMock()
         mock_model = MagicMock()
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings(
                 model_name="test-model",
                 device="cpu",
@@ -42,11 +42,11 @@ class TestLocalSentenceTransformerEmbeddings:
         mock_model = MagicMock()
         mock_model.encode.return_value = np.array([[0.1, 0.2], [0.3, 0.4]])
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
             result = embeddings.embed_documents(["Hello", "World"])
 
@@ -58,11 +58,11 @@ class TestLocalSentenceTransformerEmbeddings:
         """embed_documents returns empty list for empty input."""
         mock_st = MagicMock()
         mock_st.SentenceTransformer.return_value = MagicMock()
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
             result = embeddings.embed_documents([])
 
@@ -74,11 +74,11 @@ class TestLocalSentenceTransformerEmbeddings:
         mock_model = MagicMock()
         mock_model.encode.return_value = np.array([[0.5, 0.6, 0.7]])
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
             result = embeddings.embed_query("Test query")
 
@@ -90,11 +90,11 @@ class TestLocalSentenceTransformerEmbeddings:
         mock_model = MagicMock()
         mock_model.encode.return_value = np.array([[0.1]])
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings(batch_size=64)
             embeddings.embed_documents(["Test"])
 
@@ -108,11 +108,11 @@ class TestLocalSentenceTransformerEmbeddings:
         mock_model = MagicMock()
         mock_model.encode.return_value = np.array([[0.1]])
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings(normalize=True)
             embeddings.embed_documents(["Test"])
 
@@ -129,11 +129,11 @@ class TestLocalSentenceTransformerEmbeddings:
             np.array([[3.0, 4.0]]),  # Vector with norm 5
         ]
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings(normalize=True)
             result = embeddings.embed_documents(["Test"])
 
@@ -149,11 +149,11 @@ class TestLocalSentenceTransformerEmbeddings:
         mock_model = MagicMock()
         mock_model.encode.return_value = np.array([[1.0, 2.0]])
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
             result = await embeddings.aembed_query("Async test")
 
@@ -166,11 +166,11 @@ class TestLocalSentenceTransformerEmbeddings:
         mock_model = MagicMock()
         mock_model.encode.return_value = np.array([[1.0], [2.0]])
         mock_st.SentenceTransformer.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
             result = await embeddings.aembed_documents(["A", "B"])
 
@@ -181,6 +181,6 @@ class TestLocalSentenceTransformerEmbeddings:
         with patch.dict(sys.modules, {"sentence_transformers": None}):
             import mnemotree.embeddings.local as local_module
             importlib.reload(local_module)
-            
+
             with pytest.raises(RuntimeError, match="sentence-transformers"):
                 local_module.LocalSentenceTransformerEmbeddings()

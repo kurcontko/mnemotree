@@ -22,7 +22,6 @@ class MockStore(BaseMemoryStore):
 
     async def store_memory(self, memory):
         """Mock implementation - no-op for testing."""
-        pass
 
     async def get_memory(self, mid):
         return None
@@ -38,14 +37,12 @@ class MockStore(BaseMemoryStore):
 
     async def update_connections(self, memory_id, **kwargs):
         """Mock implementation - no-op for testing."""
-        pass
 
     async def query_by_entities(self, entities, limit=10):
         return []
 
     async def close(self):
         """Mock implementation - no-op for testing."""
-        pass
 
 
 @pytest.fixture

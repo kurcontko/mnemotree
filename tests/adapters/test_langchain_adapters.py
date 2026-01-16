@@ -4,15 +4,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 import sys
 import types
-import importlib.util
 from dataclasses import dataclass
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
-import asyncio
-from uuid import uuid4
 
 
 def _install_langchain_core_stubs() -> None:
@@ -43,7 +43,6 @@ def _install_langchain_core_stubs() -> None:
     class BaseRetriever:
         def __init__(self, *args, **kwargs) -> None:
             """Mock implementation for testing."""
-            pass
 
     retrievers.BaseRetriever = BaseRetriever
 
@@ -68,10 +67,11 @@ def _install_langchain_core_stubs() -> None:
 
 _install_langchain_core_stubs()
 
-from mnemotree.adapters.langchain.memory import MemoryLangChainAdapter
-from mnemotree.adapters.langchain.retriever import MemoryRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
+
+from mnemotree.adapters.langchain.memory import MemoryLangChainAdapter
+from mnemotree.adapters.langchain.retriever import MemoryRetriever
 
 
 class DummyMemoryCore:

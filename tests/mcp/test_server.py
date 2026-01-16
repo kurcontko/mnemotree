@@ -209,7 +209,6 @@ def test_get_mcp_registers_tools(monkeypatch):
 
         def run(self) -> None:
             """Mock implementation - no-op for testing."""
-            pass
 
     fastmcp_module = types.ModuleType("fastmcp")
     fastmcp_module.FastMCP = DummyFastMCP

@@ -14,11 +14,10 @@ This file adds tests for uncovered edge cases in:
 - Context and metadata JSON formatting
 """
 
-from datetime import datetime, timedelta, timezone
 import math
+from datetime import datetime, timedelta, timezone
 
 import pytest
-from pydantic import ValidationError
 
 from mnemotree.core.models import (
     EmotionCategory,
@@ -72,8 +71,8 @@ class TestCoerceDatetimeEdgeCases:
 
     def test_datetime_with_non_utc_timezone_preserved(self):
         """Datetime with non-UTC timezone should be preserved."""
-        from datetime import timezone as tz
         from datetime import timedelta as td
+        from datetime import timezone as tz
 
         eastern = tz(td(hours=-5))
         dt = datetime(2024, 6, 15, 10, 30, tzinfo=eastern)

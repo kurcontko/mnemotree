@@ -3,7 +3,7 @@
 These tests use mocked dependencies to avoid requiring heavy model downloads.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

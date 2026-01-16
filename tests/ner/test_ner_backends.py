@@ -215,7 +215,7 @@ class TestGLiNERNER:
         """GLiNERNER can extract entities with mocked model."""
         import importlib
         import sys
-        
+
         # Create mock for GLiNER
         mock_gliner = MagicMock()
         mock_model = MagicMock()
@@ -224,12 +224,12 @@ class TestGLiNERNER:
             {"text": "Apple", "label": "organization", "score": 0.88, "start": 18, "end": 23},
         ]
         mock_gliner.GLiNER.from_pretrained.return_value = mock_model
-        
+
         # Mock the gliner module before importing
         with patch.dict(sys.modules, {"gliner": mock_gliner}):
             import mnemotree.ner.gliner as gliner_module
             importlib.reload(gliner_module)
-            
+
             ner = gliner_module.GLiNERNER(model_name="test-model", threshold=0.3)
             result = await ner.extract_entities("John works at Apple Inc.")
 
@@ -245,16 +245,16 @@ class TestGLiNERNER:
         """GLiNERNER uses custom entity types."""
         import importlib
         import sys
-        
+
         mock_gliner = MagicMock()
         mock_model = MagicMock()
         mock_model.predict_entities.return_value = []
         mock_gliner.GLiNER.from_pretrained.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"gliner": mock_gliner}):
             import mnemotree.ner.gliner as gliner_module
             importlib.reload(gliner_module)
-            
+
             custom_types = ["food", "restaurant", "ingredient"]
             ner = gliner_module.GLiNERNER(entity_types=custom_types)
             await ner.extract_entities("Test text")
@@ -268,16 +268,16 @@ class TestGLiNERNER:
         """GLiNERNER passes threshold to model."""
         import importlib
         import sys
-        
+
         mock_gliner = MagicMock()
         mock_model = MagicMock()
         mock_model.predict_entities.return_value = []
         mock_gliner.GLiNER.from_pretrained.return_value = mock_model
-        
+
         with patch.dict(sys.modules, {"gliner": mock_gliner}):
             import mnemotree.ner.gliner as gliner_module
             importlib.reload(gliner_module)
-            
+
             ner = gliner_module.GLiNERNER(threshold=0.7)
             await ner.extract_entities("Test")
 
@@ -288,11 +288,11 @@ class TestGLiNERNER:
         """GLiNERNER raises ImportError when gliner not installed."""
         import importlib
         import sys
-        
+
         with patch.dict(sys.modules, {"gliner": None}):
             import mnemotree.ner.gliner as gliner_module
             importlib.reload(gliner_module)
-            
+
             with pytest.raises(ImportError, match="GLiNER is not installed"):
                 gliner_module.GLiNERNER()
 
@@ -305,7 +305,7 @@ class TestTransformersNER:
         """TransformersNER extracts entities from pipeline output."""
         import importlib
         import sys
-        
+
         mock_transformers = MagicMock()
         mock_pipe = MagicMock()
         mock_pipe.return_value = [
@@ -313,11 +313,11 @@ class TestTransformersNER:
             {"word": "France", "entity_group": "LOC", "score": 0.89, "start": 17, "end": 23},
         ]
         mock_transformers.pipeline.return_value = mock_pipe
-        
+
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
             importlib.reload(hf_module)
-            
+
             ner = hf_module.TransformersNER(model="test-model")
             result = await ner.extract_entities("I visited Paris, France last summer")
 
@@ -330,7 +330,7 @@ class TestTransformersNER:
         """TransformersNER handles various output field names."""
         import importlib
         import sys
-        
+
         mock_transformers = MagicMock()
         mock_pipe = MagicMock()
         # Some models use "entity" instead of "entity_group"
@@ -338,11 +338,11 @@ class TestTransformersNER:
             {"text": "Berlin", "entity": "GPE", "score": 0.85, "start": 0, "end": 6},
         ]
         mock_transformers.pipeline.return_value = mock_pipe
-        
+
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
             importlib.reload(hf_module)
-            
+
             ner = hf_module.TransformersNER()
             result = await ner.extract_entities("Berlin is nice")
 
@@ -353,7 +353,7 @@ class TestTransformersNER:
         """TransformersNER skips entities with empty text."""
         import importlib
         import sys
-        
+
         mock_transformers = MagicMock()
         mock_pipe = MagicMock()
         mock_pipe.return_value = [
@@ -361,11 +361,11 @@ class TestTransformersNER:
             {"word": "Valid", "entity_group": "PER", "score": 0.9},
         ]
         mock_transformers.pipeline.return_value = mock_pipe
-        
+
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
             importlib.reload(hf_module)
-            
+
             ner = hf_module.TransformersNER()
             result = await ner.extract_entities("Valid text")
 
@@ -377,7 +377,7 @@ class TestTransformersNER:
         """Higher confidence score updates entity type."""
         import importlib
         import sys
-        
+
         mock_transformers = MagicMock()
         mock_pipe = MagicMock()
         mock_pipe.return_value = [
@@ -385,11 +385,11 @@ class TestTransformersNER:
             {"word": "ABC", "entity_group": "MISC", "score": 0.9, "start": 10, "end": 13},
         ]
         mock_transformers.pipeline.return_value = mock_pipe
-        
+
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
             importlib.reload(hf_module)
-            
+
             ner = hf_module.TransformersNER()
             result = await ner.extract_entities("ABC test ABC again")
 
@@ -401,18 +401,18 @@ class TestTransformersNER:
         """TransformersNER falls back to grouped_entities if aggregation_strategy fails."""
         import importlib
         import sys
-        
+
         mock_transformers = MagicMock()
         # First call raises TypeError, second succeeds
         mock_transformers.pipeline.side_effect = [
             TypeError("aggregation_strategy not supported"),
             MagicMock(),
         ]
-        
+
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
             importlib.reload(hf_module)
-            
+
             # Should not raise
             ner = hf_module.TransformersNER()
             assert ner._pipeline is not None
@@ -421,10 +421,10 @@ class TestTransformersNER:
         """TransformersNER raises ImportError when transformers not installed."""
         import importlib
         import sys
-        
+
         with patch.dict(sys.modules, {"transformers": None}):
             import mnemotree.ner.hf_transformers as hf_module
             importlib.reload(hf_module)
-            
+
             with pytest.raises(ImportError, match="TransformersNER requires"):
                 hf_module.TransformersNER()

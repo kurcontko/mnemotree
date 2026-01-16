@@ -171,16 +171,16 @@ class TestMemoryEvaluator:
     async def test_compute_recall_at_k(self):
         """Test computing recall@k metric."""
         evaluator = MemoryEvaluator(memory_core=MagicMock())
-        
+
         relevant = ["mem1", "mem2", "mem3"]
         retrieved = ["mem1", "mem2", "mem4", "mem5"]
-        
+
         recall_1 = evaluator._compute_recall_at_k(relevant, retrieved, k=1)
         assert recall_1 == pytest.approx(1.0 / 3.0)  # Only mem1 retrieved in top-1
-        
+
         recall_2 = evaluator._compute_recall_at_k(relevant, retrieved, k=2)
         assert recall_2 == pytest.approx(2.0 / 3.0)  # mem1 and mem2 retrieved in top-2
-        
+
         recall_4 = evaluator._compute_recall_at_k(relevant, retrieved, k=4)
         assert recall_4 == pytest.approx(2.0 / 3.0)  # Still only mem1 and mem2
 
@@ -188,16 +188,16 @@ class TestMemoryEvaluator:
     async def test_compute_precision_at_k(self):
         """Test computing precision@k metric."""
         evaluator = MemoryEvaluator(memory_core=MagicMock())
-        
+
         relevant = ["mem1", "mem2", "mem3"]
         retrieved = ["mem1", "mem2", "mem4", "mem5"]
-        
+
         precision_1 = evaluator._compute_precision_at_k(relevant, retrieved, k=1)
         assert precision_1 == pytest.approx(1.0)  # mem1 is relevant
-        
+
         precision_2 = evaluator._compute_precision_at_k(relevant, retrieved, k=2)
         assert precision_2 == pytest.approx(1.0)  # Both mem1 and mem2 are relevant
-        
+
         precision_4 = evaluator._compute_precision_at_k(relevant, retrieved, k=4)
         assert precision_4 == pytest.approx(0.5)  # 2 out of 4 are relevant
 
@@ -205,10 +205,10 @@ class TestMemoryEvaluator:
     async def test_compute_mrr(self):
         """Test computing Mean Reciprocal Rank."""
         evaluator = MemoryEvaluator(memory_core=MagicMock())
-        
+
         relevant = ["mem2"]
         retrieved = ["mem1", "mem2", "mem3"]
-        
+
         mrr = evaluator._compute_mrr(relevant, retrieved)
         assert mrr == pytest.approx(0.5)  # mem2 is at position 2 (1-indexed), so 1/2 = 0.5
 
@@ -216,10 +216,10 @@ class TestMemoryEvaluator:
     async def test_compute_mrr_first_position(self):
         """Test MRR when relevant item is first."""
         evaluator = MemoryEvaluator(memory_core=MagicMock())
-        
+
         relevant = ["mem1"]
         retrieved = ["mem1", "mem2", "mem3"]
-        
+
         mrr = evaluator._compute_mrr(relevant, retrieved)
         assert mrr == pytest.approx(1.0)  # mem1 is at position 1, so 1/1 = 1.0
 
@@ -227,10 +227,10 @@ class TestMemoryEvaluator:
     async def test_compute_mrr_not_found(self):
         """Test MRR when no relevant items retrieved."""
         evaluator = MemoryEvaluator(memory_core=MagicMock())
-        
+
         relevant = ["mem4"]
         retrieved = ["mem1", "mem2", "mem3"]
-        
+
         mrr = evaluator._compute_mrr(relevant, retrieved)
         assert mrr == pytest.approx(0.0)
 
@@ -238,16 +238,16 @@ class TestMemoryEvaluator:
     async def test_evaluate_single_query_perfect(self, mock_memory_core, memory_items):
         """Test evaluating a single query with perfect retrieval."""
         mock_memory_core.recall.return_value = [memory_items[0], memory_items[2]]
-        
+
         evaluator = MemoryEvaluator(memory_core=mock_memory_core)
         query = EvaluationQuery(
             query_id="q1",
             query_text="Test query",
             relevant_memory_ids=["mem1", "mem3"],
         )
-        
+
         result = await evaluator.evaluate_query(query, k_values=[1, 2, 5])
-        
+
         assert result.query_id == "q1"
         assert result.recall_at_k[2] == pytest.approx(1.0)  # Both relevant items retrieved
         assert result.precision_at_k[2] == pytest.approx(1.0)  # All retrieved are relevant
@@ -257,16 +257,16 @@ class TestMemoryEvaluator:
     async def test_evaluate_single_query_partial(self, mock_memory_core, memory_items):
         """Test evaluating a single query with partial retrieval."""
         mock_memory_core.recall.return_value = [memory_items[0], memory_items[1]]
-        
+
         evaluator = MemoryEvaluator(memory_core=mock_memory_core)
         query = EvaluationQuery(
             query_id="q1",
             query_text="Test query",
             relevant_memory_ids=["mem1", "mem3"],
         )
-        
+
         result = await evaluator.evaluate_query(query, k_values=[1, 2, 5])
-        
+
         assert result.query_id == "q1"
         assert result.recall_at_k[2] == pytest.approx(0.5)  # Only 1 of 2 relevant retrieved
         assert result.precision_at_k[2] == pytest.approx(0.5)  # 1 of 2 retrieved is relevant
@@ -294,21 +294,21 @@ class TestSyntheticDatasetGenerator:
                 content="What programming language was discussed?\nWhen did the user learn Python?"
             )
         )
-        
+
         generator = SyntheticDatasetGenerator(llm=mock_llm)
         queries = await generator.generate_queries_from_memories(
             memories=memory_items[:2],
             queries_per_memory=2,
         )
-        
+
         assert len(queries) > 0
         assert all(isinstance(q, EvaluationQuery) for q in queries)
 
     @pytest.mark.asyncio
     async def test_generate_simple_queries(self, memory_items):
         """Test generating simple synthetic queries without LLM."""
-        generator = SyntheticDatasetGenerator(llm=None)
-        
+        SyntheticDatasetGenerator(llm=None)
+
         # Simple query generation that doesn't need LLM
         queries = []
         for i, mem in enumerate(memory_items[:2]):
@@ -318,7 +318,7 @@ class TestSyntheticDatasetGenerator:
                 relevant_memory_ids=[mem.memory_id],
             )
             queries.append(query)
-        
+
         assert len(queries) == 2
         assert queries[0].relevant_memory_ids == ["mem1"]
         assert queries[1].relevant_memory_ids == ["mem2"]
