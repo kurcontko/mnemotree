@@ -18,6 +18,7 @@ from ..analysis.summarizer import Summarizer
 from ..embeddings.local import LocalSentenceTransformerEmbeddings
 from ..ner.base import BaseNER
 from ..ner.spacy import SpacyNER
+from ..rerankers import FlashRankReranker
 from ..store.protocols import (
     MemoryCRUDStore,
     SupportsConnections,
@@ -28,10 +29,9 @@ from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
-from .retrieval import VectorEntityRetriever, Retriever, HybridFusionRetriever
 from .models import MemoryItem, MemoryType
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
-from ..rerankers import FlashRankReranker
+from .retrieval import HybridFusionRetriever, Retriever, VectorEntityRetriever
 from .scoring import MemoryScoring
 
 MemoryMode = Literal["lite", "pro"]

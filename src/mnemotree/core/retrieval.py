@@ -10,6 +10,7 @@ from langchain_core.embeddings.embeddings import Embeddings
 
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER
+from ..rerankers import BaseReranker
 from ..store.protocols import (
     MemoryCRUDStore,
     SupportsEntityQuery,
@@ -21,7 +22,6 @@ from ._internal.indexing import IndexManager
 from ._internal.scoring import MemoryScorer, SignalRanker, cosine_similarity
 from .models import MemoryItem
 from .query import MemoryQuery, MemoryQueryBuilder
-from ..rerankers import BaseReranker, FlashRankReranker
 from .scoring import MemoryScoring
 
 logger = logging.getLogger(__name__)
@@ -167,10 +167,10 @@ class BaseRetriever:
 
 def rrf_fuse(
     *,
-    stage_candidates: Mapping["_StageT", Sequence[MemoryItem]],
-    weights: Mapping["_StageT", float] | None = None,
+    stage_candidates: Mapping[_StageT, Sequence[MemoryItem]],
+    weights: Mapping[_StageT, float] | None = None,
     rrf_k: int = 60,
-) -> tuple[list[MemoryItem], dict[str, float], dict["_StageT", dict[str, float]]]:
+) -> tuple[list[MemoryItem], dict[str, float], dict[_StageT, dict[str, float]]]:
     scores: dict[str, float] = {}
     stage_scores: dict[_StageT, dict[str, float]] = {}
     memory_by_id: dict[str, MemoryItem] = {}
@@ -218,7 +218,6 @@ class VectorEntityRetriever(BaseRetriever):
             memories = self.memory_scorer.rank(
                 memories,
                 query_embedding,
-                extra_signals=None,
             )
 
         if isinstance(query, str) and query_embedding and (query_keywords or entity_memory_ids):
@@ -362,7 +361,6 @@ class HybridFusionRetriever(BaseRetriever):
             memories = self.memory_scorer.rank(
                 memories,
                 query_embedding,
-                extra_signals=None,
             )
 
         if self.enable_rrf_signal_rerank and query_embedding:
@@ -406,7 +404,6 @@ class HybridFusionRetriever(BaseRetriever):
             memories = self.memory_scorer.rank(
                 memories,
                 query_embedding,
-                extra_signals=None,
             )
 
         if limit is not None:

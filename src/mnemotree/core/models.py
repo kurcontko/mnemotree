@@ -302,13 +302,12 @@ class MemoryItem(BaseModel):
             return None
         emotional = []
         if self.emotional_valence is not None:
-            sentiment = (
-                "(+)"
-                if self.emotional_valence > 0
-                else "(-)"
-                if self.emotional_valence < 0
-                else "(=)"
-            )
+            if self.emotional_valence > 0:
+                sentiment = "(+)"
+            elif self.emotional_valence < 0:
+                sentiment = "(-)"
+            else:
+                sentiment = "(=)"
             emotional.append(f"**Val:** {self._format_float(self.emotional_valence)}{sentiment}")
         if self.emotional_arousal is not None:
             emotional.append(f"**Aro:** {self._format_float(self.emotional_arousal)}")

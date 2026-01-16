@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from ..rerankers import BaseReranker, CrossEncoderReranker, NoOpReranker
 from .models import MemoryItem
 from .retrieval import rrf_fuse
-from ..rerankers import BaseReranker, CrossEncoderReranker, NoOpReranker
 from .scoring import MemoryScoring
 
 __all__ = [
@@ -219,6 +219,32 @@ class HybridRetriever:
 
         return results
 
+    def _ensure_result(
+        self,
+        memory_map: dict[str, RetrievalResult],
+        memory: MemoryItem,
+    ) -> RetrievalResult:
+        if memory.memory_id not in memory_map:
+            memory_map[memory.memory_id] = RetrievalResult(
+                memory=memory,
+                scores={},
+                final_score=0.0,
+                retrieval_stages=[],
+            )
+        return memory_map[memory.memory_id]
+
+    def _apply_weighted_score(
+        self,
+        result: RetrievalResult,
+        *,
+        stage: RetrievalStage,
+        weighted_score: float,
+    ) -> None:
+        result.scores[stage.value] = weighted_score
+        result.final_score += weighted_score
+        if stage not in result.retrieval_stages:
+            result.retrieval_stages.append(stage)
+
     def _weighted_sum_fusion(
         self, stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]]
     ) -> list[RetrievalResult]:
@@ -233,27 +259,20 @@ class HybridRetriever:
             weight = self.weights.get(stage, 0.0)
 
             # Normalize scores to [0, 1] range
-            if candidates:
-                scores = [score for _, score in candidates]
-                max_score = max(scores) if scores else 1.0
+            if not candidates:
+                continue
+            scores = [score for _, score in candidates]
+            max_score = max(scores) if scores else 1.0
 
-                for memory, score in candidates:
-                    normalized_score = score / max_score if max_score > 0 else 0.0
-                    weighted_score = weight * normalized_score
-
-                    if memory.memory_id not in memory_map:
-                        memory_map[memory.memory_id] = RetrievalResult(
-                            memory=memory,
-                            scores={},
-                            final_score=0.0,
-                            retrieval_stages=[],
-                        )
-
-                    result = memory_map[memory.memory_id]
-                    result.scores[stage.value] = weighted_score
-                    result.final_score += weighted_score
-                    if stage not in result.retrieval_stages:
-                        result.retrieval_stages.append(stage)
+            for memory, score in candidates:
+                normalized_score = score / max_score if max_score > 0 else 0.0
+                weighted_score = weight * normalized_score
+                result = self._ensure_result(memory_map, memory)
+                self._apply_weighted_score(
+                    result,
+                    stage=stage,
+                    weighted_score=weighted_score,
+                )
 
         results = list(memory_map.values())
         results.sort(key=lambda x: x.final_score, reverse=True)

@@ -40,7 +40,7 @@ class MemoryScorer:
         self,
         memories: list[MemoryItem],
         query_embedding: list[float] | None,
-        extra_signals: dict[str, Any] | None = None,
+        _extra_signals: dict[str, Any] | None = None,
     ) -> list[MemoryItem]:
         return self.scoring.filter_memories_by_score(
             memories,
