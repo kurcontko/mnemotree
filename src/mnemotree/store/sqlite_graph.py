@@ -8,7 +8,6 @@ from itertools import combinations
 from ..core.models import MemoryItem
 from .serialization import normalize_entity_text
 
-
 _DELETE_EDGE_BY_SOURCE_SQL = "DELETE FROM memory_edge WHERE source_id = ? AND kind = ?"
 
 

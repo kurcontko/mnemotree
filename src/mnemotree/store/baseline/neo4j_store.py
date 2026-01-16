@@ -134,7 +134,7 @@ class BaselineNeo4jMemoryStore(BaseMemoryStore):
                 )
                 raise
 
-    async def get_entity_contexts(self, entities: list[str]) -> list[MemoryItem]:
+    async def get_entity_contexts(self, _entities: list[str]) -> list[MemoryItem]:
         # Given a list of entity texts, find related memory items
         return []
 

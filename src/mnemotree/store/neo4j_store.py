@@ -6,16 +6,17 @@ import time
 from asyncio import Lock
 from typing import Any
 from uuid import uuid4
+
 from neo4j import AsyncGraphDatabase
 from neo4j.exceptions import Neo4jError
 from pydantic import ValidationError
 
 from ..core.models import MemoryItem
 from ..core.query import MemoryQuery
-from ..errors import SerializationError, StoreError
-from .base import BaseMemoryStore
+from ..errors import StoreError
 from ._records import build_neo4j_memory_payload, parse_neo4j_node_data
 from ._schema import apply_neo4j_schema
+from .base import BaseMemoryStore
 from .logging import elapsed_ms, store_log_context
 from .query_builders import build_neo4j_where_clause
 from .serialization import serialize_datetime, serialize_datetime_list
@@ -239,7 +240,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                     ),
                 )
                 raise StoreError(
-                    f"Failed to store memory in Neo4j",
+                    "Failed to store memory in Neo4j",
                     store_type=self.store_type,
                     memory_id=memory.memory_id,
                     original_error=e,
@@ -315,11 +316,85 @@ class Neo4jMemoryStore(BaseMemoryStore):
                     ),
                 )
                 raise StoreError(
-                    f"Failed to delete memory from Neo4j",
+                    "Failed to delete memory from Neo4j",
                     store_type=self.store_type,
                     memory_id=memory_id,
                     original_error=e,
                 ) from e
+
+    def _build_entity_query_memory(self, record: Any) -> MemoryItem:
+        node_data = parse_neo4j_node_data(
+            dict(record["m"]),
+            strict_json=True,
+        )
+        context = node_data.get("context", {})
+        if not isinstance(context, dict):
+            raise TypeError("Expected context to be a dict.")
+        context = dict(context)
+        context.update(
+            {
+                "matching_entities": [
+                    {"text": entity["text"], "type": entity["type"]}
+                    for entity in record["matching_entities"]
+                ],
+                "connection_depth": record["shortest_path"],
+            }
+        )
+        node_data["context"] = context
+        return MemoryItem(**node_data)
+
+    async def _collect_entity_query_results(
+        self,
+        result: Any,
+        *,
+        start: float,
+        log_per_record: bool,
+    ) -> list[MemoryItem]:
+        memories: list[MemoryItem] = []
+        parse_errors = 0
+        last_error: Exception | None = None
+        total_records = 0
+        async for record in result:
+            total_records += 1
+            try:
+                memories.append(self._build_entity_query_memory(record))
+            except (ValidationError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                parse_errors += 1
+                last_error = exc
+                if log_per_record:
+                    memory_id = dict(record.get("m", {})).get("memory_id", "unknown")
+                    logger.warning(
+                        "Failed to parse entity query record for memory %s: %s",
+                        memory_id,
+                        exc.__class__.__name__,
+                        extra=store_log_context(
+                            self.store_type,
+                            memory_id=memory_id if memory_id != "unknown" else None,
+                        ),
+                    )
+        if parse_errors:
+            if log_per_record:
+                logger.warning(
+                    "Partial result: %d/%d records failed to parse in entity query",
+                    parse_errors,
+                    total_records,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                    exc_info=last_error,
+                )
+            else:
+                logger.warning(
+                    "Skipped %s entity records due to parse errors",
+                    parse_errors,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                    exc_info=last_error,
+                )
+        return memories
 
     async def query_by_entities(
         self, entities: dict[str, str] | list[str], limit: int = 10, depth: int = 2
@@ -354,58 +429,9 @@ class Neo4jMemoryStore(BaseMemoryStore):
                         """,
                         {"entity_names": entity_names, "limit": limit},
                     )
-
-                    memories = []
-                    parse_errors = 0
-                    last_error: Exception | None = None
-                    total_records = 0
-                    async for record in result:
-                        total_records += 1
-                        try:
-                            node_data = parse_neo4j_node_data(
-                                dict(record["m"]),
-                                strict_json=True,
-                            )
-                            context = node_data.get("context", {})
-                            if not isinstance(context, dict):
-                                raise TypeError("Expected context to be a dict.")
-                            context = dict(context)
-                            context.update(
-                                {
-                                    "matching_entities": [
-                                        {"text": e["text"], "type": e["type"]}
-                                        for e in record["matching_entities"]
-                                    ],
-                                    "connection_depth": record["shortest_path"],
-                                }
-                            )
-                            node_data["context"] = context
-                            memories.append(MemoryItem(**node_data))
-                        except (ValidationError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                            parse_errors += 1
-                            last_error = exc
-                            memory_id = dict(record.get("m", {})).get("memory_id", "unknown")
-                            logger.warning(
-                                "Failed to parse entity query record for memory %s: %s",
-                                memory_id,
-                                exc.__class__.__name__,
-                                extra=store_log_context(
-                                    self.store_type,
-                                    memory_id=memory_id if memory_id != "unknown" else None,
-                                ),
-                            )
-                    if parse_errors:
-                        logger.warning(
-                            "Partial result: %d/%d records failed to parse in entity query",
-                            parse_errors,
-                            total_records,
-                            extra=store_log_context(
-                                self.store_type,
-                                duration_ms=elapsed_ms(start),
-                            ),
-                            exc_info=last_error,
-                        )
-                    return memories
+                    return await self._collect_entity_query_results(
+                        result, start=start, log_per_record=True
+                    )
 
             async with self.driver.session() as session:
                 result = await session.run(
@@ -430,47 +456,9 @@ class Neo4jMemoryStore(BaseMemoryStore):
                         "limit": limit,
                     },
                 )
-
-                memories = []
-                parse_errors = 0
-                last_error: Exception | None = None
-                async for record in result:
-                    try:
-                        node_data = parse_neo4j_node_data(
-                            dict(record["m"]),
-                            strict_json=True,
-                        )
-                        context = node_data.get("context", {})
-                        if not isinstance(context, dict):
-                            raise TypeError("Expected context to be a dict.")
-                        context = dict(context)
-                        context.update(
-                            {
-                                "matching_entities": [
-                                    {"text": e["text"], "type": e["type"]}
-                                    for e in record["matching_entities"]
-                                ],
-                                "connection_depth": record["shortest_path"],
-                            }
-                        )
-                        node_data["context"] = context
-                        memories.append(MemoryItem(**node_data))
-                    except (ValidationError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                        parse_errors += 1
-                        last_error = exc
-                        continue
-
-                if parse_errors:
-                    logger.warning(
-                        "Skipped %s entity records due to parse errors",
-                        parse_errors,
-                        extra=store_log_context(
-                            self.store_type,
-                            duration_ms=elapsed_ms(start),
-                        ),
-                        exc_info=last_error,
-                    )
-                return memories
+                return await self._collect_entity_query_results(
+                    result, start=start, log_per_record=False
+                )
         except Neo4jError as e:
             logger.exception(
                 "Failed to query by entities",
@@ -480,7 +468,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 ),
             )
             raise StoreError(
-                f"Failed to query memories by entities in Neo4j",
+                "Failed to query memories by entities in Neo4j",
                 store_type=self.store_type,
                 original_error=e,
             ) from e
@@ -534,6 +522,192 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 )
                 raise
 
+    async def _create_query_embedding_node(
+        self,
+        session: Any,
+        *,
+        query_id: str,
+        query_embedding: list[float],
+        query: str,
+    ) -> None:
+        await session.run(
+            """
+                CREATE (:QueryEmbedding {
+                    query_id: $query_id,
+                    embedding: $embedding,
+                    query: $query
+                })
+            """,
+            {"query_id": query_id, "embedding": query_embedding, "query": query},
+        )
+
+    async def _cleanup_query_embedding_node(self, session: Any, query_id: str) -> None:
+        await session.run(
+            "MATCH (q:QueryEmbedding {query_id: $query_id}) DELETE q",
+            query_id=query_id,
+        )
+
+    async def _run_similarity_query(
+        self,
+        session: Any,
+        *,
+        query_id: str,
+        similarity_threshold: float,
+        top_k: int,
+    ) -> Any:
+        return await session.run(
+            """
+                // First get similar memories
+                    MATCH (q:QueryEmbedding {query_id: $query_id}), (m:MemoryItem)
+                    WHERE m.embedding IS NOT NULL
+                    WITH m, gds.similarity.cosine(q.embedding, m.embedding) AS score
+                    WHERE score >= $threshold
+
+                    // Get tags
+                    OPTIONAL MATCH (m)-[:HAS_TAG]->(t:Tag)
+                    WITH m, score, collect(DISTINCT t.name) as tags
+
+                    // Get entities
+                    OPTIONAL MATCH (m)-[:MENTIONS_ENTITY]->(e:Entity)
+                    WITH m, score, tags,
+                        collect(DISTINCT {text: e.text, type: e.type}) as entity_data
+
+                    // Get associations
+                    OPTIONAL MATCH (m)-[:ASSOCIATED_WITH]->(a:MemoryItem)
+                    WITH m, score, tags, entity_data,
+                        collect(DISTINCT a.memory_id) as associations
+
+                    // Get conflicts
+                    OPTIONAL MATCH (m)-[:CONFLICTS_WITH]->(c:MemoryItem)
+                    WITH m, score, tags, entity_data, associations,
+                        collect(DISTINCT c.memory_id) as conflicts
+
+                    // Get temporal relationships
+                    OPTIONAL MATCH (m)-[:TEMPORAL_NEXT]->(n:MemoryItem)
+                    OPTIONAL MATCH (p:MemoryItem)-[:TEMPORAL_NEXT]->(m)
+                    WITH m, score, tags, entity_data, associations, conflicts,
+                        n.memory_id as next_id,
+                        p.memory_id as prev_id
+
+                    // Return enriched results
+                    RETURN
+                        m {.*} as memory,
+                        score,
+                        tags,
+                        entity_data,
+                        associations,
+                        conflicts,
+                        next_id,
+                        prev_id
+                ORDER BY score DESC
+                LIMIT $limit
+            """,
+            {"query_id": query_id, "threshold": similarity_threshold, "limit": top_k},
+        )
+
+    def _build_similarity_memory(self, memory_data: dict[str, Any], record: Any) -> MemoryItem:
+        memory_data["tags"] = record["tags"]
+        memory_data["associations"] = record["associations"]
+        memory_data["conflicts_with"] = record["conflicts"]
+
+        if record["next_id"]:
+            memory_data["next_event_id"] = record["next_id"]
+        if record["prev_id"]:
+            memory_data["previous_event_id"] = record["prev_id"]
+
+        memory_data = parse_neo4j_node_data(memory_data)
+
+        if record["entity_data"]:
+            memory_data["entities"].update(
+                {ent["text"]: ent["type"] for ent in record["entity_data"]}
+            )
+
+        return MemoryItem(**memory_data)
+
+    async def _collect_similarity_results(
+        self,
+        result: Any,
+    ) -> tuple[list[MemoryItem], list[float], int, Exception | None, int]:
+        memories: list[MemoryItem] = []
+        scores: list[float] = []
+        parse_errors = 0
+        last_parse_error: Exception | None = None
+        total_records = 0
+
+        async for record in result:
+            total_records += 1
+            memory_data = dict(record["memory"])
+            score = record["score"]
+            scores.append(score)
+
+            try:
+                memory_item = self._build_similarity_memory(memory_data, record)
+                memories.append(memory_item)
+            except (ValidationError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                parse_errors += 1
+                last_parse_error = exc
+                memory_id = memory_data.get("memory_id", "unknown")
+                logger.warning(
+                    "Failed to parse similarity search record for memory %s: %s",
+                    memory_id,
+                    exc.__class__.__name__,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id if memory_id != "unknown" else None,
+                    ),
+                )
+
+        return memories, scores, parse_errors, last_parse_error, total_records
+
+    def _log_similarity_stats(
+        self,
+        *,
+        memories: list[MemoryItem],
+        scores: list[float],
+        similarity_threshold: float,
+        start: float,
+    ) -> None:
+        if scores:
+            logger.info(
+                "Found %s similar memories with scores: max=%.4f, min=%.4f, avg=%.4f",
+                len(memories),
+                max(scores),
+                min(scores),
+                sum(scores) / len(scores),
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+
+            rel_stats = {
+                "with_tags": sum(1 for memory in memories if memory.tags),
+                "with_entities": sum(1 for memory in memories if memory.entities),
+                "with_associations": sum(1 for memory in memories if memory.associations),
+                "with_temporal": sum(
+                    1
+                    for memory in memories
+                    if memory.next_event_id or memory.previous_event_id
+                ),
+            }
+            logger.info(
+                "Relationship stats: %s",
+                rel_stats,
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+        else:
+            logger.warning(
+                "No memories found above threshold %.4f",
+                similarity_threshold,
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+
     async def get_similar_memories(
         self,
         query: str,
@@ -547,120 +721,26 @@ class Neo4jMemoryStore(BaseMemoryStore):
         similarity_threshold: float = 0.1
         async with self.driver.session() as session:
             query_id = str(uuid4())
-            # Create temporary query node
-            await session.run(
-                """
-                CREATE (:QueryEmbedding {
-                    query_id: $query_id,
-                    embedding: $embedding,
-                    query: $query
-                })
-            """,
-                {"query_id": query_id, "embedding": query_embedding, "query": query},
+            await self._create_query_embedding_node(
+                session, query_id=query_id, query_embedding=query_embedding, query=query
             )
 
             try:
-                # Enhanced query including relationships
-                result = await session.run(
-                    """
-                    // First get similar memories
-                        MATCH (q:QueryEmbedding {query_id: $query_id}), (m:MemoryItem)
-                        WHERE m.embedding IS NOT NULL
-                        WITH m, gds.similarity.cosine(q.embedding, m.embedding) AS score
-                        WHERE score >= $threshold
-
-                        // Get tags
-                        OPTIONAL MATCH (m)-[:HAS_TAG]->(t:Tag)
-                        WITH m, score, collect(DISTINCT t.name) as tags
-
-                        // Get entities
-                        OPTIONAL MATCH (m)-[:MENTIONS_ENTITY]->(e:Entity)
-                        WITH m, score, tags,
-                            collect(DISTINCT {text: e.text, type: e.type}) as entity_data
-
-                        // Get associations
-                        OPTIONAL MATCH (m)-[:ASSOCIATED_WITH]->(a:MemoryItem)
-                        WITH m, score, tags, entity_data,
-                            collect(DISTINCT a.memory_id) as associations
-
-                        // Get conflicts
-                        OPTIONAL MATCH (m)-[:CONFLICTS_WITH]->(c:MemoryItem)
-                        WITH m, score, tags, entity_data, associations,
-                            collect(DISTINCT c.memory_id) as conflicts
-
-                        // Get temporal relationships
-                        OPTIONAL MATCH (m)-[:TEMPORAL_NEXT]->(n:MemoryItem)
-                        OPTIONAL MATCH (p:MemoryItem)-[:TEMPORAL_NEXT]->(m)
-                        WITH m, score, tags, entity_data, associations, conflicts,
-                            n.memory_id as next_id,
-                            p.memory_id as prev_id
-
-                        // Return enriched results
-                        RETURN
-                            m {.*} as memory,
-                            score,
-                            tags,
-                            entity_data,
-                            associations,
-                            conflicts,
-                            next_id,
-                            prev_id
-                    ORDER BY score DESC
-                    LIMIT $limit
-                """,
-                    {"query_id": query_id, "threshold": similarity_threshold, "limit": top_k},
+                result = await self._run_similarity_query(
+                    session,
+                    query_id=query_id,
+                    similarity_threshold=similarity_threshold,
+                    top_k=top_k,
                 )
 
-                memories = []
-                scores = []
-                parse_errors = 0
-                last_parse_error: Exception | None = None
-                total_records = 0
+                (
+                    memories,
+                    scores,
+                    parse_errors,
+                    last_parse_error,
+                    total_records,
+                ) = await self._collect_similarity_results(result)
 
-                async for record in result:
-                    total_records += 1
-                    memory_data = dict(record["memory"])
-                    score = record["score"]
-                    scores.append(score)
-
-                    try:
-                        # Add relationships data
-                        memory_data["tags"] = record["tags"]
-                        memory_data["associations"] = record["associations"]
-                        memory_data["conflicts_with"] = record["conflicts"]
-
-                        # Add temporal relationships
-                        if record["next_id"]:
-                            memory_data["next_event_id"] = record["next_id"]
-                        if record["prev_id"]:
-                            memory_data["previous_event_id"] = record["prev_id"]
-
-                        memory_data = parse_neo4j_node_data(memory_data)
-
-                        # Update entities from graph data
-                        if record["entity_data"]:
-                            memory_data["entities"].update(
-                                {ent["text"]: ent["type"] for ent in record["entity_data"]}
-                            )
-
-                        # Create memory item
-                        memory_item = MemoryItem(**memory_data)
-                        memories.append(memory_item)
-
-                    except (ValidationError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                        parse_errors += 1
-                        last_parse_error = exc
-                        memory_id = memory_data.get("memory_id", "unknown")
-                        logger.warning(
-                            "Failed to parse similarity search record for memory %s: %s",
-                            memory_id,
-                            exc.__class__.__name__,
-                            extra=store_log_context(
-                                self.store_type,
-                                memory_id=memory_id if memory_id != "unknown" else None,
-                            ),
-                        )
-                
                 if parse_errors:
                     logger.warning(
                         "Partial result: %d/%d records failed to parse in similarity search",
@@ -673,47 +753,12 @@ class Neo4jMemoryStore(BaseMemoryStore):
                         exc_info=last_parse_error,
                     )
 
-                # Log results
-                if scores:
-                    logger.info(
-                        "Found %s similar memories with scores: max=%.4f, min=%.4f, avg=%.4f",
-                        len(memories),
-                        max(scores),
-                        min(scores),
-                        sum(scores) / len(scores),
-                        extra=store_log_context(
-                            self.store_type,
-                            duration_ms=elapsed_ms(start),
-                        ),
-                    )
-
-                    # Log relationship statistics
-                    rel_stats = {
-                        "with_tags": sum(1 for m in memories if m.tags),
-                        "with_entities": sum(1 for m in memories if m.entities),
-                        "with_associations": sum(1 for m in memories if m.associations),
-                        "with_temporal": sum(
-                            1 for m in memories if m.next_event_id or m.previous_event_id
-                        ),
-                    }
-                    logger.info(
-                        "Relationship stats: %s",
-                        rel_stats,
-                        extra=store_log_context(
-                            self.store_type,
-                            duration_ms=elapsed_ms(start),
-                        ),
-                    )
-                else:
-                    logger.warning(
-                        "No memories found above threshold %.4f",
-                        similarity_threshold,
-                        extra=store_log_context(
-                            self.store_type,
-                            duration_ms=elapsed_ms(start),
-                        ),
-                    )
-
+                self._log_similarity_stats(
+                    memories=memories,
+                    scores=scores,
+                    similarity_threshold=similarity_threshold,
+                    start=start,
+                )
                 return memories
 
             except Neo4jError as e:
@@ -730,11 +775,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                     original_error=e,
                 ) from e
             finally:
-                # Clean up query node
-                await session.run(
-                    "MATCH (q:QueryEmbedding {query_id: $query_id}) DELETE q",
-                    query_id=query_id,
-                )
+                await self._cleanup_query_embedding_node(session, query_id)
 
     async def update_connections(
         self,
@@ -861,7 +902,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                     ),
                 )
                 raise StoreError(
-                    f"Failed to update connections in Neo4j",
+                    "Failed to update connections in Neo4j",
                     store_type=self.store_type,
                     memory_id=memory_id,
                     original_error=e,
@@ -963,7 +1004,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                     ),
                 )
                 raise StoreError(
-                    f"Failed to update memory metadata in Neo4j",
+                    "Failed to update memory metadata in Neo4j",
                     store_type=self.store_type,
                     memory_id=memory_id,
                     original_error=e,
