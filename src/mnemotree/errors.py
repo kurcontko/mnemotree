@@ -10,20 +10,19 @@ from __future__ import annotations
 
 class MnemotreeError(Exception):
     """Base exception for all Mnemotree errors.
-    
+
     All custom exceptions in Mnemotree should inherit from this class
     to enable catch-all error handling when needed.
     """
 
-    pass
 
 
 class StoreError(MnemotreeError):
     """Store operation failed.
-    
+
     Raised when a storage backend operation fails due to connectivity,
     database errors, or other infrastructure issues.
-    
+
     Attributes:
         message: Human-readable error description
         store_type: Type of store that failed (e.g., "chroma", "neo4j")
@@ -54,34 +53,32 @@ class StoreError(MnemotreeError):
 
 class SerializationError(MnemotreeError):
     """Failed to serialize or deserialize data.
-    
+
     Raised when data cannot be converted between different formats
     (e.g., JSON parsing errors, datetime conversion failures).
-    
+
     This typically indicates data corruption or format incompatibility.
     """
 
-    pass
 
 
 class InvalidQueryError(MnemotreeError):
     """Invalid query parameters or unsupported query operation.
-    
+
     Raised when a query contains invalid parameters, uses unsupported
     operators, or violates query constraints.
-    
+
     This is a user error and should be handled by validating input.
     """
 
-    pass
 
 
 class DependencyError(MnemotreeError):
     """Required dependency not available or failed to load.
-    
+
     Raised when an optional dependency is required but not installed,
     or when a dependency fails to initialize properly.
-    
+
     Example: NER backend not installed, embedding model not available.
     """
 
@@ -95,10 +92,10 @@ class DependencyError(MnemotreeError):
 
 class MemoryNotFoundError(MnemotreeError):
     """Requested memory does not exist.
-    
+
     Raised when attempting to retrieve, update, or delete a memory
     that doesn't exist in the store.
-    
+
     Note: get_memory() returns None instead of raising this exception
     to distinguish between "not found" and "error during retrieval".
     """
@@ -110,22 +107,20 @@ class MemoryNotFoundError(MnemotreeError):
 
 class ConfigurationError(MnemotreeError):
     """Invalid configuration or settings.
-    
+
     Raised when configuration values are invalid, conflicting,
     or missing required parameters.
     """
 
-    pass
 
 
 class IndexError(MnemotreeError):
     """Index operation failed.
-    
+
     Raised when building or querying an index (e.g., BM25, graph index)
     fails due to data issues or index corruption.
     """
 
-    pass
 
 
 # Error handling guidelines:

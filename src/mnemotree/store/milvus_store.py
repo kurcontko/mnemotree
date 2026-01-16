@@ -322,7 +322,7 @@ class MilvusMemoryStore(BaseMemoryStore):
             # If vector similarity is requested
             if query.vector is not None:
                 return self._search_vector_query(query, expr)
-            
+
             return self._search_scalar_query(query, expr)
 
         except (MilvusException, KeyError, TypeError, ValueError):
@@ -378,7 +378,7 @@ class MilvusMemoryStore(BaseMemoryStore):
         # Handle difference between search result (entity object/dict-like) and query result (dict)
         # Assuming record acts like a dict in both cases or normalized before calling
         get_field = record.get if isinstance(record, dict) else lambda k: record.get(k)
-        
+
         memory_data = {
             "memory_id": get_field("memory_id"),
             "content": get_field("content"),

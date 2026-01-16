@@ -22,7 +22,7 @@ def create_chroma_client(
     persist_directory: str | None = None,
     headers: dict[str, str] | None = None,
     store_type: str = "chroma",
-) -> "ClientAPI":
+) -> ClientAPI:
     """Create a ChromaDB client based on provided configuration.
 
     Args:

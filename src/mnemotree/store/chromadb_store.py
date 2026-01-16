@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+from collections.abc import Iterator
 from typing import Any
 
 from chromadb.api.models.Collection import Collection
@@ -15,7 +16,8 @@ except ImportError:  # pragma: no cover - compatibility fallback
 
 from ..core.models import MemoryItem
 from ..core.query import MemoryQuery
-from ..errors import IndexError as MnemotreeIndexError, StoreError
+from ..errors import IndexError as MnemotreeIndexError
+from ..errors import StoreError
 from ..utils.serialization import json_loads_dict
 from ._queries import build_entity_set, entity_matches
 from ._records import chroma_memory_from_record, chroma_metadata_from_memory
@@ -170,7 +172,7 @@ class ChromaMemoryStore(BaseMemoryStore):
                 documents=[memory.content],
                 metadatas=[metadata],
             )
-            
+
             await self._update_graph_index_safe(memory, start)
 
             logger.info(
@@ -194,7 +196,7 @@ class ChromaMemoryStore(BaseMemoryStore):
                 ),
             )
             raise StoreError(
-                f"Failed to store memory in ChromaDB",
+                "Failed to store memory in ChromaDB",
                 store_type=self.store_type,
                 memory_id=memory.memory_id,
                 original_error=e,
@@ -465,6 +467,161 @@ class ChromaMemoryStore(BaseMemoryStore):
             )
             raise
 
+    def _query_graph_index_hits(
+        self,
+        entities: dict[str, str] | list[str],
+        *,
+        limit: int,
+        start: float,
+    ) -> list[Any] | None:
+        if not self.graph_index:
+            return None
+        try:
+            hits = self.graph_index.recall_by_entities(
+                entities,
+                limit=limit,
+                hops=self.graph_hops,
+            )
+        except Exception as exc:
+            logger.exception(
+                "Failed to query graph index: %s",
+                exc.__class__.__name__,
+                extra=store_log_context(
+                    self.store_type,
+                    duration_ms=elapsed_ms(start),
+                ),
+            )
+            if self.graph_index_strict:
+                raise MnemotreeIndexError(
+                    "Failed to query graph index by entities"
+                ) from exc
+            return None
+        if not hits:
+            return None
+        return hits
+
+    async def _hydrate_graph_hits(
+        self,
+        hits: list[Any],
+        *,
+        limit: int,
+    ) -> list[MemoryItem]:
+        memories_by_id = await self._get_memories_by_ids(
+            [hit.memory_id for hit in hits]
+        )
+        results: list[MemoryItem] = []
+        for hit in hits:
+            memory = memories_by_id.get(hit.memory_id)
+            if memory is None:
+                continue
+            context = memory.context if isinstance(memory.context, dict) else {}
+            if hit.matching_entities:
+                context = dict(context)
+                context["matching_entities"] = hit.matching_entities
+            if hit.depth:
+                context = dict(context)
+                context["connection_depth"] = hit.depth
+            if context:
+                memory.context = context
+            results.append(memory)
+            if len(results) >= limit:
+                break
+        return results
+
+    def _scan_collection_for_entities(
+        self,
+        entities: dict[str, str] | list[str],
+        *,
+        limit: int,
+    ) -> list[MemoryItem]:
+        entity_set = build_entity_set(entities)
+        all_results = self.collection.get(include=["embeddings", "documents", "metadatas"])
+
+        if not all_results["ids"]:
+            return []
+
+        matching_memories: list[MemoryItem] = []
+        for idx, memory_id in enumerate(all_results["ids"]):
+            metadata = all_results["metadatas"][idx]
+            stored_entities = json_loads_dict(metadata.get("entities"))
+
+            if entity_matches(stored_entities, entity_set):
+                matching_memories.append(
+                    chroma_memory_from_record(
+                        memory_id=memory_id,
+                        document=all_results["documents"][idx],
+                        embedding=all_results["embeddings"][idx],
+                        metadata=metadata,
+                        entities_override=stored_entities,
+                    )
+                )
+                if len(matching_memories) >= limit:
+                    break
+        return matching_memories
+
+    def _reset_graph_index(self) -> bool:
+        try:
+            self.graph_index.reset()
+        except Exception as exc:
+            logger.exception(
+                "Failed to reset graph index: %s",
+                exc.__class__.__name__,
+                extra=store_log_context(self.store_type),
+            )
+            if self.graph_index_strict:
+                raise MnemotreeIndexError(
+                    "Failed to reset graph index during rebuild"
+                ) from exc
+            return False
+        return True
+
+    def _iter_collection_batches(self, *, batch_size: int) -> Iterator[dict[str, Any]]:
+        offset = 0
+        while True:
+            try:
+                batch = self.collection.get(
+                    include=["embeddings", "documents", "metadatas"],
+                    limit=batch_size,
+                    offset=offset,
+                )
+            except TypeError:
+                if offset != 0:
+                    return
+                batch = self.collection.get(include=["embeddings", "documents", "metadatas"])
+            ids = batch.get("ids") or []
+            if not ids:
+                return
+            yield batch
+            if len(ids) < batch_size:
+                return
+            offset += len(ids)
+
+    def _upsert_graph_batch(self, batch: dict[str, Any]) -> int:
+        ids = batch.get("ids") or []
+        rebuilt = 0
+        for idx, memory_id in enumerate(ids):
+            memory = chroma_memory_from_record(
+                memory_id=memory_id,
+                document=batch["documents"][idx],
+                embedding=batch["embeddings"][idx],
+                metadata=batch["metadatas"][idx],
+            )
+            try:
+                self.graph_index.upsert_memory(memory)
+                rebuilt += 1
+            except Exception as exc:
+                logger.warning(
+                    "Failed to index memory %s during rebuild: %s",
+                    memory_id,
+                    exc.__class__.__name__,
+                    extra=store_log_context(self.store_type, memory_id=memory_id),
+                )
+                if self.graph_index_strict:
+                    raise MnemotreeIndexError(
+                        f"Failed to rebuild graph index for memory {memory_id}"
+                    ) from exc
+        return rebuilt
+
     async def query_by_entities(
         self,
         entities: dict[str, str] | list[str],
@@ -485,90 +642,11 @@ class ChromaMemoryStore(BaseMemoryStore):
             if not entities:
                 return []
 
-            if self.graph_index:
-                try:
-                    hits = self.graph_index.recall_by_entities(
-                        entities,
-                        limit=limit,
-                        hops=self.graph_hops,
-                    )
-                except Exception as e:
-                    logger.exception(
-                        "Failed to query graph index: %s",
-                        e.__class__.__name__,
-                        extra=store_log_context(
-                            self.store_type,
-                            duration_ms=elapsed_ms(start),
-                        ),
-                    )
-                    if self.graph_index_strict:
-                        raise MnemotreeIndexError(
-                            f"Failed to query graph index by entities"
-                        ) from e
-                    hits = []
-                if not hits:
-                    # Fall back to slower scan when the index is empty/unavailable.
-                    hits = None
-            else:
-                hits = None
-
+            hits = self._query_graph_index_hits(entities, limit=limit, start=start)
             if hits is not None:
-                if not hits:
-                    return []
-                memories_by_id = await self._get_memories_by_ids(
-                    [hit.memory_id for hit in hits]
-                )
-                results: list[MemoryItem] = []
-                for hit in hits:
-                    memory = memories_by_id.get(hit.memory_id)
-                    if memory is None:
-                        continue
-                    context = memory.context if isinstance(memory.context, dict) else {}
-                    if hit.matching_entities:
-                        context = dict(context)
-                        context["matching_entities"] = hit.matching_entities
-                    if hit.depth:
-                        context = dict(context)
-                        context["connection_depth"] = hit.depth
-                    if context:
-                        memory.context = context
-                    results.append(memory)
-                    if len(results) >= limit:
-                        break
-                return results
+                return await self._hydrate_graph_hits(hits, limit=limit)
 
-            entity_set = build_entity_set(entities)
-
-            # Get all memories and filter by entities in memory
-            # ChromaDB doesn't support complex metadata queries on JSON fields,
-            # so we need to retrieve and filter in memory
-            all_results = self.collection.get(include=["embeddings", "documents", "metadatas"])
-
-            if not all_results["ids"]:
-                return []
-
-            matching_memories = []
-
-            for idx, memory_id in enumerate(all_results["ids"]):
-                metadata = all_results["metadatas"][idx]
-                stored_entities = json_loads_dict(metadata.get("entities"))
-
-                # Check if any of the requested entities are in this memory
-                if entity_matches(stored_entities, entity_set):
-                    matching_memories.append(
-                        chroma_memory_from_record(
-                            memory_id=memory_id,
-                            document=all_results["documents"][idx],
-                            embedding=all_results["embeddings"][idx],
-                            metadata=metadata,
-                            entities_override=stored_entities,
-                        )
-                    )
-
-                    if len(matching_memories) >= limit:
-                        break
-
-            return matching_memories
+            return self._scan_collection_for_entities(entities, limit=limit)
 
         except (ChromaError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             logger.exception(
@@ -587,61 +665,13 @@ class ChromaMemoryStore(BaseMemoryStore):
         await self.initialize()
         assert self.collection is not None
 
-        try:
-            self.graph_index.reset()
-        except Exception as e:
-            logger.exception(
-                "Failed to reset graph index: %s",
-                e.__class__.__name__,
-                extra=store_log_context(self.store_type),
-            )
-            if self.graph_index_strict:
-                raise MnemotreeIndexError(
-                    "Failed to reset graph index during rebuild"
-                ) from e
+        if not self._reset_graph_index():
             return 0
 
         rebuilt = 0
         batch_size = 1000
-        offset = 0
-        while True:
-            try:
-                batch = self.collection.get(
-                    include=["embeddings", "documents", "metadatas"],
-                    limit=batch_size,
-                    offset=offset,
-                )
-            except TypeError:
-                if offset != 0:
-                    break
-                batch = self.collection.get(include=["embeddings", "documents", "metadatas"])
-            ids = batch.get("ids") or []
-            if not ids:
-                break
-            for idx, memory_id in enumerate(ids):
-                memory = chroma_memory_from_record(
-                    memory_id=memory_id,
-                    document=batch["documents"][idx],
-                    embedding=batch["embeddings"][idx],
-                    metadata=batch["metadatas"][idx],
-                )
-                try:
-                    self.graph_index.upsert_memory(memory)
-                    rebuilt += 1
-                except Exception as e:
-                    logger.warning(
-                        "Failed to index memory %s during rebuild: %s",
-                        memory_id,
-                        e.__class__.__name__,
-                        extra=store_log_context(self.store_type, memory_id=memory_id),
-                    )
-                    if self.graph_index_strict:
-                        raise MnemotreeIndexError(
-                            f"Failed to rebuild graph index for memory {memory_id}"
-                        ) from e
-            if len(ids) < batch_size:
-                break
-            offset += len(ids)
+        for batch in self._iter_collection_batches(batch_size=batch_size):
+            rebuilt += self._upsert_graph_batch(batch)
         return rebuilt
 
     async def close(self):

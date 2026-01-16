@@ -248,19 +248,19 @@ class BaseQueryExpander:
         tf_counter = self.index.term_freqs.get(memory_id)
         if not tf_counter:
             return
-        
+
         dl = self.index.doc_len.get(memory_id, 0)
         if dl <= 0:
             return
-        
+
         for term, tf in tf_counter.items():
             if self._should_skip_term(term, tf, query_term_set):
                 continue
-            
+
             df = self.index.doc_freq.get(term, 0)
             if df <= 0:
                 continue
-            
+
             idf = math.log((n_docs - df + 0.5) / (df + 0.5) + 1.0)
             term_scores[term] = term_scores.get(term, 0.0) + idf * (tf / dl)
 

@@ -12,9 +12,8 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from mnemotree.core import MemoryCore
-from mnemotree.core.models import MemoryType
-from mnemotree.rerankers import CrossEncoderReranker, NoOpReranker
 from mnemotree.core.hybrid_retrieval import FusionStrategy, HybridRetriever
+from mnemotree.core.models import MemoryType
 from mnemotree.experimental import (
     AdaptiveImportanceSystem,
     ClaimsRegistry,
@@ -24,6 +23,7 @@ from mnemotree.experimental import (
     MemoryConsolidator,
     WritePolicy,
 )
+from mnemotree.rerankers import CrossEncoderReranker, NoOpReranker
 from mnemotree.store.protocols import MemoryCRUDStore
 
 
