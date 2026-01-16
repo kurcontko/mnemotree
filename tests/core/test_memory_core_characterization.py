@@ -112,7 +112,7 @@ async def test_char_remember_signature(char_store, char_embeddings, char_ner):
 
     # Assert specific fields to freeze behavior
     assert memory.content == "This contains an entity."
-    assert memory.importance == 0.8
+    assert memory.importance == pytest.approx(0.8)
     assert memory.memory_type == MemoryType.SEMANTIC
     # Tags should merge manual + keywords
     assert set(memory.tags) == {"manual1", "kw1", "kw2"}

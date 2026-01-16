@@ -48,7 +48,7 @@ class TestNoOpReranker:
 
         result = await reranker.rerank("query", memories)
 
-        assert result[0][1] == 1.0
+        assert result[0][1] == pytest.approx(1.0)
 
     @pytest.mark.asyncio
     async def test_respects_top_k(self):

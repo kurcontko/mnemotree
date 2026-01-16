@@ -67,7 +67,7 @@ def test_relevance_positive_cosine():
         current_time=now,
         query_embedding=[1.0, 0.0],
     )
-    assert score_opposite == 0.0
+    assert score_opposite == pytest.approx(0.0)
 
 
 def test_importance_access_boost():

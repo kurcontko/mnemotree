@@ -126,10 +126,10 @@ class TestEvaluationResult:
             false_positives=0,
             false_negatives=0,
         )
-        assert result.recall_at_k[1] == 0.5
-        assert result.precision_at_k[5] == 0.4
-        assert result.mrr == 1.0
-        assert result.ndcg == 0.85
+        assert result.recall_at_k[1] == pytest.approx(0.5)
+        assert result.precision_at_k[5] == pytest.approx(0.4)
+        assert result.mrr == pytest.approx(1.0)
+        assert result.ndcg == pytest.approx(0.85)
 
 
 class TestBenchmarkResult:
@@ -140,7 +140,7 @@ class TestBenchmarkResult:
         result = BenchmarkResult()
         assert result.total_queries == 0
         assert result.total_memories == 0
-        assert result.avg_mrr == 0.0
+        assert result.avg_mrr == pytest.approx(0.0)
         assert isinstance(result.evaluated_at, datetime)
 
     def test_to_dict(self):
@@ -154,7 +154,7 @@ class TestBenchmarkResult:
         )
         result_dict = result.to_dict()
         assert result_dict["avg_recall_at_k"] == {1: 0.8, 5: 0.9}
-        assert result_dict["avg_mrr"] == 0.85
+        assert result_dict["avg_mrr"] == pytest.approx(0.85)
         assert result_dict["total_queries"] == 10
 
 
@@ -176,13 +176,13 @@ class TestMemoryEvaluator:
         retrieved = ["mem1", "mem2", "mem4", "mem5"]
         
         recall_1 = evaluator._compute_recall_at_k(relevant, retrieved, k=1)
-        assert recall_1 == 1.0 / 3.0  # Only mem1 retrieved in top-1
+        assert recall_1 == pytest.approx(1.0 / 3.0)  # Only mem1 retrieved in top-1
         
         recall_2 = evaluator._compute_recall_at_k(relevant, retrieved, k=2)
-        assert recall_2 == 2.0 / 3.0  # mem1 and mem2 retrieved in top-2
+        assert recall_2 == pytest.approx(2.0 / 3.0)  # mem1 and mem2 retrieved in top-2
         
         recall_4 = evaluator._compute_recall_at_k(relevant, retrieved, k=4)
-        assert recall_4 == 2.0 / 3.0  # Still only mem1 and mem2
+        assert recall_4 == pytest.approx(2.0 / 3.0)  # Still only mem1 and mem2
 
     @pytest.mark.asyncio
     async def test_compute_precision_at_k(self):
@@ -193,13 +193,13 @@ class TestMemoryEvaluator:
         retrieved = ["mem1", "mem2", "mem4", "mem5"]
         
         precision_1 = evaluator._compute_precision_at_k(relevant, retrieved, k=1)
-        assert precision_1 == 1.0  # mem1 is relevant
+        assert precision_1 == pytest.approx(1.0)  # mem1 is relevant
         
         precision_2 = evaluator._compute_precision_at_k(relevant, retrieved, k=2)
-        assert precision_2 == 1.0  # Both mem1 and mem2 are relevant
+        assert precision_2 == pytest.approx(1.0)  # Both mem1 and mem2 are relevant
         
         precision_4 = evaluator._compute_precision_at_k(relevant, retrieved, k=4)
-        assert precision_4 == 0.5  # 2 out of 4 are relevant
+        assert precision_4 == pytest.approx(0.5)  # 2 out of 4 are relevant
 
     @pytest.mark.asyncio
     async def test_compute_mrr(self):
@@ -210,7 +210,7 @@ class TestMemoryEvaluator:
         retrieved = ["mem1", "mem2", "mem3"]
         
         mrr = evaluator._compute_mrr(relevant, retrieved)
-        assert mrr == 0.5  # mem2 is at position 2 (1-indexed), so 1/2 = 0.5
+        assert mrr == pytest.approx(0.5)  # mem2 is at position 2 (1-indexed), so 1/2 = 0.5
 
     @pytest.mark.asyncio
     async def test_compute_mrr_first_position(self):
@@ -221,7 +221,7 @@ class TestMemoryEvaluator:
         retrieved = ["mem1", "mem2", "mem3"]
         
         mrr = evaluator._compute_mrr(relevant, retrieved)
-        assert mrr == 1.0  # mem1 is at position 1, so 1/1 = 1.0
+        assert mrr == pytest.approx(1.0)  # mem1 is at position 1, so 1/1 = 1.0
 
     @pytest.mark.asyncio
     async def test_compute_mrr_not_found(self):
@@ -232,7 +232,7 @@ class TestMemoryEvaluator:
         retrieved = ["mem1", "mem2", "mem3"]
         
         mrr = evaluator._compute_mrr(relevant, retrieved)
-        assert mrr == 0.0
+        assert mrr == pytest.approx(0.0)
 
     @pytest.mark.asyncio
     async def test_evaluate_single_query_perfect(self, mock_memory_core, memory_items):
@@ -249,9 +249,9 @@ class TestMemoryEvaluator:
         result = await evaluator.evaluate_query(query, k_values=[1, 2, 5])
         
         assert result.query_id == "q1"
-        assert result.recall_at_k[2] == 1.0  # Both relevant items retrieved
-        assert result.precision_at_k[2] == 1.0  # All retrieved are relevant
-        assert result.mrr == 1.0  # First relevant at position 1
+        assert result.recall_at_k[2] == pytest.approx(1.0)  # Both relevant items retrieved
+        assert result.precision_at_k[2] == pytest.approx(1.0)  # All retrieved are relevant
+        assert result.mrr == pytest.approx(1.0)  # First relevant at position 1
 
     @pytest.mark.asyncio
     async def test_evaluate_single_query_partial(self, mock_memory_core, memory_items):
@@ -268,8 +268,8 @@ class TestMemoryEvaluator:
         result = await evaluator.evaluate_query(query, k_values=[1, 2, 5])
         
         assert result.query_id == "q1"
-        assert result.recall_at_k[2] == 0.5  # Only 1 of 2 relevant retrieved
-        assert result.precision_at_k[2] == 0.5  # 1 of 2 retrieved is relevant
+        assert result.recall_at_k[2] == pytest.approx(0.5)  # Only 1 of 2 relevant retrieved
+        assert result.precision_at_k[2] == pytest.approx(0.5)  # 1 of 2 retrieved is relevant
         assert result.true_positives == 1
         assert result.false_positives == 1
         assert result.false_negatives == 1
