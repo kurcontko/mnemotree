@@ -507,7 +507,7 @@ class SyntheticDatasetGenerator:
 
     def __init__(self, seed: int = 42, llm: Any | None = None):
         """Initialize generator with random seed."""
-        np.random.seed(seed)
+        self.rng = np.random.default_rng(seed)
         self.seed = seed
         self.llm = llm
 
@@ -531,7 +531,7 @@ class SyntheticDatasetGenerator:
         queries = []
 
         # Sample memories to use as query templates
-        sampled_indices = np.random.choice(
+        sampled_indices = self.rng.choice(
             len(memories), size=min(num_queries, len(memories)), replace=False
         )
 

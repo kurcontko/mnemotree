@@ -47,8 +47,8 @@ class SpacedRepetitionSchedule:
     easiness_factor: float = 2.5  # How easy is this memory to recall (1.3-2.5)
     interval_days: float = 1.0  # Days until next review
     repetition_count: int = 0  # Number of successful recalls
-    last_review: datetime = None
-    next_review: datetime = None
+    last_review: datetime | None = None
+    next_review: datetime | None = None
 
     def schedule_next_review(self, quality: int):
         """
@@ -202,7 +202,7 @@ class AdaptiveImportanceSystem:
 
         return max(0.0, min(1.0, adaptive_decay))
 
-    def _calculate_usage_modifier(self, memory: MemoryItem, current_time: datetime) -> float:
+    def _calculate_usage_modifier(self, memory: MemoryItem, _current_time: datetime) -> float:
         """
         Calculate modifier based on usage patterns.
 

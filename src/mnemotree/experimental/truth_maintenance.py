@@ -16,7 +16,7 @@ from typing import Any
 from uuid import uuid4
 
 from langchain_core.language_models.base import BaseLanguageModel
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.models import MemoryItem
 
