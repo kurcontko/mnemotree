@@ -19,6 +19,10 @@ except ImportError:  # pragma: no cover
         return False
 
 DEFAULT_K_VALUES = [1, 3, 5, 10]
+DEFAULT_MODEL = "gpt-4.1-mini"
+METRIC_PRECISION = "precision@k"
+METRIC_RECALL = "recall@k"
+METRIC_NDCG = "ndcg@k"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -314,7 +318,7 @@ class InMemoryVectorStore:
     async def get_memory(self, memory_id: str):
         return self._memories.get(memory_id)
 
-    async def delete_memory(self, memory_id: str, *, cascade: bool = False) -> bool:
+    async def delete_memory(self, memory_id: str, *, _cascade: bool = False) -> bool:
         return self._memories.pop(memory_id, None) is not None
 
     async def update_connections(self, memory_id: str, **kwargs):
@@ -329,10 +333,10 @@ class InMemoryVectorStore:
                 setattr(memory, key, value)
         return True
 
-    async def query_by_entities(self, entities, limit: int = 10):
+    async def query_by_entities(self, _entities, _limit: int = 10):
         return []
 
-    async def query_memories(self, query):
+    async def query_memories(self, _query):
         return []
 
     async def get_similar_memories(
@@ -340,7 +344,7 @@ class InMemoryVectorStore:
         query: str,
         query_embedding: List[float],
         top_k: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
+        _filters: Optional[Dict[str, Any]] = None,
     ):
         def cosine(a: Sequence[float], b: Sequence[float]) -> float:
             if not a or not b or len(a) != len(b):
@@ -718,9 +722,9 @@ async def evaluate_queries(
                 "recall_ms": recall_ms,
             },
             "metrics": {
-                "precision@k": _stringify_k_metrics(metrics_precision),
-                "recall@k": _stringify_k_metrics(metrics_recall),
-                "ndcg@k": _stringify_k_metrics(metrics_ndcg),
+                METRIC_PRECISION: _stringify_k_metrics(metrics_precision),
+                METRIC_RECALL: _stringify_k_metrics(metrics_recall),
+                METRIC_NDCG: _stringify_k_metrics(metrics_ndcg),
                 "mrr": mrr_score(retrieved_keys, relevant_set),
                 "semantic_similarity": semantic_similarity,
             },
@@ -796,9 +800,9 @@ def aggregate_results(
         )
 
     summary = {
-        "precision@k": _stringify_k_metrics(precision_summary),
-        "recall@k": _stringify_k_metrics(recall_summary),
-        "ndcg@k": _stringify_k_metrics(ndcg_summary),
+        METRIC_PRECISION: _stringify_k_metrics(precision_summary),
+        METRIC_RECALL: _stringify_k_metrics(recall_summary),
+        METRIC_NDCG: _stringify_k_metrics(ndcg_summary),
         "mrr": mean([r["metrics"]["mrr"] for r in per_query_results]),
         "semantic_similarity": mean(
             [r["metrics"]["semantic_similarity"] for r in per_query_results]
@@ -856,7 +860,7 @@ async def run_benchmark(config: EvalConfig) -> Dict[str, Any]:
         if config.ner_type == "llm":
             from langchain_openai import ChatOpenAI
             from mnemotree.ner.llm import LangchainLLMNER
-            llm = ChatOpenAI(model=config.answer_model or "gpt-4.1-mini", temperature=0, api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
+            llm = ChatOpenAI(model=config.answer_model or DEFAULT_MODEL, temperature=0, api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
             ner = LangchainLLMNER(llm)
         elif config.ner_type == "gliner":
             from mnemotree.ner.gliner import GLiNERNER
