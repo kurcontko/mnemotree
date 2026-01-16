@@ -79,6 +79,67 @@ async def _get_all_memories(
     return await store.list_memories(include_embeddings=include_embeddings)
 
 
+def _resolve_timeline_anchor(
+    sorted_memories: list[MemoryItem],
+    *,
+    memory_id: str | None,
+    timestamp: str | None,
+) -> tuple[int | None, str | None]:
+    if memory_id:
+        for idx, memory in enumerate(sorted_memories):
+            if memory.memory_id == memory_id:
+                return idx, memory_id
+        return None, None
+
+    anchor_time = coerce_datetime(timestamp, default=None)
+    if anchor_time is None:
+        raise ValueError("Invalid timestamp format.")
+    for idx, memory in enumerate(sorted_memories):
+        if _memory_timestamp(memory) >= anchor_time:
+            return idx, memory.memory_id
+    if not sorted_memories:
+        return None, None
+    return len(sorted_memories) - 1, sorted_memories[-1].memory_id
+
+
+def _compute_timeline_window(
+    anchor_index: int,
+    *,
+    before: int,
+    after: int,
+    total: int,
+) -> tuple[int, int]:
+    window_before = max(0, int(before))
+    window_after = max(0, int(after))
+    start = max(0, anchor_index - window_before)
+    end = min(total, anchor_index + window_after + 1)
+    return start, end
+
+
+def _build_timeline_results(
+    slice_memories: list[MemoryItem],
+    *,
+    start: int,
+    anchor_index: int,
+    anchor_id: str | None,
+    include_anchor: bool,
+    include_embedding: bool,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for local_rank, memory in enumerate(slice_memories, start=1):
+        idx = start + local_rank - 1
+        if not include_anchor and anchor_id and memory.memory_id == anchor_id:
+            continue
+        entry = _serialize_memory_index(memory, local_rank)
+        entry["offset"] = idx - anchor_index
+        if anchor_id and memory.memory_id == anchor_id:
+            entry["anchor"] = True
+        if include_embedding:
+            entry["embedding"] = memory.embedding
+        results.append(entry)
+    return results
+
+
 async def _get_memory_core() -> MemoryCore:
     global _memory_core
     async with _memory_lock:
@@ -220,48 +281,24 @@ async def timeline(
         return []
 
     sorted_memories = sorted(memories, key=_memory_timestamp)
-    anchor_index = None
-    anchor_id = memory_id
+    anchor_index, anchor_id = _resolve_timeline_anchor(
+        sorted_memories, memory_id=memory_id, timestamp=timestamp
+    )
+    if anchor_index is None:
+        return []
 
-    if memory_id:
-        for idx, memory in enumerate(sorted_memories):
-            if memory.memory_id == memory_id:
-                anchor_index = idx
-                break
-        if anchor_index is None:
-            return []
-    else:
-        anchor_time = coerce_datetime(timestamp, default=None)
-        if anchor_time is None:
-            raise ValueError("Invalid timestamp format.")
-        for idx, memory in enumerate(sorted_memories):
-            if _memory_timestamp(memory) >= anchor_time:
-                anchor_index = idx
-                anchor_id = memory.memory_id
-                break
-        if anchor_index is None:
-            anchor_index = len(sorted_memories) - 1
-            anchor_id = sorted_memories[anchor_index].memory_id
-
-    window_before = max(0, int(before))
-    window_after = max(0, int(after))
-    start = max(0, anchor_index - window_before)
-    end = min(len(sorted_memories), anchor_index + window_after + 1)
+    start, end = _compute_timeline_window(
+        anchor_index, before=before, after=after, total=len(sorted_memories)
+    )
     slice_memories = sorted_memories[start:end]
-
-    results: list[dict[str, Any]] = []
-    for local_rank, memory in enumerate(slice_memories, start=1):
-        idx = start + local_rank - 1
-        if not include_anchor and anchor_id and memory.memory_id == anchor_id:
-            continue
-        entry = _serialize_memory_index(memory, local_rank)
-        entry["offset"] = idx - anchor_index
-        if anchor_id and memory.memory_id == anchor_id:
-            entry["anchor"] = True
-        if include_embedding:
-            entry["embedding"] = memory.embedding
-        results.append(entry)
-    return results
+    return _build_timeline_results(
+        slice_memories,
+        start=start,
+        anchor_index=anchor_index,
+        anchor_id=anchor_id,
+        include_anchor=include_anchor,
+        include_embedding=include_embedding,
+    )
 
 
 async def get_memories(
