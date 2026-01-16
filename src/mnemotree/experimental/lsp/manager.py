@@ -29,7 +29,7 @@ class LspManager:
             client = await self._start_python_ls()
             self.clients["python"] = client
             return client
-        
+
         raise ValueError(f"Unsupported language: {language_id}")
 
     async def _start_python_ls(self) -> LspClient:
@@ -40,11 +40,11 @@ class LspManager:
             # But usually it puts `pyright-langserver` in bin.
             # If not found, raise.
              raise RuntimeError("pyright-langserver not found. Please install `pyright`.")
-        
+
         cmd = [executable, "--stdio"]
         client = LspClient(cmd, self.root_dir)
         await client.start()
-        
+
         # Initialize
         await client.initialize()
         return client

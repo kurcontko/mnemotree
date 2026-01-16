@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
-from typing import Any, NoReturn
+from typing import Any
 
-from .protocol import encode_message, decode_header, make_request, make_notification
+from .protocol import decode_header, encode_message, make_notification, make_request
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class LspClient:
         self._request_id = 0
         self._pending_requests: dict[int | str, asyncio.Future] = {}
         self._reader_task: asyncio.Task | None = None
+        self._stderr_task: asyncio.Task | None = None
         self._loop_running = False
 
     async def start(self) -> None:
@@ -39,29 +41,30 @@ class LspClient:
         self._reader_task = asyncio.create_task(self._read_loop())
 
         # Log stderr in background
-        asyncio.create_task(self._log_stderr())
+        self._stderr_task = asyncio.create_task(self._log_stderr())
 
     async def stop(self) -> None:
         """Stops the language server."""
         self._loop_running = False
-        
+
         # Cancel reader first so it stops trying to read
         if self._reader_task:
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
-            except asyncio.CancelledError:
-                pass
+
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._stderr_task
 
         if self.process:
             try:
                 # Close stdin to signal EOF
                 if self.process.stdin:
                     self.process.stdin.close()
-                    try:
+                    with contextlib.suppress(BrokenPipeError, ConnectionResetError):
                         await self.process.stdin.wait_closed()
-                    except (BrokenPipeError, ConnectionResetError):
-                        pass
 
                 self.process.terminate()
                 try:
@@ -75,7 +78,7 @@ class LspClient:
                         pass
             except ProcessLookupError:
                 pass
-        
+
         logger.info("LSP Client stopped")
 
     async def initialize(self) -> dict[str, Any]:
@@ -93,7 +96,7 @@ class LspClient:
                     "definition": {"dynamicRegistration": True},
                     "references": {"dynamicRegistration": True},
                     "documentHighlight": {"dynamicRegistration": True},
-                    "documentSymbol": {"dynamicRegistration": True, "symbolKind": {"valueSet": [i for i in range(1, 27)]}},
+                    "documentSymbol": {"dynamicRegistration": True, "symbolKind": {"valueSet": list(range(1, 27))}},
                     "codeAction": {"dynamicRegistration": True},
                     "formatting": {"dynamicRegistration": True},
                     "rangeFormatting": {"dynamicRegistration": True},
@@ -115,10 +118,10 @@ class LspClient:
         """Sends a request and waits for the response."""
         req_id = self._next_id()
         req_json = make_request(method, params, req_id)
-        
+
         future = asyncio.get_running_loop().create_future()
         self._pending_requests[req_id] = future
-        
+
         await self._send(req_json)
         return await future
 
@@ -134,7 +137,7 @@ class LspClient:
     async def _send(self, content: dict[str, Any]) -> None:
         if not self.process or not self.process.stdin:
             raise RuntimeError("LSP process not running")
-        
+
         logger.debug(f"Sending: {content.get('method')} id={content.get('id')}")
         data = encode_message(content)
         self.process.stdin.write(data)
@@ -142,7 +145,7 @@ class LspClient:
 
     async def _read_loop(self) -> None:
         assert self.process and self.process.stdout
-        
+
         try:
             while self._loop_running:
                 # Read header
@@ -152,14 +155,14 @@ class LspClient:
                     if line == b"\r\n":
                         break
                     header_lines.append(line)
-                
+
                 header_block = b"".join(header_lines)
                 content_length = decode_header(header_block)
-                
+
                 # Read content
                 content_bytes = await self.process.stdout.readexactly(content_length)
                 content = json.loads(content_bytes)
-                
+
                 self._handle_message(content)
         except asyncio.IncompleteReadError:
             logger.info("LSP stream ended")
