@@ -30,7 +30,7 @@ async def test_python_lsp_integration():
             pytest.skip("Test file not found")
 
         with open(test_file_path) as f:
-            content = f.read()
+            content = await asyncio.to_thread(f.read)
 
         logging.info("Opening document")
         await client.text_document_did_open(test_file_path, content)

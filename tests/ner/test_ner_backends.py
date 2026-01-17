@@ -237,8 +237,8 @@ class TestGLiNERNER:
             assert result.entities["John"] == "person"
             assert "Apple" in result.entities
             assert result.entities["Apple"] == "organization"
-            assert result.confidence["John"] == 0.95
-            assert result.confidence["Apple"] == 0.88
+            assert result.confidence["John"] == pytest.approx(0.95)
+            assert result.confidence["Apple"] == pytest.approx(0.88)
 
     @pytest.mark.asyncio
     async def test_custom_entity_types(self):
@@ -282,7 +282,7 @@ class TestGLiNERNER:
             await ner.extract_entities("Test")
 
             call_kwargs = mock_model.predict_entities.call_args[1]
-            assert call_kwargs["threshold"] == 0.7
+            assert call_kwargs["threshold"] == pytest.approx(0.7)
 
     def test_import_error_without_gliner(self):
         """GLiNERNER raises ImportError when gliner not installed."""
@@ -395,7 +395,7 @@ class TestTransformersNER:
 
             # Higher score should update type
             assert result.entities["ABC"] == "MISC"
-            assert result.confidence["ABC"] == 0.9
+            assert result.confidence["ABC"] == pytest.approx(0.9)
 
     def test_fallback_to_grouped_entities(self):
         """TransformersNER falls back to grouped_entities if aggregation_strategy fails."""

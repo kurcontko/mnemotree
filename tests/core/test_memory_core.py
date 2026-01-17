@@ -18,8 +18,11 @@ from mnemotree.store.base import BaseMemoryStore
 
 
 class MockStore(BaseMemoryStore):
+    """Minimal store implementation for testing MemoryCore behavior."""
+
     async def store_memory(self, memory):
-        pass
+        """Stub: actual storage handled by mock overrides in tests."""
+        return None
 
     async def get_memory(self, mid):
         return None
@@ -37,13 +40,15 @@ class MockStore(BaseMemoryStore):
         return []
 
     async def update_connections(self, memory_id, **kwargs):
-        pass
+        """Stub: connection updates mocked in tests that need it."""
+        return None
 
     async def query_by_entities(self, entities, limit=10):
         return []
 
     async def close(self):
-        pass
+        """No-op: in-memory mock requires no cleanup."""
+        return None
 
 
 @pytest.fixture

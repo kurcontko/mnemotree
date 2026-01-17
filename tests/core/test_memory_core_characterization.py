@@ -17,23 +17,27 @@ class MockStore(BaseMemoryStore):
         self.stored_memories[memory.memory_id] = memory
 
     def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
-        # Return empty by default, tests will override or populate
+        """Return empty by default; tests override via mocking."""
         return []
 
     def list_memories(self, *, include_embeddings=False):
+        """Return stored memories for test inspection."""
         return list(self.stored_memories.values())
 
     def query_memories(self, query, limit=10):
+        """Stub: tests mock this method as needed."""
         return []
 
     def update_connections(self, memory_id, **kwargs):
-        pass
+        """Stub: connection updates not needed for these characterization tests."""
+        return None
 
     async def query_by_entities(self, entities, limit=10):
         return []
 
     async def update_memory_metadata(self, memory_id, metadata):
-        pass
+        """Stub: metadata updates not exercised in characterization tests."""
+        return False
 
     async def delete_memory(self, mid, *, cascade=False):
         return True
@@ -42,7 +46,8 @@ class MockStore(BaseMemoryStore):
         return self.stored_memories.get(mid)
 
     async def close(self):
-        pass
+        """No-op: in-memory mock requires no cleanup."""
+        return None
 
 
 @pytest.fixture
