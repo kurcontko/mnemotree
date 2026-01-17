@@ -228,12 +228,12 @@ def parse_args() -> EvalConfig:
     )
     parser.add_argument(
         "--answer-model",
-        default=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        default=os.getenv("OPENAI_MODEL", DEFAULT_MODEL),
         help="LLM model name used to generate answers.",
     )
     parser.add_argument(
         "--judge-model",
-        default=os.getenv("OPENAI_JUDGE_MODEL", "gpt-4.1-mini"),
+        default=os.getenv("OPENAI_JUDGE_MODEL", DEFAULT_MODEL),
         help="LLM model name used to judge answers.",
     )
     parser.add_argument(
@@ -655,6 +655,171 @@ def _percentile(values: List[float], percentile: float) -> float:
     return (sorted_values[lo] * (1.0 - weight)) + (sorted_values[hi] * weight)
 
 
+def _build_answer_models(
+    answer_eval: bool,
+    answer_model: Optional[str],
+    judge_model: Optional[str],
+) -> tuple[Optional["AnswerGenerator"], Optional["AnswerJudgmentModel"]]:
+    if not answer_eval:
+        return None, None
+    if not answer_model or not judge_model:
+        raise ValueError("answer-model and judge-model must be set for answer eval")
+    return AnswerGenerator(answer_model), AnswerJudgmentModel(judge_model)
+
+
+def _extract_retrieved_keys(retrieved: Sequence[Any], relevance_key: str) -> list[str]:
+    if relevance_key == "memory_id":
+        return [getattr(item, relevance_key) for item in retrieved]
+    return [item.content for item in retrieved]
+
+
+def _calculate_metrics(
+    retrieved_keys: Sequence[str], relevant_set: set[str], k_values: Sequence[int]
+) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
+    metrics_precision = {k: precision_at_k(retrieved_keys, relevant_set, k) for k in k_values}
+    metrics_recall = {k: recall_at_k(retrieved_keys, relevant_set, k) for k in k_values}
+    metrics_ndcg = {k: ndcg_at_k(retrieved_keys, relevant_set, k) for k in k_values}
+    return metrics_precision, metrics_recall, metrics_ndcg
+
+
+def _mean_semantic_similarity(
+    query_embedding: Sequence[float], retrieved: Sequence[Any]
+) -> float:
+    semantic_similarities = [
+        cosine_similarity(query_embedding, item.embedding or []) for item in retrieved
+    ]
+    return (
+        sum(semantic_similarities) / len(semantic_similarities)
+        if semantic_similarities
+        else 0.0
+    )
+
+
+def _retrieved_context_fields(item: Any) -> dict[str, Any]:
+    context = getattr(item, "context", None)
+    if not isinstance(context, dict):
+        return {}
+    payload = {}
+    if "connection_depth" in context:
+        payload["connection_depth"] = context["connection_depth"]
+    if "matching_entities" in context:
+        payload["matching_entities"] = context["matching_entities"]
+    return payload
+
+
+def _build_retrieved_payload(retrieved: Sequence[Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "memory_id": item.memory_id,
+            "content": _truncate(item.content),
+            **_retrieved_context_fields(item),
+        }
+        for item in retrieved
+    ]
+
+
+async def _collect_retrieval(
+    memory_core: Any,
+    query_text: str,
+    *,
+    max_k: int,
+    scoring: bool,
+) -> tuple[list[Any], float, list[float]]:
+    recall_start = time.perf_counter()
+    retrieved = await memory_core.recall(
+        query_text,
+        limit=max_k,
+        scoring=scoring,
+        update_access=False,
+    )
+    recall_ms = (time.perf_counter() - recall_start) * 1000.0
+    query_embedding = await memory_core.get_embedding(query_text)
+    return retrieved, recall_ms, query_embedding
+
+
+async def _maybe_add_answer_eval(
+    *,
+    result: dict[str, Any],
+    query: QueryCase,
+    retrieved: Sequence[Any],
+    retrieved_keys: Sequence[str],
+    relevant_set: set[str],
+    answer_k: int,
+    answer_generator: Optional["AnswerGenerator"],
+    answer_judge: Optional["AnswerJudgmentModel"],
+) -> None:
+    if not answer_generator or not answer_judge:
+        return
+    contexts = build_context_block(retrieved[:answer_k])
+    answer = await answer_generator.generate(query.query, contexts)
+    judgment = await answer_judge.judge(query.query, answer, contexts)
+    context_precision = precision_at_k(retrieved_keys, relevant_set, answer_k)
+    context_recall = recall_at_k(retrieved_keys, relevant_set, answer_k)
+    result["answer_eval"] = {
+        "answer": answer,
+        "answer_relevance": judgment["answer_relevance"],
+        "faithfulness": judgment["faithfulness"],
+        "context_precision": context_precision,
+        "context_recall": context_recall,
+        "judge_explanation": judgment["explanation"],
+        "unsupported_claims": judgment["unsupported_claims"],
+    }
+
+
+async def _evaluate_single_query(
+    *,
+    memory_core: Any,
+    query: QueryCase,
+    max_k: int,
+    k_values: Sequence[int],
+    scoring: bool,
+    answer_k: int,
+    answer_generator: Optional["AnswerGenerator"],
+    answer_judge: Optional["AnswerJudgmentModel"],
+) -> dict[str, Any]:
+    retrieved, recall_ms, query_embedding = await _collect_retrieval(
+        memory_core, query.query, max_k=max_k, scoring=scoring
+    )
+
+    relevant_set, relevance_key = _relevant_set_for_query(query)
+    retrieved_keys = _extract_retrieved_keys(retrieved, relevance_key)
+
+    metrics_precision, metrics_recall, metrics_ndcg = _calculate_metrics(
+        retrieved_keys, relevant_set, k_values
+    )
+    semantic_similarity = _mean_semantic_similarity(query_embedding, retrieved)
+
+    result = {
+        "query": query.query,
+        "description": query.description,
+        "query_type": query.query_type,
+        "timing": {
+            "recall_ms": recall_ms,
+        },
+        "metrics": {
+            METRIC_PRECISION: _stringify_k_metrics(metrics_precision),
+            METRIC_RECALL: _stringify_k_metrics(metrics_recall),
+            METRIC_NDCG: _stringify_k_metrics(metrics_ndcg),
+            "mrr": mrr_score(retrieved_keys, relevant_set),
+            "semantic_similarity": semantic_similarity,
+        },
+        "retrieved": _build_retrieved_payload(retrieved),
+    }
+
+    await _maybe_add_answer_eval(
+        result=result,
+        query=query,
+        retrieved=retrieved,
+        retrieved_keys=retrieved_keys,
+        relevant_set=relevant_set,
+        answer_k=answer_k,
+        answer_generator=answer_generator,
+        answer_judge=answer_judge,
+    )
+
+    return result
+
+
 async def evaluate_queries(
     memory_core,
     queries: List[QueryCase],
@@ -667,108 +832,23 @@ async def evaluate_queries(
 ) -> Dict[str, Any]:
     max_k = max(k_values)
     answer_k = min(answer_k, max_k) if answer_k > 0 else max_k
-    answer_generator = None
-    answer_judge = None
-    if answer_eval:
-        if not answer_model or not judge_model:
-            raise ValueError("answer-model and judge-model must be set for answer eval")
-        answer_generator = AnswerGenerator(answer_model)
-        answer_judge = AnswerJudgmentModel(judge_model)
+    answer_generator, answer_judge = _build_answer_models(
+        answer_eval, answer_model, judge_model
+    )
 
     per_query_results = []
 
     for query in queries:
-        recall_start = time.perf_counter()
-        retrieved = await memory_core.recall(
-            query.query,
-            limit=max_k,
+        result = await _evaluate_single_query(
+            memory_core=memory_core,
+            query=query,
+            max_k=max_k,
+            k_values=k_values,
             scoring=scoring,
-            update_access=False,
+            answer_k=answer_k,
+            answer_generator=answer_generator,
+            answer_judge=answer_judge,
         )
-        recall_ms = (time.perf_counter() - recall_start) * 1000.0
-        query_embedding = await memory_core.get_embedding(query.query)
-
-        relevant_set, relevance_key = _relevant_set_for_query(query)
-        retrieved_keys = [
-            getattr(item, relevance_key) if relevance_key == "memory_id" else item.content
-            for item in retrieved
-        ]
-
-        metrics_precision = {
-            k: precision_at_k(retrieved_keys, relevant_set, k) for k in k_values
-        }
-        metrics_recall = {
-            k: recall_at_k(retrieved_keys, relevant_set, k) for k in k_values
-        }
-        metrics_ndcg = {
-            k: ndcg_at_k(retrieved_keys, relevant_set, k) for k in k_values
-        }
-
-        semantic_similarities = [
-            cosine_similarity(query_embedding, item.embedding or [])
-            for item in retrieved
-        ]
-        semantic_similarity = (
-            sum(semantic_similarities) / len(semantic_similarities)
-            if semantic_similarities
-            else 0.0
-        )
-
-        result = {
-            "query": query.query,
-            "description": query.description,
-            "query_type": query.query_type,
-            "timing": {
-                "recall_ms": recall_ms,
-            },
-            "metrics": {
-                METRIC_PRECISION: _stringify_k_metrics(metrics_precision),
-                METRIC_RECALL: _stringify_k_metrics(metrics_recall),
-                METRIC_NDCG: _stringify_k_metrics(metrics_ndcg),
-                "mrr": mrr_score(retrieved_keys, relevant_set),
-                "semantic_similarity": semantic_similarity,
-            },
-            "retrieved": [
-                {
-                    "memory_id": item.memory_id,
-                    "content": _truncate(item.content),
-                    **(
-                        {
-                            "connection_depth": (item.context or {}).get(
-                                "connection_depth"
-                            ),
-                            "matching_entities": (item.context or {}).get(
-                                "matching_entities"
-                            ),
-                        }
-                        if isinstance(getattr(item, "context", None), dict)
-                        and (
-                            "connection_depth" in (item.context or {})
-                            or "matching_entities" in (item.context or {})
-                        )
-                        else {}
-                    ),
-                }
-                for item in retrieved
-            ],
-        }
-
-        if answer_eval and answer_generator and answer_judge:
-            contexts = build_context_block(retrieved[:answer_k])
-            answer = await answer_generator.generate(query.query, contexts)
-            judgment = await answer_judge.judge(query.query, answer, contexts)
-            context_precision = precision_at_k(retrieved_keys, relevant_set, answer_k)
-            context_recall = recall_at_k(retrieved_keys, relevant_set, answer_k)
-            result["answer_eval"] = {
-                "answer": answer,
-                "answer_relevance": judgment["answer_relevance"],
-                "faithfulness": judgment["faithfulness"],
-                "context_precision": context_precision,
-                "context_recall": context_recall,
-                "judge_explanation": judgment["explanation"],
-                "unsupported_claims": judgment["unsupported_claims"],
-            }
-
         per_query_results.append(result)
 
     return {
