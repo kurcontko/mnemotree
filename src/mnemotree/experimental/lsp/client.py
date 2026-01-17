@@ -167,9 +167,10 @@ class LspClient:
         except asyncio.IncompleteReadError:
             logger.info("LSP stream ended")
         except asyncio.CancelledError:
-            pass
+            logger.debug(\"LSP read loop cancelled\")
+            raise
         except Exception as e:
-            logger.error(f"Error in LSP read loop: {e}")
+            logger.error(f\"Error in LSP read loop: {e}\")
 
     def _handle_message(self, message: dict[str, Any]) -> None:
         logger.debug(f"Received: {message.get('method')} id={message.get('id')}")
