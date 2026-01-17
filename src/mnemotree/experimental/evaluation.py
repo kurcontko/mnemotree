@@ -511,6 +511,39 @@ class SyntheticDatasetGenerator:
         self.seed = seed
         self.llm = llm
 
+    def _sample_memories(self, memories: list[MemoryItem], num_queries: int) -> list[MemoryItem]:
+        sampled_indices = self.rng.choice(
+            len(memories), size=min(num_queries, len(memories)), replace=False
+        )
+        return [memories[idx] for idx in sampled_indices]
+
+    @staticmethod
+    def _build_query_text(memory: MemoryItem) -> str:
+        sentences = memory.content.split(".")
+        return sentences[0] + "." if sentences else memory.content[:50]
+
+    def _collect_relevant_ids(
+        self,
+        base_memory: MemoryItem,
+        memories: list[MemoryItem],
+        relevance_threshold: float,
+    ) -> list[str]:
+        relevant_ids = [base_memory.memory_id]
+        if not base_memory.embedding:
+            return relevant_ids
+
+        for other_memory in memories:
+            if other_memory.memory_id == base_memory.memory_id:
+                continue
+            if not other_memory.embedding:
+                continue
+
+            similarity = self._cosine_similarity(base_memory.embedding, other_memory.embedding)
+            if similarity >= relevance_threshold:
+                relevant_ids.append(other_memory.memory_id)
+
+        return relevant_ids
+
     def generate_queries(
         self, memories: list[MemoryItem], num_queries: int = 50, relevance_threshold: float = 0.7
     ) -> list[EvaluationQuery]:
@@ -530,34 +563,11 @@ class SyntheticDatasetGenerator:
 
         queries = []
 
-        # Sample memories to use as query templates
-        sampled_indices = self.rng.choice(
-            len(memories), size=min(num_queries, len(memories)), replace=False
-        )
-
-        for idx in sampled_indices:
-            base_memory = memories[idx]
-
-            # Create query from memory content (use first sentence or 50 chars)
-            sentences = base_memory.content.split(".")
-            query_text = sentences[0] + "." if sentences else base_memory.content[:50]
-
-            # Find relevant memories (similar to base memory)
-            relevant_ids = [base_memory.memory_id]
-
-            if base_memory.embedding:
-                for other_memory in memories:
-                    if other_memory.memory_id == base_memory.memory_id:
-                        continue
-
-                    if other_memory.embedding:
-                        similarity = self._cosine_similarity(
-                            base_memory.embedding, other_memory.embedding
-                        )
-
-                        if similarity >= relevance_threshold:
-                            relevant_ids.append(other_memory.memory_id)
-
+        for base_memory in self._sample_memories(memories, num_queries):
+            query_text = self._build_query_text(base_memory)
+            relevant_ids = self._collect_relevant_ids(
+                base_memory, memories, relevance_threshold
+            )
             queries.append(
                 EvaluationQuery(
                     query_id=f"query_{len(queries) + 1}",
