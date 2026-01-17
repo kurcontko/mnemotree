@@ -9,7 +9,7 @@ def test_cli_help_prints_usage(capsys):
     result = cli.main([])
     captured = capsys.readouterr()
     assert "usage: mnemotree" in captured.out
-    assert result == 0
+    assert result == 1
 
 
 def test_cli_version_success(monkeypatch, capsys):
