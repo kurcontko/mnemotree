@@ -11,12 +11,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit as exc:
-        # argparse uses SystemExit for parsing errors/help; return its code.
-        code = exc.code if isinstance(exc.code, int) else 1
-        return code
+    args = parser.parse_args(argv)
 
     if args.version:
         try:
