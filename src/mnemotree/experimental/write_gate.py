@@ -164,26 +164,58 @@ class ContextAwareWriteGate:
         Returns:
             WriteResult with decision and reasoning
         """
-        reasons = []
-        scores = {}
+        reasons: list[str] = []
+        scores: dict[str, float] = {}
 
-        # Override: Always store high-importance memories
+        override = self._override_decision(memory)
+        if override:
+            return override
+
+        policy_gate = self._policy_memory_type_gate(memory)
+        if policy_gate:
+            return policy_gate
+
+        rate_gate = self._rate_limit_gate(memory)
+        if rate_gate:
+            return rate_gate
+
+        quality_gate = self._apply_quality_gate(memory, scores, reasons)
+        if quality_gate:
+            return quality_gate
+
+        novelty_gate = await self._apply_novelty_gate(memory, existing_memories, scores, reasons)
+        if novelty_gate:
+            return novelty_gate
+
+        meaningful_gate = self._apply_meaningfulness_gate(memory, scores, reasons)
+        if meaningful_gate:
+            return meaningful_gate
+
+        pii_gate = self._apply_pii_gate(memory)
+        if pii_gate:
+            return pii_gate
+
+        if context:
+            self._apply_relevance(memory, context, scores, reasons)
+
+        return self._finalize_decision(scores, reasons)
+
+    def _override_decision(self, memory: MemoryItem) -> WriteResult | None:
         if memory.importance >= self.policy.always_store_high_importance:
             return WriteResult(
                 decision=WriteDecision.ACCEPT,
                 reasons=["High importance override"],
                 score=1.0,
             )
-
-        # Override: Auto-approve semantic memories if configured
         if self.policy.auto_approve_semantic and memory.memory_type == MemoryType.SEMANTIC:
             return WriteResult(
                 decision=WriteDecision.ACCEPT,
                 reasons=["Semantic memory auto-approval"],
                 score=0.9,
             )
+        return None
 
-        # Check 1: Memory type allowed
+    def _policy_memory_type_gate(self, memory: MemoryItem) -> WriteResult | None:
         if (
             self.policy.memory_types_allowed
             and memory.memory_type not in self.policy.memory_types_allowed
@@ -193,8 +225,9 @@ class ContextAwareWriteGate:
                 reasons=[f"Memory type {memory.memory_type} not allowed by policy"],
                 score=0.0,
             )
+        return None
 
-        # Check 2: Rate limiting
+    def _rate_limit_gate(self, memory: MemoryItem) -> WriteResult | None:
         if self.policy.max_memories_per_hour and not self._check_rate_limit(
             memory.user_id or "default"
         ):
@@ -203,56 +236,81 @@ class ContextAwareWriteGate:
                 reasons=["Rate limit exceeded"],
                 score=0.0,
             )
+        return None
 
-        # Check 3: Basic quality filters
+    def _apply_quality_gate(
+        self,
+        memory: MemoryItem,
+        scores: dict[str, float],
+        reasons: list[str],
+    ) -> WriteResult | None:
         quality_result = self._check_quality(memory)
         if quality_result.decision == WriteDecision.REJECT:
             return quality_result
         scores["quality"] = quality_result.quality_score or 0.5
         reasons.extend(quality_result.reasons)
+        return None
 
-        # Check 4: Novelty assessment
+    async def _apply_novelty_gate(
+        self,
+        memory: MemoryItem,
+        existing_memories: list[MemoryItem] | None,
+        scores: dict[str, float],
+        reasons: list[str],
+    ) -> WriteResult | None:
         novelty_result = await self._assess_novelty(memory, existing_memories)
         scores["novelty"] = novelty_result.novelty_score or 0.5
-
-        if (
-            novelty_result.decision == WriteDecision.REJECT
-            or novelty_result.decision == WriteDecision.MERGE
-        ):
+        if novelty_result.decision in (WriteDecision.REJECT, WriteDecision.MERGE):
             return novelty_result
         reasons.extend(novelty_result.reasons)
+        return None
 
-        # Check 5: Content meaningfulness
-        if self.policy.require_meaningful_content:
-            meaningful_result = self._check_meaningful_content(memory)
-            if meaningful_result.decision == WriteDecision.REJECT:
-                return meaningful_result
-            scores["meaningfulness"] = meaningful_result.score
-            reasons.extend(meaningful_result.reasons)
+    def _apply_meaningfulness_gate(
+        self,
+        memory: MemoryItem,
+        scores: dict[str, float],
+        reasons: list[str],
+    ) -> WriteResult | None:
+        if not self.policy.require_meaningful_content:
+            return None
+        meaningful_result = self._check_meaningful_content(memory)
+        if meaningful_result.decision == WriteDecision.REJECT:
+            return meaningful_result
+        scores["meaningfulness"] = meaningful_result.score
+        reasons.extend(meaningful_result.reasons)
+        return None
 
-        # Check 6: Privacy concerns
-        if self.policy.block_pii:
-            pii_result = self._check_pii(memory)
-            if pii_result.decision == WriteDecision.REJECT:
-                return pii_result
+    def _apply_pii_gate(self, memory: MemoryItem) -> WriteResult | None:
+        if not self.policy.block_pii:
+            return None
+        pii_result = self._check_pii(memory)
+        if pii_result.decision == WriteDecision.REJECT:
+            return pii_result
+        return None
 
-        # Check 7: Contextual relevance
-        if context:
-            relevance_result = self._assess_relevance(memory, context)
-            scores["relevance"] = relevance_result.relevance_score or 0.5
-            reasons.extend(relevance_result.reasons)
+    def _apply_relevance(
+        self,
+        memory: MemoryItem,
+        context: dict[str, Any],
+        scores: dict[str, float],
+        reasons: list[str],
+    ) -> None:
+        relevance_result = self._assess_relevance(memory, context)
+        scores["relevance"] = relevance_result.relevance_score or 0.5
+        reasons.extend(relevance_result.reasons)
 
-        # Calculate overall score
+    def _finalize_decision(
+        self,
+        scores: dict[str, float],
+        reasons: list[str],
+    ) -> WriteResult:
         overall_score = sum(scores.values()) / len(scores) if scores else 0.5
-
-        # Make final decision
         if overall_score >= 0.6:
             decision = WriteDecision.ACCEPT
         elif overall_score >= 0.4:
             decision = WriteDecision.REQUEST_APPROVAL
         else:
             decision = WriteDecision.REJECT
-
         return WriteResult(
             decision=decision,
             reasons=reasons,
