@@ -54,6 +54,53 @@ class TransformersNER(BaseNER):
                 **kwargs,
             )
 
+    @staticmethod
+    def _coerce_score(score: Any) -> float | None:
+        try:
+            return float(score) if score is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _coerce_span(start: Any, end: Any) -> tuple[int | None, int | None]:
+        if isinstance(start, int) and isinstance(end, int):
+            return start, end
+        return None, None
+
+    def _parse_prediction(
+        self, text: str, pred: dict[str, Any]
+    ) -> tuple[str, str, float | None, str | None] | None:
+        entity_text = (pred.get("word") or pred.get("text") or "").strip()
+        if not entity_text:
+            return None
+
+        entity_type = pred.get("entity_group") or pred.get("entity") or pred.get("label") or "ENTITY"
+        score_f = self._coerce_score(pred.get("score"))
+        start, end = self._coerce_span(pred.get("start"), pred.get("end"))
+        context = self._get_context(text, start, end) if start is not None and end is not None else None
+        return entity_text, str(entity_type), score_f, context
+
+    @staticmethod
+    def _should_update_entity(
+        entity_text: str,
+        score_f: float | None,
+        confidence: dict[str, float],
+        entities: dict[str, str],
+    ) -> bool:
+        if entity_text not in entities:
+            return True
+        return score_f is not None and score_f > confidence.get(entity_text, -1.0)
+
+    @staticmethod
+    def _update_confidence(
+        entity_text: str,
+        score_f: float | None,
+        confidence: dict[str, float],
+    ) -> None:
+        if score_f is None:
+            return
+        confidence[entity_text] = max(confidence.get(entity_text, 0.0), score_f)
+
     async def extract_entities(self, text: str) -> NERResult:
         predictions: list[dict[str, Any]] = await asyncio.to_thread(self._pipeline, text)
 
@@ -62,34 +109,17 @@ class TransformersNER(BaseNER):
         confidence: dict[str, float] = {}
 
         for pred in predictions:
-            entity_text = (pred.get("word") or pred.get("text") or "").strip()
-            if not entity_text:
+            parsed = self._parse_prediction(text, pred)
+            if parsed is None:
                 continue
+            entity_text, entity_type, score_f, context = parsed
 
-            entity_type = (
-                pred.get("entity_group") or pred.get("entity") or pred.get("label") or "ENTITY"
-            )
-            score = pred.get("score")
-            try:
-                score_f = float(score) if score is not None else None
-            except (TypeError, ValueError):
-                score_f = None
+            if self._should_update_entity(entity_text, score_f, confidence, entities):
+                entities[entity_text] = entity_type
 
-            start = pred.get("start")
-            end = pred.get("end")
+            self._update_confidence(entity_text, score_f, confidence)
 
-            if (
-                entity_text not in entities
-                or score_f is not None
-                and score_f > confidence.get(entity_text, -1.0)
-            ):
-                entities[entity_text] = str(entity_type)
-
-            if score_f is not None:
-                confidence[entity_text] = max(confidence.get(entity_text, 0.0), score_f)
-
-            if isinstance(start, int) and isinstance(end, int):
-                context = self._get_context(text, start, end)
+            if context is not None:
                 mentions.setdefault(entity_text, []).append(context)
 
         return NERResult(

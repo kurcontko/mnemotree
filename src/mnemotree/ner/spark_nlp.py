@@ -35,6 +35,55 @@ class SparkNLPNER(BaseNER):
         self._input_col = input_col
         self._output_col = output_col
 
+    @staticmethod
+    def _item_to_dict(item: Any) -> dict[str, Any] | None:
+        data = item.asDict(recursive=True) if hasattr(item, "asDict") else item
+        return data if isinstance(data, dict) else None
+
+    @staticmethod
+    def _coerce_span(begin: Any, end: Any) -> tuple[int | None, int | None]:
+        try:
+            start = int(begin) if begin is not None else None
+            end_val = int(end) + 1 if end is not None else None
+        except (TypeError, ValueError):
+            return None, None
+        return start, end_val
+
+    @staticmethod
+    def _coerce_score(score: Any) -> float | None:
+        try:
+            return float(score) if score is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _parse_item(
+        self, text: str, item: Any
+    ) -> tuple[str, str, float | None, str | None] | None:
+        data = self._item_to_dict(item)
+        if data is None:
+            return None
+
+        entity_text = str(data.get("result") or "").strip()
+        if not entity_text:
+            return None
+
+        metadata = data.get("metadata") or {}
+        entity_type = metadata.get("entity") or metadata.get("label") or metadata.get("ner") or "ENTITY"
+        start, end = self._coerce_span(data.get("begin"), data.get("end"))
+        score_f = self._coerce_score(metadata.get("confidence") or metadata.get("score"))
+        context = self._get_context(text, start, end) if start is not None and end is not None else None
+        return entity_text, str(entity_type), score_f, context
+
+    @staticmethod
+    def _update_confidence(
+        entity_text: str,
+        score_f: float | None,
+        confidence: dict[str, float],
+    ) -> None:
+        if score_f is None:
+            return
+        confidence[entity_text] = max(confidence.get(entity_text, 0.0), score_f)
+
     async def extract_entities(self, text: str) -> NERResult:
         return await asyncio.to_thread(self._extract_sync, text)
 
@@ -48,37 +97,15 @@ class SparkNLPNER(BaseNER):
         confidence: dict[str, float] = {}
 
         for item in raw or []:
-            data = item.asDict(recursive=True) if hasattr(item, "asDict") else item
-            if not isinstance(data, dict):
+            parsed = self._parse_item(text, item)
+            if parsed is None:
                 continue
+            entity_text, entity_type, score_f, context = parsed
 
-            entity_text = str(data.get("result") or "").strip()
-            if not entity_text:
-                continue
+            entities[entity_text] = entity_type
+            self._update_confidence(entity_text, score_f, confidence)
 
-            metadata = data.get("metadata") or {}
-            entity_type = (
-                metadata.get("entity") or metadata.get("label") or metadata.get("ner") or "ENTITY"
-            )
-
-            try:
-                start = int(data.get("begin")) if data.get("begin") is not None else None
-                end = int(data.get("end")) + 1 if data.get("end") is not None else None
-            except (TypeError, ValueError):
-                start, end = None, None
-
-            score = metadata.get("confidence") or metadata.get("score")
-            try:
-                score_f = float(score) if score is not None else None
-            except (TypeError, ValueError):
-                score_f = None
-
-            entities[entity_text] = str(entity_type)
-            if score_f is not None:
-                confidence[entity_text] = max(confidence.get(entity_text, 0.0), score_f)
-
-            if start is not None and end is not None:
-                context = self._get_context(text, start, end)
+            if context is not None:
                 mentions.setdefault(entity_text, []).append(context)
 
         return NERResult(
