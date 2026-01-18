@@ -458,7 +458,7 @@ class TestStanzaNER:
             import mnemotree.ner.stanza as stanza_module
             importlib.reload(stanza_module)
 
-            ner = stanza_module.StanzaNER()
+            stanza_module.StanzaNER()
 
             mock_stanza.Pipeline.assert_called_once_with(
                 lang="en",
