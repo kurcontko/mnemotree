@@ -27,7 +27,7 @@ from .query_builders import UnsupportedQueryError
 
 logger = logging.getLogger(__name__)
 
-_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_]\w*$", re.ASCII)
 
 
 class SQLiteVecMemoryStore(BaseMemoryStore):
