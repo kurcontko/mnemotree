@@ -1,17 +1,15 @@
 import asyncio
-import os
-import sys
 from pathlib import Path
 
-import streamlit as st
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 # Load environment variables from .env file in project root
 env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 from chat_ui import MemoryChatUI
+
 from mnemotree.core.memory import MemoryCore
 from mnemotree.core.scoring import MemoryScoring
 from mnemotree.store.chromadb_store import ChromaMemoryStore
@@ -24,7 +22,7 @@ async def init_memory_core() -> MemoryCore:
         persist_directory=".mnemotree/chromadb"
     )
     await store.initialize()
-    
+
     # Alternative: Neo4j store (requires Neo4j running)
     # try:
     #     store = Neo4jMemoryStore(

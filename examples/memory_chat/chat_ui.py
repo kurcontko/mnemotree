@@ -1,14 +1,12 @@
-import asyncio
 import time
-from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, AsyncGenerator, List, Optional, Tuple
+from typing import Any
 
 import streamlit as st
-from langchain_core.documents import Document
-
 from inference import LangChainInference
+from langchain_core.documents import Document
 from message_types import MessageRole
+
 from mnemotree.core.memory import MemoryCore
 from mnemotree.core.models import MemoryItem
 from mnemotree.utils.memory_formatter import MemoryFormatter
@@ -133,27 +131,27 @@ class MemoryChatUI:
         """Format memory for inline display in the UI. Returns markdown formatted string."""
         if not memory:
             return ""
-            
+
         def format_rating(value: float) -> str:
             if value is None:
                 return ""
             filled = round(value * 5)
             return "★" * filled + "☆" * (5 - filled)
-        
+
         def format_value(value: float) -> str:
             return f"{value:.2f}" if value is not None else "N/A"
 
         sections = []
-        
+
         # Content Section
         sections.append(f"> {memory.content.replace(chr(10), chr(10) + '> ')}")  # Quote the content
-        
+
         # Key metrics in a concise format
         sections.append(
             f"**Importance:** {format_value(memory.importance)} {format_rating(memory.importance)} | "
             f"**Confidence:** {format_value(memory.confidence)} {format_rating(memory.confidence)}"
         )
-        
+
         # Links and source in condensed format
         if memory.linked_concepts:
             sections.append(f"**Links:** {', '.join(memory.linked_concepts)}")
@@ -161,18 +159,18 @@ class MemoryChatUI:
             sections.append(f"**Source:** {memory.source}")
 
         return "\n\n".join(sections)
-    
+
     def display_memory(self, memory: MemoryItem):
         with st.expander("🧠 Memory", expanded=True):
             col1, col2 = st.columns([3, 1])  # Adjust ratio as needed
             with col1:
                 st.markdown(self.format_memory_display(memory))
-                
+
             with col2:
                 st.caption(f"Type: {memory.memory_type.value}")
                 st.caption(f"ID: {memory.memory_id[:8]}")  # Show truncated ID
 
-    def filter_memories(self, memories: List, search_term: str) -> List:
+    def filter_memories(self, memories: list, search_term: str) -> list:
         """Filter memories based on search term."""
         if not search_term:
             return memories
@@ -288,7 +286,7 @@ class MemoryChatUI:
             mime="application/json"
         )
 
-    def validate_input(self, prompt: str) -> Tuple[bool, Optional[str]]:
+    def validate_input(self, prompt: str) -> tuple[bool, str | None]:
         """Validate user input."""
         if not prompt.strip():
             return False, "Please enter a non-empty message"
@@ -307,7 +305,7 @@ class MemoryChatUI:
                     message.get("timestamp")
                 ))
 
-    def format_message_for_display(self, role: str, content: str, timestamp: Optional[float] = None) -> str:
+    def format_message_for_display(self, role: str, content: str, timestamp: float | None = None) -> str:
         """Format message with optional timestamp and styling."""
         formatted_message = content
 
@@ -325,84 +323,99 @@ class MemoryChatUI:
                 st.warning(error_message)
                 return
 
-            st.session_state.messages.append({
-                "role": MessageRole.USER,
-                "content": prompt,
-                "timestamp": time.time()
-            })
-
-            with st.chat_message(MessageRole.USER):
-                st.markdown(prompt)
+            self._append_user_message(prompt)
 
             with st.chat_message(MessageRole.ASSISTANT):
-                response_container = st.container()
-                response_placeholder = response_container.empty()
-                progress_container = response_container.empty()
-                memory_placeholder = response_container.empty()
-                full_response = ""
+                await self._handle_assistant_response(prompt)
 
-                try:
-                    response_start_time = time.time()
-                    st.session_state.last_response_time = response_start_time
+    def _append_user_message(self, prompt: str):
+        st.session_state.messages.append({
+            "role": MessageRole.USER,
+            "content": prompt,
+            "timestamp": time.time()
+        })
+        with st.chat_message(MessageRole.USER):
+            st.markdown(prompt)
 
-                    with st.spinner("Retrieving memories..."):
-                        memories = []
-                        if st.session_state.memory_enabled:
-                            memories = await self.memory.recall(prompt, limit=20)
-                            lc_memories = [m.to_langchain_document() for m in memories]
+    async def _handle_assistant_response(self, prompt: str):
+        response_container = st.container()
+        response_placeholder = response_container.empty()
+        memory_placeholder = response_container.empty()
 
-                            # Display memories grouped in accordions
-                            self.display_memories(lc_memories)
+        try:
+            start_time = time.time()
+            st.session_state.last_response_time = start_time
 
-                        # Generate system message
-                        system_message = self.get_system_message(lc_memories)
+            memories, system_message = await self._retrieve_context(prompt)
 
-                    with st.spinner("Thinking..."):
-                        message_list = [
-                            {"role": m["role"], "content": m["content"]}
-                            for m in st.session_state.messages
-                        ]
+            full_response = await self._generate_response(
+                system_message, response_placeholder
+            )
 
-                        # Inject system prompt at the beginning of the message list
-                        system_prompt_message = {"role": "system", "content": system_message}
-                        message_list.insert(0, system_prompt_message)  # Insert at the top
+            self._display_response_time(response_container, start_time)
+            self._append_assistant_message(full_response)
 
-                        for chunk in self.inference_engine.chat_completion(
-                            message_list,
-                            max_tokens=st.session_state.get("max_tokens", 2048),
-                            temperature=st.session_state.get("temperature", 0.0)
-                        ):
-                            full_response += chunk
-                            response_placeholder.markdown(full_response + "▌")
+            await self._store_memory_interaction(
+                prompt, full_response, memory_placeholder
+            )
 
-                    response_placeholder.markdown(full_response)
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+            st.session_state.messages.pop()
 
-                    response_time = time.time() - response_start_time
-                    response_container.caption(f"Response time: {response_time:.2f}s")
+    async def _retrieve_context(self, prompt: str) -> tuple[list[Document], str]:
+        with st.spinner("Retrieving memories..."):
+            memories = []
+            if st.session_state.memory_enabled:
+                memory_items = await self.memory.recall(prompt, limit=20)
+                memories = [m.to_langchain_document() for m in memory_items]
+                self.display_memories(memories)
 
-                    st.session_state.messages.append({
-                        "role": MessageRole.ASSISTANT,
-                        "content": full_response,
-                        "timestamp": time.time()
-                    })
+            system_message = self.get_system_message(memories)
+            return memories, system_message
 
-                    if st.session_state.memory_enabled:
-                        
-                        with st.spinner("Storing memory..."):
-                            memory = await self.memory.remember(content=f"<user>\n{prompt}\n</user>\n\n<assistant>\n{full_response}\n</assistant>")
+    async def _generate_response(self, system_message: str, placeholder: Any) -> str:
+        full_response = ""
+        with st.spinner("Thinking..."):
+            message_list = [{"role": m["role"], "content": m["content"]}
+                          for m in st.session_state.messages]
+            message_list.insert(0, {"role": "system", "content": system_message})
 
-                            if memory:
-                                memory_placeholder.markdown(
-                                    #self.format_memory_display(memory),
-                                    self.display_memory(memory),
-                                    unsafe_allow_html=True
-                                )
+            for chunk in self.inference_engine.chat_completion(
+                message_list,
+                max_tokens=st.session_state.get("max_tokens", 2048),
+                temperature=st.session_state.get("temperature", 0.0)
+            ):
+                full_response += chunk
+                placeholder.markdown(full_response + "▌")
 
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-                    st.session_state.messages.pop()
+        placeholder.markdown(full_response)
+        return full_response
 
-    def display_memories(self, memories: List[Document]):
+    def _display_response_time(self, container: Any, start_time: float):
+        response_time = time.time() - start_time
+        container.caption(f"Response time: {response_time:.2f}s")
+
+    def _append_assistant_message(self, content: str):
+        st.session_state.messages.append({
+            "role": MessageRole.ASSISTANT,
+            "content": content,
+            "timestamp": time.time()
+        })
+
+    async def _store_memory_interaction(self, prompt: str, response: str, placeholder: Any):
+        if st.session_state.memory_enabled:
+            with st.spinner("Storing memory..."):
+                content = f"<user>\n{prompt}\n</user>\n\n<assistant>\n{response}\n</assistant>"
+                memory = await self.memory.remember(content=content)
+
+                if memory:
+                    placeholder.markdown(
+                        self.display_memory(memory),
+                        unsafe_allow_html=True
+                    )
+
+    def display_memories(self, memories: list[Document]):
         if not memories:
             st.warning("No memories found for your query.")
             return
@@ -435,7 +448,7 @@ class MemoryChatUI:
                                     # Assuming timestamp is a string, format it nicely
                                     formatted_time = datetime.fromisoformat(timestamp).strftime("%Y-%m-%d %H:%M")
                                     st.markdown(f"Time: *{formatted_time}*")
-                                except:
+                                except Exception:
                                     st.markdown(f"Time: *{timestamp}*")
 
                         # Memory content
@@ -450,11 +463,11 @@ class MemoryChatUI:
                         if idx < len(category_memories):
                             st.divider()
 
-    def display_memory_stats(self, memories: List[Document]):
+    def display_memory_stats(self, memories: list[Document]):
         """Display statistics about the memories"""
         total_memories = len(memories)
-        categories = set(doc.metadata.get('memory_category', 'uncategorized') for doc in memories)
-        memory_types = set(doc.metadata.get('memory_type', 'general') for doc in memories)
+        categories = {doc.metadata.get('memory_category', 'uncategorized') for doc in memories}
+        memory_types = {doc.metadata.get('memory_type', 'general') for doc in memories}
 
         stats_cols = st.columns(3)
         with stats_cols[0]:
