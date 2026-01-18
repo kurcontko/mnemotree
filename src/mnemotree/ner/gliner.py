@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .base import BaseNER, NERResult
 
 
@@ -42,9 +44,9 @@ class GLiNERNER(BaseNER):
         # GLiNER is synchronous, so run it directly
         predictions = self.model.predict_entities(text, self.entity_types, threshold=self.threshold)
 
-        entities = {}
-        mentions = {}
-        confidence = {}
+        entities: dict[str, str] = {}
+        mentions: dict[str, list[dict[str, Any]]] = {}
+        confidence: dict[str, float] = {}
 
         for pred in predictions:
             entity_text = pred["text"]
@@ -65,7 +67,7 @@ class GLiNERNER(BaseNER):
             start_idx = pred.get("start", 0)
             end_idx = pred.get("end", len(entity_text))
             context = self._get_context(text, start_idx, end_idx)
-            mentions[entity_text].append(context)
+            mentions[entity_text].append({"context": context, "position": (start_idx, end_idx)})
 
         return NERResult(entities=entities, mentions=mentions, confidence=confidence)
 

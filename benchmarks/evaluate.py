@@ -8,9 +8,10 @@ import os
 import shutil
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 try:
     from dotenv import load_dotenv
@@ -36,21 +37,21 @@ load_dotenv(PROJECT_ROOT / ".env")
 @dataclass
 class MemoryRecord:
     content: str
-    memory_type: Optional[str] = None
-    concepts: List[str] = field(default_factory=list)
-    entities: Dict[str, str] = field(default_factory=dict)
-    emotion: Optional[str] = None
-    importance: Optional[float] = None
+    memory_type: str | None = None
+    concepts: list[str] = field(default_factory=list)
+    entities: dict[str, str] = field(default_factory=dict)
+    emotion: str | None = None
+    importance: float | None = None
 
 
 @dataclass
 class QueryCase:
     query: str
-    expected_memories: List[str] = field(default_factory=list)
-    expected_ids: List[str] = field(default_factory=list)
-    expected_answer: Optional[str] = None
+    expected_memories: list[str] = field(default_factory=list)
+    expected_ids: list[str] = field(default_factory=list)
+    expected_answer: str | None = None
     description: str = ""
-    query_type: Optional[str] = None
+    query_type: str | None = None
 
 
 @dataclass
@@ -58,7 +59,7 @@ class EvalConfig:
     data_dir: Path
     memories_file: str
     queries_file: str
-    k_values: List[int]
+    k_values: list[int]
     store_type: str
     mode: str
     scoring: bool
@@ -77,9 +78,9 @@ class EvalConfig:
     rerank_candidates: int
     answer_eval: bool
     answer_k: int
-    answer_model: Optional[str]
-    judge_model: Optional[str]
-    output_path: Optional[Path]
+    answer_model: str | None
+    judge_model: str | None
+    output_path: Path | None
     dummy_embeddings: bool
 
 
@@ -291,7 +292,7 @@ class DummyEmbeddings:
     def __init__(self, dim: int = 64):
         self.dim = dim
 
-    async def aembed_query(self, text: str) -> List[float]:
+    async def aembed_query(self, text: str) -> list[float]:
         tokens = [t.lower() for t in text.split() if t.strip()]
         vec = [0.0] * self.dim
         for token in tokens:
@@ -307,7 +308,7 @@ class InMemoryVectorStore:
     """Simple in-memory vector store for benchmark smoke tests."""
 
     def __init__(self):
-        self._memories: Dict[str, Any] = {}
+        self._memories: dict[str, Any] = {}
 
     async def initialize(self) -> None:
         return None
@@ -321,10 +322,10 @@ class InMemoryVectorStore:
     async def delete_memory(self, memory_id: str, *, _cascade: bool = False) -> bool:
         return self._memories.pop(memory_id, None) is not None
 
-    async def update_connections(self, memory_id: str, **kwargs):
+    async def update_connections(self, _memory_id: str, **_kwargs):
         return None
 
-    async def update_memory_metadata(self, memory_id: str, metadata: Dict[str, Any]):
+    async def update_memory_metadata(self, memory_id: str, metadata: dict[str, Any]):
         memory = self._memories.get(memory_id)
         if not memory:
             return False
@@ -341,10 +342,10 @@ class InMemoryVectorStore:
 
     async def get_similar_memories(
         self,
-        query: str,
-        query_embedding: List[float],
+        _query: str,
+        query_embedding: list[float],
         top_k: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
     ):
         def cosine(a: Sequence[float], b: Sequence[float]) -> float:
             if not a or not b or len(a) != len(b):
@@ -364,7 +365,7 @@ class InMemoryVectorStore:
         return [memory for _, memory in scored[:top_k]]
 
 
-def _safe_float(value: Any) -> Optional[float]:
+def _safe_float(value: Any) -> float | None:
     if value is None:
         return None
     try:
@@ -373,8 +374,8 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
-def load_memories(path: Path) -> List[MemoryRecord]:
-    records: List[MemoryRecord] = []
+def load_memories(path: Path) -> list[MemoryRecord]:
+    records: list[MemoryRecord] = []
     with path.open() as handle:
         for line in handle:
             if not line.strip():
@@ -393,8 +394,8 @@ def load_memories(path: Path) -> List[MemoryRecord]:
     return records
 
 
-def load_queries(path: Path) -> List[QueryCase]:
-    queries: List[QueryCase] = []
+def load_queries(path: Path) -> list[QueryCase]:
+    queries: list[QueryCase] = []
     with path.open() as handle:
         for line in handle:
             if not line.strip():
@@ -462,7 +463,7 @@ def ndcg_at_k(retrieved: Sequence[str], relevant: set[str], k: int) -> float:
     return dcg / idcg if idcg > 0 else 0.0
 
 
-def _stringify_k_metrics(metrics: Dict[int, float]) -> Dict[str, float]:
+def _stringify_k_metrics(metrics: dict[int, float]) -> dict[str, float]:
     return {str(k): value for k, value in metrics.items()}
 
 
@@ -474,10 +475,10 @@ def _truncate(text: str, limit: int = 120) -> str:
 
 class AnswerJudgmentModel:
     def __init__(self, judge_model: str):
-        from pydantic import BaseModel, Field
         from langchain_core.output_parsers import JsonOutputParser
         from langchain_core.prompts import PromptTemplate
         from langchain_openai import ChatOpenAI
+        from pydantic import BaseModel, Field
 
         class AnswerJudgment(BaseModel):
             answer_relevance: float = Field(
@@ -487,7 +488,7 @@ class AnswerJudgmentModel:
                 description="Score between 0 and 1 for how well the answer is supported by the contexts."
             )
             explanation: str = Field(description="Short explanation for the scores.")
-            unsupported_claims: List[str] = Field(
+            unsupported_claims: list[str] = Field(
                 description="Any claims not supported by the contexts."
             )
 
@@ -509,7 +510,7 @@ class AnswerJudgmentModel:
         )
         self.chain = prompt | ChatOpenAI(model=judge_model, temperature=0) | parser
 
-    async def judge(self, question: str, answer: str, contexts: str) -> Dict[str, Any]:
+    async def judge(self, question: str, answer: str, contexts: str) -> dict[str, Any]:
         result = await self.chain.ainvoke(
             {"question": question, "answer": answer, "contexts": contexts}
         )
@@ -591,7 +592,7 @@ async def build_store(store_type: str, data_dir: Path):
 
 async def seed_memories(
     memory_core,
-    memories: List[MemoryRecord],
+    memories: list[MemoryRecord],
 ) -> int:
     from mnemotree.core.models import MemoryType
 
@@ -630,13 +631,13 @@ def build_context_block(memories: Sequence[Any]) -> str:
     return "\n".join(lines)
 
 
-def _relevant_set_for_query(query: QueryCase) -> Tuple[set[str], str]:
+def _relevant_set_for_query(query: QueryCase) -> tuple[set[str], str]:
     if query.expected_ids:
         return set(query.expected_ids), "memory_id"
     return set(query.expected_memories), "content"
 
 
-def _percentile(values: List[float], percentile: float) -> float:
+def _percentile(values: list[float], percentile: float) -> float:
     if not values:
         return 0.0
     if percentile <= 0:
@@ -657,9 +658,9 @@ def _percentile(values: List[float], percentile: float) -> float:
 
 def _build_answer_models(
     answer_eval: bool,
-    answer_model: Optional[str],
-    judge_model: Optional[str],
-) -> tuple[Optional["AnswerGenerator"], Optional["AnswerJudgmentModel"]]:
+    answer_model: str | None,
+    judge_model: str | None,
+) -> tuple[AnswerGenerator | None, AnswerJudgmentModel | None]:
     if not answer_eval:
         return None, None
     if not answer_model or not judge_model:
@@ -745,8 +746,8 @@ async def _maybe_add_answer_eval(
     retrieved_keys: Sequence[str],
     relevant_set: set[str],
     answer_k: int,
-    answer_generator: Optional["AnswerGenerator"],
-    answer_judge: Optional["AnswerJudgmentModel"],
+    answer_generator: AnswerGenerator | None,
+    answer_judge: AnswerJudgmentModel | None,
 ) -> None:
     if not answer_generator or not answer_judge:
         return
@@ -774,8 +775,8 @@ async def _evaluate_single_query(
     k_values: Sequence[int],
     scoring: bool,
     answer_k: int,
-    answer_generator: Optional["AnswerGenerator"],
-    answer_judge: Optional["AnswerJudgmentModel"],
+    answer_generator: AnswerGenerator | None,
+    answer_judge: AnswerJudgmentModel | None,
 ) -> dict[str, Any]:
     retrieved, recall_ms, query_embedding = await _collect_retrieval(
         memory_core, query.query, max_k=max_k, scoring=scoring
@@ -822,14 +823,14 @@ async def _evaluate_single_query(
 
 async def evaluate_queries(
     memory_core,
-    queries: List[QueryCase],
-    k_values: List[int],
+    queries: list[QueryCase],
+    k_values: list[int],
     scoring: bool,
     answer_eval: bool,
     answer_k: int,
-    answer_model: Optional[str],
-    judge_model: Optional[str],
-) -> Dict[str, Any]:
+    answer_model: str | None,
+    judge_model: str | None,
+) -> dict[str, Any]:
     max_k = max(k_values)
     answer_k = min(answer_k, max_k) if answer_k > 0 else max_k
     answer_generator, answer_judge = _build_answer_models(
@@ -857,11 +858,11 @@ async def evaluate_queries(
 
 
 def aggregate_results(
-    per_query_results: List[Dict[str, Any]],
-    k_values: List[int],
+    per_query_results: list[dict[str, Any]],
+    k_values: list[int],
     answer_eval: bool,
-) -> Dict[str, Any]:
-    def mean(values: List[float]) -> float:
+) -> dict[str, Any]:
+    def mean(values: list[float]) -> float:
         return sum(values) / len(values) if values else 0.0
 
     precision_summary = {}
@@ -921,7 +922,7 @@ def aggregate_results(
     return summary
 
 
-async def run_benchmark(config: EvalConfig) -> Dict[str, Any]:
+async def run_benchmark(config: EvalConfig) -> dict[str, Any]:
     from mnemotree.core.memory import MemoryCore, ModeDefaultsConfig, NerConfig, RetrievalConfig
 
     retrieval_mode = "hybrid" if config.retrieval_mode == "rrf" else config.retrieval_mode
@@ -933,12 +934,13 @@ async def run_benchmark(config: EvalConfig) -> Dict[str, Any]:
     queries = load_queries(queries_path)
 
     store = await build_store(config.store_type, config.data_dir)
-    
+
     # Setup NER if enabled
     ner = None
     if config.enable_ner:
         if config.ner_type == "llm":
             from langchain_openai import ChatOpenAI
+
             from mnemotree.ner.llm import LangchainLLMNER
             llm = ChatOpenAI(model=config.answer_model or DEFAULT_MODEL, temperature=0, api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
             ner = LangchainLLMNER(llm)
@@ -955,7 +957,7 @@ async def run_benchmark(config: EvalConfig) -> Dict[str, Any]:
             from mnemotree.ner.distilbert import DistilBERTNER
             ner = DistilBERTNER(model_name="dslim/distilbert-NER")
         # else: spacy is the default, let MemoryCore create it
-    
+
     embeddings = DummyEmbeddings() if config.dummy_embeddings else None
 
     memory_core = MemoryCore(

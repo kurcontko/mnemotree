@@ -241,7 +241,8 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                         f"VALUES ({placeholders})",
                         values,
                     )
-                    memory_row_id = int(cursor.lastrowid)
+                    last_id = cursor.lastrowid
+                    memory_row_id = int(last_id) if last_id is not None else 0
 
                 conn.execute(
                     f'DELETE FROM "{self._vector_table}" WHERE rowid = ?',

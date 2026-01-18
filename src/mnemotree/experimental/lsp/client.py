@@ -217,7 +217,8 @@ class LspClient:
         """Sends textDocument/documentSymbol."""
         uri = f"file://{file_path}"
         params = {"textDocument": {"uri": uri}}
-        return await self.request("textDocument/documentSymbol", params) # type: ignore
+        result: Any = await self.request("textDocument/documentSymbol", params)
+        return result
 
     async def text_document_references(self, file_path: str, line: int, character: int) -> list[dict[str, Any]]:
         """Sends textDocument/references."""
@@ -227,4 +228,5 @@ class LspClient:
             "position": {"line": line, "character": character},
             "context": {"includeDeclaration": False},
         }
-        return await self.request("textDocument/references", params) # type: ignore
+        result: Any = await self.request("textDocument/references", params)
+        return result

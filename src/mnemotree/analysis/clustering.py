@@ -84,7 +84,7 @@ class MemoryClusterer:
             ]
             memory_texts = [f"- {m.content}" for m in cluster_memories]
             summary = await self.summarizer.summarize("\n".join(memory_texts))
-            cluster_summaries[cluster_id] = summary
+            cluster_summaries[cluster_id] = str(summary) if summary else ""
 
         return ClusteringResult(
             cluster_ids=clusters.cluster_ids,

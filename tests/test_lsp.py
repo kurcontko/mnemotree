@@ -1,13 +1,19 @@
 import asyncio
 import logging
 import os
-from pathlib import Path
 
 import pytest
+
+try:
+    import aiofiles
+    HAS_AIOFILES = True
+except ImportError:
+    HAS_AIOFILES = False
 
 from mnemotree.experimental.lsp.manager import LspManager
 
 
+@pytest.mark.skipif(not HAS_AIOFILES, reason="aiofiles not installed")
 @pytest.mark.asyncio
 async def test_python_lsp_integration():
     """
@@ -30,7 +36,8 @@ async def test_python_lsp_integration():
         if not os.path.exists(test_file_path):
             pytest.skip("Test file not found")
 
-        content = await asyncio.to_thread(lambda: Path(test_file_path).read_text())
+        async with aiofiles.open(test_file_path) as f:
+            content = await f.read()
 
         logging.info("Opening document")
         await client.text_document_did_open(test_file_path, content)

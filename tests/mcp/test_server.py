@@ -563,8 +563,8 @@ async def test_forget_reflect_and_helpers(monkeypatch):
 
     assert await server.forget("mem-id") is True
     assert await server.reflect(min_importance=0.95) == {"summary": "ok"}
-    assert await server.memory_types() == [item.value for item in MemoryType]
-    assert await server.health() == {"status": "ok"}
+    assert server.memory_types() == [item.value for item in MemoryType]
+    assert server.health() == {"status": "ok"}
 
 
 def test_get_mcp_returns_cached_instance(monkeypatch):

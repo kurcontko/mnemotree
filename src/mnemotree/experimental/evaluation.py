@@ -240,16 +240,16 @@ class MemoryEvaluator:
             precisions = [r.precision_at_k.get(k, 0.0) for r in query_results]
             f1s = [r.f1_at_k.get(k, 0.0) for r in query_results]
 
-            benchmark.avg_recall_at_k[k] = np.mean(recalls)
-            benchmark.avg_precision_at_k[k] = np.mean(precisions)
-            benchmark.avg_f1_at_k[k] = np.mean(f1s)
+            benchmark.avg_recall_at_k[k] = float(np.mean(recalls))
+            benchmark.avg_precision_at_k[k] = float(np.mean(precisions))
+            benchmark.avg_f1_at_k[k] = float(np.mean(f1s))
 
         # Aggregate MRR and NDCG
         mrrs = [r.mrr for r in query_results if r.mrr is not None]
         ndcgs = [r.ndcg for r in query_results if r.ndcg is not None]
 
-        benchmark.avg_mrr = np.mean(mrrs) if mrrs else 0.0
-        benchmark.avg_ndcg = np.mean(ndcgs) if ndcgs else 0.0
+        benchmark.avg_mrr = float(np.mean(mrrs)) if mrrs else 0.0
+        benchmark.avg_ndcg = float(np.mean(ndcgs)) if ndcgs else 0.0
 
         # Calculate system health metrics
         benchmark.drift_rate = self.calculate_drift_rate(all_memories)
@@ -561,7 +561,7 @@ class SyntheticDatasetGenerator:
         if len(memories) < 10:
             raise ValueError("Need at least 10 memories to generate queries")
 
-        queries = []
+        queries: list[EvaluationQuery] = []
 
         for base_memory in self._sample_memories(memories, num_queries):
             query_text = self._build_query_text(base_memory)

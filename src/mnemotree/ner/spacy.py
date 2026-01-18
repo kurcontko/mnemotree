@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import spacy
 
@@ -24,8 +25,8 @@ class SpacyNER(BaseNER):
         # Process using spaCy in a thread pool to avoid blocking
         doc = await asyncio.to_thread(self.nlp, text)
 
-        entities = {}
-        mentions = {}
+        entities: dict[str, str] = {}
+        mentions: dict[str, list[dict[str, Any]]] = {}
 
         for ent in doc.ents:
             # Store entity and type
@@ -35,6 +36,6 @@ class SpacyNER(BaseNER):
             context = self._get_context(text, ent.start_char, ent.end_char)
             if ent.text not in mentions:
                 mentions[ent.text] = []
-            mentions[ent.text].append(context)
+            mentions[ent.text].append({"context": context, "position": (ent.start_char, ent.end_char)})
 
         return NERResult(entities=entities, mentions=mentions)

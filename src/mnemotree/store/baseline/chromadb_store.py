@@ -85,15 +85,18 @@ class BaselineChromaStore(BaseMemoryStore):
 
     async def store_memory(self, memory: MemoryItem) -> None:
         """Store memory with only embeddings"""
-        self.collection.add(
-            ids=[memory.memory_id],
-            embeddings=[memory.embedding],
-            documents=[memory.content],
-            metadatas=[{"memory_id": memory.memory_id}],
-        )
+        if self.collection is not None:
+            self.collection.add(
+                ids=[memory.memory_id],
+                embeddings=[memory.embedding],
+                documents=[memory.content],
+                metadatas=[{"memory_id": memory.memory_id}],
+            )
 
     async def get_memory(self, memory_id: str) -> MemoryItem | None:
         """Retrieve memory by ID"""
+        if self.collection is None:
+            return None
         result = self.collection.get(ids=[memory_id], include=["embeddings", "documents"])
 
         if not result["ids"]:
@@ -119,7 +122,8 @@ class BaselineChromaStore(BaseMemoryStore):
             existing = await self.get_memory(memory_id)
             if not existing:
                 return False
-            self.collection.delete(ids=[memory_id])
+            if self.collection is not None:
+                self.collection.delete(ids=[memory_id])
             return True
         except ChromaError:
             logger.exception(
@@ -137,6 +141,8 @@ class BaselineChromaStore(BaseMemoryStore):
         filters: dict[str, Any] | None = None,
     ) -> list[MemoryItem]:
         """Get similar memories using only vector similarity"""
+        if self.collection is None:
+            return []
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k,

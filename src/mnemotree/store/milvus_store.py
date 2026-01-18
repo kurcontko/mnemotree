@@ -140,16 +140,18 @@ class MilvusMemoryStore(BaseMemoryStore):
         await self.initialize()
         start = time.perf_counter()
         try:
-            timestamp = memory.timestamp
-            if isinstance(timestamp, datetime):
-                timestamp = timestamp.isoformat()
+            timestamp_value: str
+            if isinstance(memory.timestamp, datetime):
+                timestamp_value = memory.timestamp.isoformat()
+            else:
+                timestamp_value = str(memory.timestamp)
 
             # Prepare data for insertion
             data = {
                 "memory_id": [memory.memory_id],
                 "content": [memory.content],
                 "memory_type": [memory.memory_type.value],
-                "timestamp": [timestamp],
+                "timestamp": [timestamp_value],
                 "importance": [float(memory.importance)],
                 "confidence": [float(memory.confidence)],
                 "tags": [json.dumps(memory.tags)],
@@ -160,8 +162,9 @@ class MilvusMemoryStore(BaseMemoryStore):
             }
 
             # Insert into Milvus
-            self.collection.insert(data)
-            self.collection.flush()
+            if self.collection is not None:
+                self.collection.insert(data)
+                self.collection.flush()
             logger.info(
                 "Successfully stored memory %s",
                 memory.memory_id,
@@ -190,6 +193,8 @@ class MilvusMemoryStore(BaseMemoryStore):
         start = time.perf_counter()
         try:
             # Query by memory_id
+            if self.collection is None:
+                return None
             self.collection.load()
             results = self.collection.query(expr=f'memory_id == "{memory_id}"', output_fields=["*"])
 
@@ -251,6 +256,8 @@ class MilvusMemoryStore(BaseMemoryStore):
                     ),
                 )
                 return False
+            if self.collection is None:
+                return False
             expr = f'memory_id == "{memory_id}"'
             self.collection.delete(expr)
             logger.info(
@@ -286,6 +293,8 @@ class MilvusMemoryStore(BaseMemoryStore):
         await self.initialize()
         start = time.perf_counter()
         try:
+            if self.collection is None:
+                return []
             search_params = {
                 "metric_type": "COSINE",
                 "params": {"nprobe": 10},
@@ -346,6 +355,8 @@ class MilvusMemoryStore(BaseMemoryStore):
         return " && ".join(expressions) if expressions else ""
 
     def _search_vector_query(self, query: MemoryQuery, expr: str) -> list[MemoryItem]:
+        if self.collection is None:
+            return []
         search_params = {
             "metric_type": "COSINE",
             "params": {"nprobe": 10},
@@ -362,6 +373,8 @@ class MilvusMemoryStore(BaseMemoryStore):
         return self._process_search_results(results)
 
     def _search_scalar_query(self, query: MemoryQuery, expr: str) -> list[MemoryItem]:
+        if self.collection is None:
+            return []
         results = self.collection.query(
             expr=expr if expr else None, output_fields=["*"], limit=query.limit
         )
@@ -379,15 +392,20 @@ class MilvusMemoryStore(BaseMemoryStore):
         # Assuming record acts like a dict in both cases or normalized before calling
         get_field = record.get if isinstance(record, dict) else lambda k: record.get(k)
 
+        importance_val = get_field("importance")
+        confidence_val = get_field("confidence")
+        tags_val = get_field("tags")
+        emotions_val = get_field("emotions")
+
         memory_data = {
             "memory_id": get_field("memory_id"),
             "content": get_field("content"),
             "memory_type": MemoryType(get_field("memory_type")),
             "timestamp": get_field("timestamp"),
-            "importance": float(get_field("importance")),
-            "confidence": float(get_field("confidence")),
-            "tags": json.loads(get_field("tags")),
-            "emotions": json.loads(get_field("emotions")),
+            "importance": float(importance_val) if importance_val is not None else 0.0,
+            "confidence": float(confidence_val) if confidence_val is not None else 0.0,
+            "tags": json.loads(tags_val) if tags_val is not None else [],
+            "emotions": json.loads(emotions_val) if emotions_val is not None else [],
             "source": get_field("source") if get_field("source") else None,
             "context": json_loads_dict(get_field("context")),
             "embedding": get_field("embedding"),

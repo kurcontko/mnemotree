@@ -141,6 +141,8 @@ class ChromaMemoryStore(BaseMemoryStore):
         include = ["documents", "metadatas"]
         if include_embeddings:
             include.append("embeddings")
+        if self.collection is None:
+            return []
         results = self.collection.get(include=include)
         ids = results.get("ids") or []
         if not ids:
@@ -166,12 +168,13 @@ class ChromaMemoryStore(BaseMemoryStore):
             metadata = chroma_metadata_from_memory(memory)
 
             # Store in ChromaDB
-            self.collection.upsert(
-                ids=[memory.memory_id],
-                embeddings=[memory.embedding],
-                documents=[memory.content],
-                metadatas=[metadata],
-            )
+            if self.collection is not None:
+                self.collection.upsert(
+                    ids=[memory.memory_id],
+                    embeddings=[memory.embedding],
+                    documents=[memory.content],
+                    metadatas=[metadata],
+                )
 
             await self._update_graph_index_safe(memory, start)
 
@@ -230,6 +233,8 @@ class ChromaMemoryStore(BaseMemoryStore):
         await self.initialize()
         start = time.perf_counter()
         try:
+            if self.collection is None:
+                return None
             result = self.collection.get(
                 ids=[memory_id], include=["embeddings", "documents", "metadatas"]
             )
@@ -281,7 +286,8 @@ class ChromaMemoryStore(BaseMemoryStore):
                     ),
                 )
                 return False
-            self.collection.delete(ids=[memory_id])
+            if self.collection is not None:
+                self.collection.delete(ids=[memory_id])
             if self.graph_index:
                 try:
                     self.graph_index.delete_memory(memory_id)
@@ -333,6 +339,8 @@ class ChromaMemoryStore(BaseMemoryStore):
         await self.initialize()
         start = time.perf_counter()
         try:
+            if self.collection is None:
+                return []
             results = self.collection.query(
                 query_texts=[query],
                 query_embeddings=[query_embedding],
@@ -368,6 +376,8 @@ class ChromaMemoryStore(BaseMemoryStore):
         await self.initialize()
         start = time.perf_counter()
         try:
+            if self.collection is None:
+                return []
             # Build where clause for metadata filtering
             where: dict[str, str] = {}
             if query.filters:
@@ -535,6 +545,8 @@ class ChromaMemoryStore(BaseMemoryStore):
         limit: int,
     ) -> list[MemoryItem]:
         entity_set = build_entity_set(entities)
+        if self.collection is None:
+            return []
         all_results = self.collection.get(include=["embeddings", "documents", "metadatas"])
 
         if not all_results["ids"]:
@@ -560,6 +572,8 @@ class ChromaMemoryStore(BaseMemoryStore):
         return matching_memories
 
     def _reset_graph_index(self) -> bool:
+        if self.graph_index is None:
+            return True
         try:
             self.graph_index.reset()
         except Exception as exc:
@@ -576,6 +590,8 @@ class ChromaMemoryStore(BaseMemoryStore):
         return True
 
     def _iter_collection_batches(self, *, batch_size: int) -> Iterator[dict[str, Any]]:
+        if self.collection is None:
+            return
         offset = 0
         while True:
             try:
@@ -597,6 +613,8 @@ class ChromaMemoryStore(BaseMemoryStore):
             offset += len(ids)
 
     def _upsert_graph_batch(self, batch: dict[str, Any]) -> int:
+        if self.graph_index is None:
+            return 0
         ids = batch.get("ids") or []
         rebuilt = 0
         for idx, memory_id in enumerate(ids):
@@ -684,6 +702,8 @@ class ChromaMemoryStore(BaseMemoryStore):
 
     async def _get_memories_by_ids(self, memory_ids: list[str]) -> dict[str, MemoryItem]:
         if not memory_ids:
+            return {}
+        if self.collection is None:
             return {}
         result = self.collection.get(
             ids=memory_ids, include=["embeddings", "documents", "metadatas"]

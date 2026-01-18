@@ -18,6 +18,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from sklearn.cluster import DBSCAN, AgglomerativeClustering
 
 from ..analysis.clustering import MemoryClusterer
+from ..analysis.summarizer import Summarizer
 from ..core.models import MemoryItem, MemoryType, coerce_datetime
 
 
@@ -91,7 +92,7 @@ class MemoryConsolidator:
             config: Consolidation configuration
         """
         self.llm = llm
-        self.clusterer = clusterer or MemoryClusterer()
+        self.clusterer = clusterer or MemoryClusterer(summarizer=Summarizer(llm=llm))
         self.config = config or ConsolidationConfig()
 
     async def consolidate(

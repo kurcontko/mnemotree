@@ -3,23 +3,23 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 
-def _load(path: Path) -> Dict[str, Any]:
+def _load(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def _metrics(doc: Dict[str, Any]) -> Dict[str, Any]:
+def _metrics(doc: dict[str, Any]) -> dict[str, Any]:
     return doc["summary"]["metrics"]
 
 
-def _as_float_map(d: Dict[str, Any]) -> Dict[int, float]:
+def _as_float_map(d: dict[str, Any]) -> dict[int, float]:
     return {int(k): float(v) for k, v in d.items()}
 
 
-def _row(path: Path) -> Dict[str, Any]:
+def _row(path: Path) -> dict[str, Any]:
     doc = _load(path)
     cfg = doc.get("config", {})
     m = _metrics(doc)
@@ -48,9 +48,9 @@ def _delta(x: float, baseline: float) -> str:
 
 
 def _print_table(
-    baseline: Dict[str, Any],
-    candidates: List[Dict[str, Any]],
-    k_values: List[int],
+    baseline: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    k_values: list[int],
 ) -> None:
     header = [
         "file",
@@ -66,7 +66,7 @@ def _print_table(
     print("| " + " | ".join(header) + " |")
     print("| " + " | ".join(["---"] * len(header)) + " |")
 
-    def emit(row: Dict[str, Any]) -> None:
+    def emit(row: dict[str, Any]) -> None:
         vals = [
             Path(row["path"]).name,
             str(row.get("store")),

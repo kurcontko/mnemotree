@@ -31,7 +31,7 @@ def create_ner(backend: str, **kwargs: object) -> BaseNER:
     if key in {"spark", "spark-nlp", "sparknlp"}:
         return SparkNLPNER(**kwargs)  # type: ignore[arg-type]
     if key in {"llm", "langchain"}:
-        return LangchainLLMNER(**kwargs)  # type: ignore[arg-type]
+        return LangchainLLMNER(**kwargs)
     raise ValueError(f"Unknown NER backend: {backend!r}")
 
 

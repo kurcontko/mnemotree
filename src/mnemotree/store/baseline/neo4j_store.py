@@ -25,7 +25,7 @@ class BaselineNeo4jMemoryStore(BaseMemoryStore):
 
     def __init__(self, uri: str, user: str, password: str):
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
-        self._memory_locks = {}
+        self._memory_locks: dict[str, Lock] = {}
         self._global_lock = Lock()
 
     async def initialize(self):

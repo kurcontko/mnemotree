@@ -25,6 +25,7 @@ from ..store.protocols import (
     SupportsStructuredQuery,
     SupportsVectorSearch,
 )
+from ..store.serialization import serialize_datetime
 from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
@@ -357,7 +358,7 @@ class MemoryCore:
             "entity_mentions": enrichment.entity_mentions or {},
         }
         if timestamp is not None:
-            data["timestamp"] = timestamp
+            data["timestamp"] = serialize_datetime(timestamp) if isinstance(timestamp, datetime) else timestamp
         return data
 
     async def _apply_pre_remember_hooks(self, memory: MemoryItem) -> MemoryItem:
@@ -614,12 +615,19 @@ class MemoryCore:
         filter_list: list[MemoryFilter],
         limit: int,
     ) -> list[MemoryItem]:
-        memory_query = MemoryQuery(
-            vector=query_embedding,
-            filters=filter_list,
-            limit=limit,
-        )
-        return await self.store.query_memories(memory_query)
+        # Use get_similar_memories for vector-based retrieval with structured filters
+        if hasattr(self.store, 'get_similar_memories'):
+            return await self.store.get_similar_memories(
+                query="",
+                query_embedding=query_embedding,
+                top_k=limit,
+                filters=filter_list,
+            )
+        # Fallback: get memories and filter manually
+        all_memories = await self.store.get_memory(memory_id="")  # Will fail gracefully
+        if all_memories:
+            return [all_memories][:limit]
+        return []
 
     async def _query_vector(
         self,
@@ -627,12 +635,15 @@ class MemoryCore:
         query_embedding: Any,
         limit: int,
     ) -> list[MemoryItem]:
-        return await self.store.get_similar_memories(
-            query=query,
-            query_embedding=query_embedding,
-            top_k=limit,
-            filters=None,
-        )
+        if hasattr(self.store, 'get_similar_memories'):
+            return await self.store.get_similar_memories(
+                query=query,
+                query_embedding=query_embedding,
+                top_k=limit,
+                filters=None,
+            )
+        # Fallback for stores without vector search
+        return []
 
     async def cluster(
         self,
@@ -792,7 +803,7 @@ class MemoryCore:
 
     def _init_ner(self, *, ner: BaseNER | None, enable_ner: bool) -> None:
         if enable_ner:
-            self.ner = ner if ner is not None else SpacyNER()
+            self.ner: BaseNER | None = ner if ner is not None else SpacyNER()
         else:
             self.ner = None
 

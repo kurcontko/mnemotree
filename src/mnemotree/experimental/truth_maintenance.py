@@ -62,15 +62,15 @@ class Claim(BaseModel):
     - Retired when no longer relevant
     """
 
+    # Full statement
+    statement: str  # Natural language form
+
     claim_id: str = Field(default_factory=lambda: str(uuid4()))
 
     # Core content
-    subject: str  # What the claim is about
-    predicate: str  # The relationship or property
-    object: str  # The value or target
-
-    # Full statement
-    statement: str  # Natural language form
+    subject: str = ""  # What the claim is about
+    predicate: str = ""  # The relationship or property
+    object: str = ""  # The value or target
 
     # Provenance
     source_memory_ids: list[str] = Field(default_factory=list)
@@ -401,13 +401,13 @@ Severity:"""
             # Weighted combination
             scores = []
             for claim in claims:
-                recency_score = (datetime.now(timezone.utc) - claim.updated_at).days
-                recency_score = 1.0 / (1.0 + recency_score / 30.0)
+                recency_days = (datetime.now(timezone.utc) - claim.updated_at).days
+                recency_score = 1.0 / (1.0 + recency_days / 30.0)
 
                 score = (
                     0.4 * claim.confidence
                     + 0.3 * recency_score
-                    + 0.3 * min(1.0, claim.access_count / 10.0)
+                    + 0.3 * min(1.0, float(claim.access_count) / 10.0)
                 )
                 scores.append(score)
             winner = claims[scores.index(max(scores))]

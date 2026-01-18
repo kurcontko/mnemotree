@@ -553,7 +553,8 @@ class ContextAwareWriteGate:
         ]
 
         # Check limit
-        if len(self._write_timestamps[user_id]) >= self.policy.max_memories_per_hour:
+        max_per_hour = self.policy.max_memories_per_hour
+        if max_per_hour is not None and len(self._write_timestamps[user_id]) >= max_per_hour:
             return False
 
         # Record this write

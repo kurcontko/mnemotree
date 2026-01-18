@@ -335,12 +335,12 @@ async def reflect(min_importance: float = 0.7) -> dict[str, Any]:
     return await memory_core.reflect(min_importance=min_importance)
 
 
-async def memory_types() -> list[str]:
+def memory_types() -> list[str]:
     """Return supported memory type values."""
     return [memory_type.value for memory_type in MemoryType]
 
 
-async def health() -> dict[str, str]:
+def health() -> dict[str, str]:
     """Simple health check."""
     return {"status": "ok"}
 
