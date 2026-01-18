@@ -55,6 +55,7 @@ jobs:
         with:
           args: >
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
