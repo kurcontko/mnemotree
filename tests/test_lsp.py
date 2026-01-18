@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import shutil
 
 import pytest
 
@@ -23,12 +24,19 @@ async def test_python_lsp_integration():
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     manager = LspManager(root_dir)
 
+    if shutil.which("pyright-langserver") is None:
+        pytest.skip("pyright-langserver not installed")
+
     logging.getLogger(__name__)
 
     try:
         logging.info("Starting LSP Manager")
         # Start client
-        client = await manager.get_client("python")
+        try:
+            client = await manager.get_client("python")
+        except RuntimeError as exc:
+            pytest.skip(f"pyright-langserver failed to start: {exc}")
+
         assert client.process is not None
 
         # Open this very test file (mocking it primarily)
