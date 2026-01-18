@@ -24,6 +24,11 @@ class IngestionRequest:
     summarize: bool | None
     references: list[str] | None
     timestamp: datetime | None
+    source: str | None
+    author: str | None
+    metadata: dict[str, object] | None
+    conversation_id: str | None
+    user_id: str | None
 
 
 class MemoryIngestionQueue:
