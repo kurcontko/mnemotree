@@ -1,42 +1,39 @@
 import asyncio
-import os
-import sys
+from pathlib import Path
 
-import streamlit as st
+from chat_ui import MemoryChatUI
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-# Add project root to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from mnemotree.core.memory import MemoryCore
+from mnemotree.core.scoring import MemoryScoring
+from mnemotree.store.chromadb_store import ChromaMemoryStore
 
-from examples.memory_chat.chat_ui import MemoryChatUI
-from src.core.memory import MemoryCore
-from src.store.neo4j_store import Neo4jMemoryStore
-from src.store.chromadb_store import ChromaMemoryStore
+# Load environment variables from .env file in project root
+env_path = Path(__file__).parent.parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 async def init_memory_core() -> MemoryCore:
-    """Initialize MemoryCore with storage."""
-    # Initialize store
+    """Initialize MemoryEngine with storage."""
+    # Initialize store - using ChromaDB with local persistence by default
+    store = ChromaMemoryStore(
+        persist_directory=".mnemotree/chromadb"
+    )
+    await store.initialize()
 
-    # Neo4j store
-    try:
-        store = Neo4jMemoryStore(
-            uri="bolt://localhost:7687",
-            user="neo4j",
-            password="password"
-        )
-        await store.initialize()
-    except Exception as e:
-        print(f"Neo4j store failed to initialize: {e}")
-        store = ChromaMemoryStore()
-        await store.initialize()
-
-    # Chroma store
-    # store = ChromaMemoryStore(
-    #     host="localhost",
-    #     port=8000,
-    # )
-    # await store.initialize()
+    # Alternative: Neo4j store (requires Neo4j running)
+    # try:
+    #     store = Neo4jMemoryStore(
+    #         uri="bolt://localhost:7687",
+    #         user="neo4j",
+    #         password="password"
+    #     )
+    #     await store.initialize()
+    # except Exception as e:
+    #     print(f"Neo4j store failed to initialize: {e}")
+    #     store = ChromaMemoryStore(persist_directory=".mnemotree/chromadb")
+    #     await store.initialize()
 
     # Initialize embeddings
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
@@ -47,11 +44,19 @@ async def init_memory_core() -> MemoryCore:
         temperature=0
     )
 
+    # Tune scoring to favor query relevance and keep more candidates for recall
+    memory_scoring = MemoryScoring(
+        query_relevance_weight=0.35,
+        score_threshold=0.85,
+    )
+
     # Initialize MemoryCore
     memory_core = MemoryCore(
+        store=store,
         llm=llm,
         embeddings=embeddings,
-        store=store
+        memory_scoring=memory_scoring,
+        enable_ner=False  # Disable NER to avoid needing spacy model
     )
     return memory_core
 

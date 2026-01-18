@@ -1,14 +1,15 @@
 import os
-from typing import Iterator, List, Dict, Tuple, Any, AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
+from typing import Any
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
 
 class LangChainInference:
     """LangChain-based inference engine using OpenAI."""
 
-    def __init__(self, 
+    def __init__(self,
                  model_name: str = "gpt-4o-mini",
                  api_key: str = None,
                  base_url: str = None,
@@ -40,7 +41,7 @@ class LangChainInference:
 
         self.client = ChatOpenAI(**kwargs)
 
-    def _convert_messages(self, messages: List[Dict[str, str]]) -> List[Any]:
+    def _convert_messages(self, messages: list[dict[str, str]]) -> list[Any]:
         """Convert dict messages to LangChain message objects."""
         langchain_messages = []
         for message in messages:
@@ -58,7 +59,7 @@ class LangChainInference:
 
     def chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         stream: bool = True,
         max_tokens: int = 2048,
         temperature: float = 0.0
@@ -85,7 +86,7 @@ class LangChainInference:
 
     async def achat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         stream: bool = True,
         max_tokens: int = 2048,
         temperature: float = 0.0

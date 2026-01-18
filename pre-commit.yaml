@@ -1,0 +1,36 @@
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: make lint
+        language: system
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff-format
+        entry: make format
+        language: system
+        pass_filenames: false
+      - id: mypy
+        name: mypy
+        entry: make typecheck
+        language: system
+        pass_filenames: false
+      - id: pytest
+        name: pytest
+        entry: make test
+        language: system
+        pass_filenames: false

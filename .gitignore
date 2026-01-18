@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.pycache/
 *.py[cod]
 *$py.class
 
@@ -167,3 +168,5 @@ cython_debug/
 
 # Drafts
 /draft
+
+.serena

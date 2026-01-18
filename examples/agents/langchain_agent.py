@@ -1,18 +1,16 @@
 import asyncio
 import os
 import sys
-from typing import List
 
 from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import Tool
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from src.core.memory import MemoryCore
-from src.store.neo4j_store import Neo4jMemoryStore
 from src.store.chromadb_store import ChromaMemoryStore
 from src.tools.langchain import LangchainMemoryTool
 
@@ -95,5 +93,5 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-    
+
     asyncio.run(main())
