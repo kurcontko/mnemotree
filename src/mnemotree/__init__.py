@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .core.builder import MemoryCoreBuilder
-from .core.memory import MemoryCore, MemoryMode
+from .core.memory import MemoryCore, MemoryMode, RecallFilters, RecallOptions, RememberOptions
 from .errors import (
     ConfigurationError,
     DependencyError,
@@ -17,6 +17,9 @@ __all__ = [
     "MemoryCore",
     "MemoryCoreBuilder",
     "MemoryMode",
+    "RememberOptions",
+    "RecallFilters",
+    "RecallOptions",
     # Error types
     "MnemotreeError",
     "StoreError",
