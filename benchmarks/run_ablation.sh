@@ -98,7 +98,7 @@ for name, path in files.items():
         r10 = metrics['recall@k']['10'] * 100
         ndcg10 = metrics['ndcg@k']['10'] * 100
         mrr = metrics['mrr'] * 100
-        
+
         if baseline_metrics is None:
             baseline_metrics = {'p1': p1, 'r10': r10, 'ndcg10': ndcg10, 'mrr': mrr}
             print(f'{name:<25} {p1:>6.1f}%  {r10:>6.1f}%  {ndcg10:>8.1f}%  {mrr:>6.1f}%')
