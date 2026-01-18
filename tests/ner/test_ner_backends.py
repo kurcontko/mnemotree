@@ -1081,3 +1081,69 @@ class TestSparkNLPNER:
             result = await ner.extract_entities("Test")
 
             assert result.entities.get("Test") == "ENTITY"  # Default fallback
+
+
+class TestSpacyNER:
+    """Tests for SpacyNER backend with mocked spacy."""
+
+    def test_initialization_loads_model(self):
+        """SpacyNER loads spacy model on init."""
+        import importlib
+        import sys
+
+        mock_spacy = MagicMock()
+        mock_nlp = MagicMock()
+        mock_spacy.load.return_value = mock_nlp
+
+        with patch.dict(sys.modules, {"spacy": mock_spacy}):
+            import mnemotree.ner.spacy as spacy_module
+
+            importlib.reload(spacy_module)
+
+            ner = spacy_module.SpacyNER(model="en_core_web_lg")
+
+            mock_spacy.load.assert_called_once_with("en_core_web_lg")
+            assert ner.nlp is mock_nlp
+
+    def test_initialization_default_model(self):
+        """SpacyNER uses default model if not specified."""
+        import importlib
+        import sys
+
+        mock_spacy = MagicMock()
+        mock_spacy.load.return_value = MagicMock()
+
+        with patch.dict(sys.modules, {"spacy": mock_spacy}):
+            import mnemotree.ner.spacy as spacy_module
+
+            importlib.reload(spacy_module)
+
+            spacy_module.SpacyNER()
+
+            mock_spacy.load.assert_called_once_with("en_core_web_sm")
+
+    @pytest.mark.asyncio
+    async def test_extract_entities_empty_text(self):
+        """SpacyNER handles empty text with no entities."""
+        import importlib
+        import sys
+
+        mock_spacy = MagicMock()
+        mock_nlp = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.ents = []  # No entities
+        mock_spacy.load.return_value = mock_nlp
+
+        with patch.dict(sys.modules, {"spacy": mock_spacy}):
+            import mnemotree.ner.spacy as spacy_module
+
+            importlib.reload(spacy_module)
+
+            ner = spacy_module.SpacyNER()
+
+            # Patch asyncio.to_thread to return our mock doc
+            with patch("mnemotree.ner.spacy.asyncio.to_thread", new=AsyncMock(return_value=mock_doc)):
+                result = await ner.extract_entities("")
+
+            assert result.entities == {}
+            assert result.mentions == {}
