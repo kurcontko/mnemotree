@@ -344,7 +344,7 @@ class InMemoryVectorStore:
         query: str,
         query_embedding: List[float],
         top_k: int = 10,
-        _filters: Optional[Dict[str, Any]] = None,
+        filters: Optional[Dict[str, Any]] = None,
     ):
         def cosine(a: Sequence[float], b: Sequence[float]) -> float:
             if not a or not b or len(a) != len(b):
