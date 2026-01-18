@@ -262,11 +262,7 @@ class TestMemoryQueryBuilder:
     @pytest.mark.asyncio
     async def test_with_relationship(self):
         """with_relationship() adds graph relationship."""
-        query = await (
-            MemoryQueryBuilder()
-            .with_relationship("related_to", "out", "Memory")
-            .build()
-        )
+        query = await MemoryQueryBuilder().with_relationship("related_to", "out", "Memory").build()
         assert len(query.relationships) == 1
         assert query.relationships[0].type == "related_to"
 

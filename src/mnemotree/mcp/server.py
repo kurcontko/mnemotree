@@ -313,9 +313,7 @@ async def get_memories(
     store = memory_core.store
     if not memory_ids:
         return []
-    results = await asyncio.gather(
-        *(store.get_memory(memory_id) for memory_id in memory_ids)
-    )
+    results = await asyncio.gather(*(store.get_memory(memory_id) for memory_id in memory_ids))
     return [
         _serialize_memory(memory, include_embedding=include_embedding)
         for memory in results

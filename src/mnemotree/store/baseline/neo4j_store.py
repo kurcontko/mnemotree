@@ -74,7 +74,10 @@ class BaselineNeo4jMemoryStore(BaseMemoryStore):
         """Store a single memory with transaction safety"""
         memory_lock = await self._get_memory_lock(memory.memory_id)
 
-        async with memory_lock, self.driver.session() as session:  # Prevent concurrent modifications
+        async with (
+            memory_lock,
+            self.driver.session() as session,
+        ):  # Prevent concurrent modifications
             # Begin transaction properly with await
             tx = await session.begin_transaction()
             start = time.perf_counter()

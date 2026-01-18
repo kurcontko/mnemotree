@@ -228,6 +228,7 @@ class TestGLiNERNER:
         # Mock the gliner module before importing
         with patch.dict(sys.modules, {"gliner": mock_gliner}):
             import mnemotree.ner.gliner as gliner_module
+
             importlib.reload(gliner_module)
 
             ner = gliner_module.GLiNERNER(model_name="test-model", threshold=0.3)
@@ -253,6 +254,7 @@ class TestGLiNERNER:
 
         with patch.dict(sys.modules, {"gliner": mock_gliner}):
             import mnemotree.ner.gliner as gliner_module
+
             importlib.reload(gliner_module)
 
             custom_types = ["food", "restaurant", "ingredient"]
@@ -276,6 +278,7 @@ class TestGLiNERNER:
 
         with patch.dict(sys.modules, {"gliner": mock_gliner}):
             import mnemotree.ner.gliner as gliner_module
+
             importlib.reload(gliner_module)
 
             ner = gliner_module.GLiNERNER(threshold=0.7)
@@ -291,6 +294,7 @@ class TestGLiNERNER:
 
         with patch.dict(sys.modules, {"gliner": None}):
             import mnemotree.ner.gliner as gliner_module
+
             importlib.reload(gliner_module)
 
             with pytest.raises(ImportError, match="GLiNER is not installed"):
@@ -316,6 +320,7 @@ class TestTransformersNER:
 
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
+
             importlib.reload(hf_module)
 
             ner = hf_module.TransformersNER(model="test-model")
@@ -341,6 +346,7 @@ class TestTransformersNER:
 
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
+
             importlib.reload(hf_module)
 
             ner = hf_module.TransformersNER()
@@ -364,6 +370,7 @@ class TestTransformersNER:
 
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
+
             importlib.reload(hf_module)
 
             ner = hf_module.TransformersNER()
@@ -388,6 +395,7 @@ class TestTransformersNER:
 
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
+
             importlib.reload(hf_module)
 
             ner = hf_module.TransformersNER()
@@ -411,6 +419,7 @@ class TestTransformersNER:
 
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             import mnemotree.ner.hf_transformers as hf_module
+
             importlib.reload(hf_module)
 
             # Should not raise
@@ -424,6 +433,7 @@ class TestTransformersNER:
 
         with patch.dict(sys.modules, {"transformers": None}):
             import mnemotree.ner.hf_transformers as hf_module
+
             importlib.reload(hf_module)
 
             with pytest.raises(ImportError, match="TransformersNER requires"):
@@ -440,6 +450,7 @@ class TestStanzaNER:
 
         with patch.dict(sys.modules, {"stanza": None}):
             import mnemotree.ner.stanza as stanza_module
+
             importlib.reload(stanza_module)
 
             with pytest.raises(ImportError, match="StanzaNER requires"):
@@ -456,6 +467,7 @@ class TestStanzaNER:
 
         with patch.dict(sys.modules, {"stanza": mock_stanza}):
             import mnemotree.ner.stanza as stanza_module
+
             importlib.reload(stanza_module)
 
             stanza_module.StanzaNER()
@@ -477,6 +489,7 @@ class TestStanzaNER:
 
         with patch.dict(sys.modules, {"stanza": mock_stanza}):
             import mnemotree.ner.stanza as stanza_module
+
             importlib.reload(stanza_module)
 
             stanza_module.StanzaNER(
@@ -522,6 +535,7 @@ class TestStanzaNER:
 
         with patch.dict(sys.modules, {"stanza": mock_stanza}):
             import mnemotree.ner.stanza as stanza_module
+
             importlib.reload(stanza_module)
 
             ner = stanza_module.StanzaNER()
@@ -556,6 +570,7 @@ class TestStanzaNER:
 
         with patch.dict(sys.modules, {"stanza": mock_stanza}):
             import mnemotree.ner.stanza as stanza_module
+
             importlib.reload(stanza_module)
 
             ner = stanza_module.StanzaNER()
@@ -583,6 +598,7 @@ class TestStanzaNER:
 
         with patch.dict(sys.modules, {"stanza": mock_stanza}):
             import mnemotree.ner.stanza as stanza_module
+
             importlib.reload(stanza_module)
 
             ner = stanza_module.StanzaNER()
@@ -605,6 +621,7 @@ class TestStanzaNER:
 
         with patch.dict(sys.modules, {"stanza": mock_stanza}):
             import mnemotree.ner.stanza as stanza_module
+
             importlib.reload(stanza_module)
 
             ner = stanza_module.StanzaNER()
@@ -675,9 +692,7 @@ class TestLangchainLLMNER:
 
             # Create a mock chain that raises ValidationError
             mock_chain = AsyncMock()
-            mock_chain.ainvoke.side_effect = ValidationError.from_exception_data(
-                "test", []
-            )
+            mock_chain.ainvoke.side_effect = ValidationError.from_exception_data("test", [])
 
             with patch("mnemotree.ner.llm.PromptTemplate") as mock_prompt:
                 mock_prompt.return_value.__or__ = lambda self, other: MagicMock(
@@ -775,6 +790,7 @@ class TestSparkNLPNER:
 
         with patch.dict(sys.modules, {"pyspark": None}):
             import mnemotree.ner.spark_nlp as spark_module
+
             importlib.reload(spark_module)
 
             with pytest.raises(ImportError, match="SparkNLPNER requires"):
@@ -789,6 +805,7 @@ class TestSparkNLPNER:
 
         with patch.dict(sys.modules, {"pyspark": mock_pyspark}):
             import mnemotree.ner.spark_nlp as spark_module
+
             importlib.reload(spark_module)
 
             mock_spark = MagicMock()
@@ -922,6 +939,7 @@ class TestSparkNLPNER:
 
         with patch.dict(sys.modules, {"pyspark": mock_pyspark}):
             import mnemotree.ner.spark_nlp as spark_module
+
             importlib.reload(spark_module)
 
             mock_spark = MagicMock()
@@ -974,6 +992,7 @@ class TestSparkNLPNER:
 
         with patch.dict(sys.modules, {"pyspark": mock_pyspark}):
             import mnemotree.ner.spark_nlp as spark_module
+
             importlib.reload(spark_module)
 
             mock_spark = MagicMock()
@@ -1003,6 +1022,7 @@ class TestSparkNLPNER:
 
         with patch.dict(sys.modules, {"pyspark": mock_pyspark}):
             import mnemotree.ner.spark_nlp as spark_module
+
             importlib.reload(spark_module)
 
             mock_spark = MagicMock()
@@ -1038,6 +1058,7 @@ class TestSparkNLPNER:
 
         with patch.dict(sys.modules, {"pyspark": mock_pyspark}):
             import mnemotree.ner.spark_nlp as spark_module
+
             importlib.reload(spark_module)
 
             mock_spark = MagicMock()

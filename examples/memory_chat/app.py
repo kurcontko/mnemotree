@@ -1,10 +1,10 @@
 import asyncio
 from pathlib import Path
 
+from chat_ui import MemoryChatUI
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from chat_ui import MemoryChatUI
 from mnemotree.core.memory import MemoryCore
 from mnemotree.core.scoring import MemoryScoring
 from mnemotree.store.chromadb_store import ChromaMemoryStore

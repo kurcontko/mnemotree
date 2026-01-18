@@ -11,7 +11,6 @@ from .serialization import normalize_entity_text
 _DELETE_EDGE_BY_SOURCE_SQL = "DELETE FROM memory_edge WHERE source_id = ? AND kind = ?"
 
 
-
 @dataclass(frozen=True)
 class GraphMemoryHit:
     memory_id: str
@@ -320,9 +319,7 @@ class SQLiteGraphIndex:
                 matching_entities=None,
             )
 
-    def _fetch_entity_ids_for_memory(
-        self, conn: sqlite3.Connection, memory_id: str
-    ) -> list[int]:
+    def _fetch_entity_ids_for_memory(self, conn: sqlite3.Connection, memory_id: str) -> list[int]:
         rows = conn.execute(
             "SELECT entity_id FROM memory_entity WHERE memory_id = ?",
             (memory_id,),
@@ -475,16 +472,12 @@ class SQLiteGraphIndex:
             GROUP BY neighbor_id
             ORDER BY weight DESC
             LIMIT ?
-            """.format(
-                placeholders=",".join("?" * len(entity_ids))
-            ),
+            """.format(placeholders=",".join("?" * len(entity_ids))),
             entity_ids + entity_ids + entity_ids + entity_ids + [neighbor_limit],
         ).fetchall()
         return rows
 
-    def _resolve_seed_entities(
-        self, entities: dict[str, str] | list[str]
-    ) -> _ResolvedEntities:
+    def _resolve_seed_entities(self, entities: dict[str, str] | list[str]) -> _ResolvedEntities:
         typed, name_only = self._partition_seed_entities(entities)
         entity_rows: list[sqlite3.Row] = []
         with self._connect() as conn:

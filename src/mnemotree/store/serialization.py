@@ -67,7 +67,7 @@ def normalize_entity_text(text: str) -> str:
     normalized = text.strip().lower()
     for prefix in ("the ", "a ", "an "):
         if normalized.startswith(prefix):
-            normalized = normalized[len(prefix):].lstrip()
+            normalized = normalized[len(prefix) :].lstrip()
     return normalized
 
 
@@ -97,4 +97,3 @@ def normalize_filter_value(value: Any) -> Any:
     if isinstance(value, list):
         return [normalize_filter_value(v) for v in value]
     return value
-

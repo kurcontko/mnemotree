@@ -90,9 +90,7 @@ class DummyMemoryCore:
 
 def _make_run_manager() -> CallbackManagerForRetrieverRun:
     try:
-        return CallbackManagerForRetrieverRun(
-            run_id=uuid4(), handlers=[], inheritable_handlers=[]
-        )
+        return CallbackManagerForRetrieverRun(run_id=uuid4(), handlers=[], inheritable_handlers=[])
     except TypeError:
         return CallbackManagerForRetrieverRun()
 

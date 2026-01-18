@@ -259,19 +259,32 @@ class TestReflectMethod:
     @pytest.mark.asyncio
     async def test_reflect_without_structured_query_support(self, mock_llm, mock_embeddings):
         """Test reflect raises error when store doesn't support structured queries."""
+
         # Create a store that explicitly does NOT implement SupportsStructuredQuery (no query_memories)
         class MockVectorOnlyStore(BaseMemoryStore, SupportsVectorSearch):
             async def store_memory(self, memory):
                 # Intentionally empty: Mock method for inner test class
                 pass
-            async def get_memory(self, mid): return None
-            async def delete_memory(self, mid, *, cascade=False): return True
-            async def list_memories(self, *, include_embeddings=False): return []
-            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
+
+            async def get_memory(self, mid):
+                return None
+
+            async def delete_memory(self, mid, *, cascade=False):
+                return True
+
+            async def list_memories(self, *, include_embeddings=False):
+                return []
+
+            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
+                return []
+
             async def update_connections(self, memory_id, **kwargs):
                 # Intentionally empty: Mock method for inner test class
                 pass
-            async def query_by_entities(self, entities, limit=10): return []
+
+            async def query_by_entities(self, entities, limit=10):
+                return []
+
             async def close(self):
                 # Intentionally empty: Mock method for inner test class
                 pass
@@ -286,7 +299,10 @@ class TestReflectMethod:
             ner_config=NerConfig(enable_ner=False),  # Disable NER to avoid model loading
         )
 
-        with pytest.raises(NotImplementedError, match="(does not support structured queries|Structured queries are not supported)"):
+        with pytest.raises(
+            NotImplementedError,
+            match="(does not support structured queries|Structured queries are not supported)",
+        ):
             await memory_core.reflect()
 
 
@@ -381,9 +397,7 @@ class TestBatchRemember:
         contents = ["First", "Second"]
         context = {"source": "batch_import"}
 
-        memories = await basic_memory_core.batch_remember(
-            contents, analyze=False, context=context
-        )
+        memories = await basic_memory_core.batch_remember(contents, analyze=False, context=context)
 
         assert all(m.context == context for m in memories)
 
@@ -392,23 +406,34 @@ class TestSearchMethod:
     """Test search method with various store types."""
 
     @pytest.mark.asyncio
-    async def test_search_with_filters_requires_structured_query_store(
-        self, mock_embeddings
-    ):
+    async def test_search_with_filters_requires_structured_query_store(self, mock_embeddings):
         """Test search with filters on non-structured store raises error."""
+
         # Create a store that explicitly does NOT implement SupportsStructuredQuery
         class MockVectorOnlyStore(BaseMemoryStore, SupportsVectorSearch):
             async def store_memory(self, memory):
                 # Intentionally empty: Mock method for test
                 pass
-            async def get_memory(self, mid): return None
-            async def delete_memory(self, mid, *, cascade=False): return True
-            async def list_memories(self, *, include_embeddings=False): return []
-            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
+
+            async def get_memory(self, mid):
+                return None
+
+            async def delete_memory(self, mid, *, cascade=False):
+                return True
+
+            async def list_memories(self, *, include_embeddings=False):
+                return []
+
+            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
+                return []
+
             async def update_connections(self, memory_id, **kwargs):
                 # Intentionally empty: Mock method for test
                 pass
-            async def query_by_entities(self, entities, limit=10): return []
+
+            async def query_by_entities(self, entities, limit=10):
+                return []
+
             async def close(self):
                 # Intentionally empty: Mock method for test
                 pass
@@ -422,7 +447,10 @@ class TestSearchMethod:
             ner_config=NerConfig(enable_ner=False),
         )
 
-        with pytest.raises(NotImplementedError, match="(does not support structured queries|Structured queries are not supported)"):
+        with pytest.raises(
+            NotImplementedError,
+            match="(does not support structured queries|Structured queries are not supported)",
+        ):
             await memory_core.search("query", filters={"memory_type": "episodic"})
 
     @pytest.mark.asyncio
@@ -448,16 +476,26 @@ class TestSearchMethod:
     @pytest.mark.asyncio
     async def test_search_falls_back_to_vector_search(self, mock_embeddings):
         """Test search uses vector search when no filters and store supports it."""
+
         # Use a pure object that does NOT inherit from BaseMemoryStore to avoid
         # accidentally matching SupportsStructuredQuery protocol via inherited methods
         class PureVectorStore:
             async def store_memory(self, memory):
                 # Intentionally empty: Mock method for test
                 pass
-            async def get_memory(self, mid): return None
-            async def delete_memory(self, mid, *, cascade=False): return True
-            async def list_memories(self, *, include_embeddings=False): return []
-            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
+
+            async def get_memory(self, mid):
+                return None
+
+            async def delete_memory(self, mid, *, cascade=False):
+                return True
+
+            async def list_memories(self, *, include_embeddings=False):
+                return []
+
+            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
+                return []
+
             async def close(self):
                 # Intentionally empty: Mock method for test
                 pass
@@ -479,12 +517,18 @@ class TestSearchMethod:
     @pytest.mark.asyncio
     async def test_search_without_vector_support_raises_error(self, mock_embeddings):
         """Test search raises error when store doesn't support any search method."""
+
         class ConcreteBaseStore(BaseMemoryStore):
             async def store_memory(self, memory):
                 # Intentionally empty: Mock method for test
                 pass
-            async def get_memory(self, mid): return None
-            async def delete_memory(self, mid, *, cascade=False): return True
+
+            async def get_memory(self, mid):
+                return None
+
+            async def delete_memory(self, mid, *, cascade=False):
+                return True
+
             async def close(self):
                 # Intentionally empty: Mock method for test
                 pass
@@ -501,21 +545,34 @@ class TestSearchMethod:
         # When store inherits from BaseMemoryStore, it technically satisfies the protocols checks
         # because the methods exist (raising NotImplementedError).
         # MemoryCore prefers structured query if supported.
-        with pytest.raises(NotImplementedError, match="(Structured queries are not supported|Vector similarity search is not supported)"):
+        with pytest.raises(
+            NotImplementedError,
+            match="(Structured queries are not supported|Vector similarity search is not supported)",
+        ):
             await memory_core.search("query")
 
     @pytest.mark.asyncio
     async def test_search_with_bm25_empty_index(self, mock_embeddings):
         """Test search with BM25 but empty index falls back to vector search."""
+
         # Use a pure object to avoid protocol confusion
         class PureVectorStore:
             async def store_memory(self, memory):
                 # Intentionally empty: Mock method for test
                 pass
-            async def get_memory(self, mid): return None
-            async def delete_memory(self, mid, *, cascade=False): return True
-            async def list_memories(self, *, include_embeddings=False): return []
-            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None): return []
+
+            async def get_memory(self, mid):
+                return None
+
+            async def delete_memory(self, mid, *, cascade=False):
+                return True
+
+            async def list_memories(self, *, include_embeddings=False):
+                return []
+
+            async def get_similar_memories(self, query, query_embedding, top_k=5, filters=None):
+                return []
+
             async def close(self):
                 # Intentionally empty: Mock method for test
                 pass

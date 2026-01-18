@@ -89,6 +89,7 @@ class BM25Index:
         It is not optimized for large datasets (millions of documents).
         For large scale use cases, consider using an external search engine.
     """
+
     k1: float = 1.2
     b: float = 0.75
     doc_freq: Counter[str] = field(default_factory=Counter)
@@ -206,7 +207,9 @@ class BaseQueryExpander:
         return list(dict.fromkeys(tokens + expansion_terms))
 
     def _can_expand(self, tokens: list[str], top_k_docs: list[tuple[str, float]]) -> bool:
-        return bool(self.index and top_k_docs and self.top_docs > 0 and self.top_terms > 0 and tokens)
+        return bool(
+            self.index and top_k_docs and self.top_docs > 0 and self.top_terms > 0 and tokens
+        )
 
     @staticmethod
     def _filter_content_terms(tokens: list[str]) -> list[str]:

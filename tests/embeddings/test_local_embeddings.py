@@ -23,6 +23,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings(
@@ -45,6 +46,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
@@ -61,6 +63,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
@@ -77,6 +80,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
@@ -93,6 +97,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings(batch_size=64)
@@ -111,6 +116,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings(normalize=True)
@@ -132,6 +138,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings(normalize=True)
@@ -152,6 +159,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
@@ -169,6 +177,7 @@ class TestLocalSentenceTransformerEmbeddings:
 
         with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
@@ -180,6 +189,7 @@ class TestLocalSentenceTransformerEmbeddings:
         """RuntimeError raised when sentence-transformers not installed."""
         with patch.dict(sys.modules, {"sentence_transformers": None}):
             import mnemotree.embeddings.local as local_module
+
             importlib.reload(local_module)
 
             with pytest.raises(RuntimeError, match="sentence-transformers"):

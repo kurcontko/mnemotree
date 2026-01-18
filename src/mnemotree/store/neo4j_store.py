@@ -24,8 +24,6 @@ from .serialization import serialize_datetime, serialize_datetime_list
 logger = logging.getLogger(__name__)
 
 
-
-
 class Neo4jMemoryStore(BaseMemoryStore):
     store_type = "neo4j"
 
@@ -509,7 +507,14 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 await tx.commit()
                 return MemoryItem(**node_data)
 
-            except (Neo4jError, ValidationError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            except (
+                Neo4jError,
+                ValidationError,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
                 await tx.rollback()
                 logger.exception(
                     "Failed to retrieve memory %s",
@@ -685,9 +690,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 "with_entities": sum(1 for memory in memories if memory.entities),
                 "with_associations": sum(1 for memory in memories if memory.associations),
                 "with_temporal": sum(
-                    1
-                    for memory in memories
-                    if memory.next_event_id or memory.previous_event_id
+                    1 for memory in memories if memory.next_event_id or memory.previous_event_id
                 ),
             }
             logger.info(
@@ -953,7 +956,14 @@ class Neo4jMemoryStore(BaseMemoryStore):
 
                 return memories
 
-            except (Neo4jError, ValidationError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            except (
+                Neo4jError,
+                ValidationError,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
                 logger.exception(
                     "Failed to query memories",
                     extra=store_log_context(

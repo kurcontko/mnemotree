@@ -359,7 +359,9 @@ class MemoryCore:
             "entity_mentions": enrichment.entity_mentions or {},
         }
         if timestamp is not None:
-            data["timestamp"] = serialize_datetime(timestamp) if isinstance(timestamp, datetime) else timestamp
+            data["timestamp"] = (
+                serialize_datetime(timestamp) if isinstance(timestamp, datetime) else timestamp
+            )
         return data
 
     async def _apply_pre_remember_hooks(self, memory: MemoryItem) -> MemoryItem:
@@ -637,7 +639,7 @@ class MemoryCore:
         query_embedding: Any,
         limit: int,
     ) -> list[MemoryItem]:
-        if hasattr(self.store, 'get_similar_memories'):
+        if hasattr(self.store, "get_similar_memories"):
             return await self.store.get_similar_memories(
                 query=query,
                 query_embedding=query_embedding,

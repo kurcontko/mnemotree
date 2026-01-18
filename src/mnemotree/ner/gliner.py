@@ -68,4 +68,3 @@ class GLiNERNER(BaseNER):
             mentions[entity_text].append(context)
 
         return NERResult(entities=entities, mentions=mentions, confidence=confidence)
-

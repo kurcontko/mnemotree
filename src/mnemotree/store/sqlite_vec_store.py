@@ -161,9 +161,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             return
 
         conn.execute(f'DELETE FROM "{self._entity_table}"')
-        rows = conn.execute(
-            f'SELECT memory_id, entities FROM "{self.collection_name}"'
-        ).fetchall()
+        rows = conn.execute(f'SELECT memory_id, entities FROM "{self.collection_name}"').fetchall()
         entries: list[tuple[str, str]] = []
         for row in rows:
             stored_entities = json_loads_dict(row["entities"])
@@ -373,9 +371,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                         "confidence",
                         "memory_type",
                     }:
-                        raise UnsupportedQueryError(
-                            f"Unsupported sort field: {query.sort_by!r}."
-                        )
+                        raise UnsupportedQueryError(f"Unsupported sort field: {query.sort_by!r}.")
                     order_sql = f"ORDER BY {query.sort_by} {query.sort_order.value.upper()}"
 
                 limit = query.limit or 10
@@ -384,16 +380,14 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 if query.vector is not None:
                     vector_blob = sqlite_vec.serialize_float32(query.vector)
                     sql = (
-                        f'SELECT m.*, distance(v.embedding, ?) AS distance '
+                        f"SELECT m.*, distance(v.embedding, ?) AS distance "
                         f'FROM "{self._vector_table}" v '
                         f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
                         f"{where_sql} "
                         "ORDER BY distance "
                         "LIMIT ? OFFSET ?"
                     )
-                    rows = conn.execute(
-                        sql, [vector_blob, *params, limit, offset]
-                    ).fetchall()
+                    rows = conn.execute(sql, [vector_blob, *params, limit, offset]).fetchall()
                 else:
                     sql = (
                         f'SELECT * FROM "{self.collection_name}" '
@@ -431,16 +425,14 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 if filters:
                     for key, value in filters.items():
                         if key not in {"memory_type", "source"}:
-                            raise UnsupportedQueryError(
-                                f"Unsupported filter field: {key!r}"
-                            )
+                            raise UnsupportedQueryError(f"Unsupported filter field: {key!r}")
                         where_clauses.append(f"{key} = ?")
                         params.append(normalize_filter_value(value))
                 where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
                 vector_blob = sqlite_vec.serialize_float32(query_embedding)
                 sql = (
-                    f'SELECT m.*, distance(v.embedding, ?) AS distance '
+                    f"SELECT m.*, distance(v.embedding, ?) AS distance "
                     f'FROM "{self._vector_table}" v '
                     f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
                     f"{where_sql} "

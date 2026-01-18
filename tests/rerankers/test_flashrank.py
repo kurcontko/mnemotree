@@ -279,9 +279,7 @@ class TestFlashRankRerankerRerankSync:
         reranker = self._setup_mocked_reranker()
         memories = [_make_memory(f"m{i}", f"content {i}") for i in range(5)]
 
-        reranker._ranker.rerank.return_value = [
-            {"id": i, "score": 0.9 - i * 0.1} for i in range(5)
-        ]
+        reranker._ranker.rerank.return_value = [{"id": i, "score": 0.9 - i * 0.1} for i in range(5)]
 
         result = reranker._rerank_sync("query", memories, top_k=2)
 
@@ -292,9 +290,7 @@ class TestFlashRankRerankerRerankSync:
         reranker = self._setup_mocked_reranker()
         memories = [_make_memory(f"m{i}", f"content {i}") for i in range(5)]
 
-        reranker._ranker.rerank.return_value = [
-            {"id": i, "score": 0.9 - i * 0.1} for i in range(5)
-        ]
+        reranker._ranker.rerank.return_value = [{"id": i, "score": 0.9 - i * 0.1} for i in range(5)]
 
         result = reranker._rerank_sync("query", memories, top_k=None)
 

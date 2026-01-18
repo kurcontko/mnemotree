@@ -364,9 +364,7 @@ def test_with_option_ner_fields(mock_store):
     """Test with_option() for NER config fields."""
     mock_ner = MagicMock()
     builder = (
-        MemoryCoreBuilder(mock_store)
-        .with_option("ner", mock_ner)
-        .with_option("enable_ner", False)
+        MemoryCoreBuilder(mock_store).with_option("ner", mock_ner).with_option("enable_ner", False)
     )
     assert builder._ner_config.ner is mock_ner
     assert builder._ner_config.enable_ner is False
@@ -402,11 +400,7 @@ def test_with_option_enable_bm25(mock_store):
 
 def test_with_option_bm25_params(mock_store):
     """Test with_option() for BM25 parameters."""
-    builder = (
-        MemoryCoreBuilder(mock_store)
-        .with_option("bm25_k1", 1.8)
-        .with_option("bm25_b", 0.6)
-    )
+    builder = MemoryCoreBuilder(mock_store).with_option("bm25_k1", 1.8).with_option("bm25_b", 0.6)
     assert abs(builder._retrieval_config.bm25_k1 - 1.8) < 1e-9
     assert abs(builder._retrieval_config.bm25_b - 0.6) < 1e-9
 

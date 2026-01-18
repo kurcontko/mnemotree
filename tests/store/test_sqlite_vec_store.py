@@ -147,7 +147,11 @@ async def test_sqlite_vec_get_similar_memories(tmp_path, memory_item):
     try:
         # Store memories
         mem1 = memory_item.model_copy(
-            update={"memory_id": "mem-1", "content": "Python programming tutorial", "importance": 0.8}
+            update={
+                "memory_id": "mem-1",
+                "content": "Python programming tutorial",
+                "importance": 0.8,
+            }
         )
         mem2 = memory_item.model_copy(
             update={"memory_id": "mem-2", "content": "JavaScript basics", "importance": 0.6}
@@ -241,7 +245,9 @@ async def test_sqlite_vec_entity_index_operations(tmp_path, memory_item):
         await store.store_memory(mem1)
 
         # Update memory with new entities
-        mem1_updated = mem1.model_copy(update={"entities": {"Python": "LANGUAGE", "Java": "LANGUAGE"}})
+        mem1_updated = mem1.model_copy(
+            update={"entities": {"Python": "LANGUAGE", "Java": "LANGUAGE"}}
+        )
         await store.store_memory(mem1_updated)
 
         # Query should find both entities
@@ -294,9 +300,7 @@ async def test_sqlite_vec_delete_with_cascade(tmp_path, memory_item):
 
     try:
         # Store memories with connections
-        mem1 = memory_item.model_copy(
-            update={"memory_id": "mem-1", "content": "First memory"}
-        )
+        mem1 = memory_item.model_copy(update={"memory_id": "mem-1", "content": "First memory"})
         mem2 = memory_item.model_copy(
             update={
                 "memory_id": "mem-2",

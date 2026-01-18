@@ -63,9 +63,7 @@ class MemorySystemConfig:
         # Initialize LLM and embeddings if not provided.
         # Prefer explicit constructor args; otherwise fall back to env-configured defaults.
         llm = self.llm or ChatOpenAI(
-            model=os.getenv("MNEMOTREE_LLM_MODEL")
-            or os.getenv("OPENAI_MODEL")
-            or "gpt-4",
+            model=os.getenv("MNEMOTREE_LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4",
             temperature=float(os.getenv("MNEMOTREE_LLM_TEMPERATURE", "0.7")),
         )
 

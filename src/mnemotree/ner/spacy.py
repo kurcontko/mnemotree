@@ -36,6 +36,8 @@ class SpacyNER(BaseNER):
             context = self._get_context(text, ent.start_char, ent.end_char)
             if ent.text not in mentions:
                 mentions[ent.text] = []
-            mentions[ent.text].append({"context": context, "position": (ent.start_char, ent.end_char)})
+            mentions[ent.text].append(
+                {"context": context, "position": (ent.start_char, ent.end_char)}
+            )
 
         return NERResult(entities=entities, mentions=mentions)

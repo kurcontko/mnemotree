@@ -12,9 +12,15 @@ async def test_store_contract_roundtrip_and_query_limit(temp_chroma_dir, memory_
     await store.initialize()
 
     try:
-        first = memory_item.model_copy(update={"memory_id": "contract-1", "content": "Contract one"})
-        second = memory_item.model_copy(update={"memory_id": "contract-2", "content": "Contract two"})
-        third = memory_item.model_copy(update={"memory_id": "contract-3", "content": "Contract three"})
+        first = memory_item.model_copy(
+            update={"memory_id": "contract-1", "content": "Contract one"}
+        )
+        second = memory_item.model_copy(
+            update={"memory_id": "contract-2", "content": "Contract two"}
+        )
+        third = memory_item.model_copy(
+            update={"memory_id": "contract-3", "content": "Contract three"}
+        )
 
         await store.store_memory(first)
         await store.store_memory(second)

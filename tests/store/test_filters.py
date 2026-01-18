@@ -102,14 +102,20 @@ class TestBuildSqliteFilterClauses:
 
     def test_in_operator(self):
         """IN operator generates correct clause."""
-        filters = [MemoryFilter(field="memory_type", operator=FilterOperator.IN, value=["semantic", "episodic"])]
+        filters = [
+            MemoryFilter(
+                field="memory_type", operator=FilterOperator.IN, value=["semantic", "episodic"]
+            )
+        ]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["memory_type IN (?, ?)"]
         assert params == ["semantic", "episodic"]
 
     def test_not_in_operator(self):
         """NOT_IN operator generates correct clause."""
-        filters = [MemoryFilter(field="source", operator=FilterOperator.NOT_IN, value=["a", "b", "c"])]
+        filters = [
+            MemoryFilter(field="source", operator=FilterOperator.NOT_IN, value=["a", "b", "c"])
+        ]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["source NOT IN (?, ?, ?)"]
         assert params == ["a", "b", "c"]
@@ -152,7 +158,9 @@ class TestBuildSqliteFilterClauses:
 
     def test_not_contains_on_content(self):
         """NOT_CONTAINS on content field uses NOT LIKE."""
-        filters = [MemoryFilter(field="content", operator=FilterOperator.NOT_CONTAINS, value="secret")]
+        filters = [
+            MemoryFilter(field="content", operator=FilterOperator.NOT_CONTAINS, value="secret")
+        ]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["NOT (content LIKE ?)"]
         assert params == ["%secret%"]
@@ -196,7 +204,9 @@ class TestBuildSqliteFilterClauses:
 
     def test_not_contains_on_emotions(self):
         """NOT_CONTAINS on emotions field uses NOT with comma-wrapped LIKE."""
-        filters = [MemoryFilter(field="emotions", operator=FilterOperator.NOT_CONTAINS, value="anger")]
+        filters = [
+            MemoryFilter(field="emotions", operator=FilterOperator.NOT_CONTAINS, value="anger")
+        ]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["NOT ((',' || emotions || ',') LIKE ?)"]
         assert params == ["%,anger,%"]
@@ -217,7 +227,9 @@ class TestBuildSqliteFilterClauses:
 
     def test_memory_type_enum_normalized(self):
         """MemoryType enum is normalized to string value."""
-        filters = [MemoryFilter(field="memory_type", operator=FilterOperator.EQ, value=MemoryType.EPISODIC)]
+        filters = [
+            MemoryFilter(field="memory_type", operator=FilterOperator.EQ, value=MemoryType.EPISODIC)
+        ]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert params == ["episodic"]
 

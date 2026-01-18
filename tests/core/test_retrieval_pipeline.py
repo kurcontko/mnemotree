@@ -60,7 +60,10 @@ async def test_weighted_sum_fusion_rewards_multi_signal_candidates():
     )
 
     assert [r.memory.memory_id for r in results] == ["m2", "m1"]
-    assert set(results[0].scores.keys()) == {RetrievalStage.VECTOR.value, RetrievalStage.ENTITY.value}
+    assert set(results[0].scores.keys()) == {
+        RetrievalStage.VECTOR.value,
+        RetrievalStage.ENTITY.value,
+    }
 
 
 @pytest.mark.asyncio

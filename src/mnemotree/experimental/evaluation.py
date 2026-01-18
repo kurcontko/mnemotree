@@ -177,11 +177,7 @@ class MemoryEvaluator:
             result.precision_at_k[k] = precision
 
             # F1@k
-            f1 = (
-                2 * (precision * recall) / (precision + recall)
-                if recall + precision > 0
-                else 0.0
-            )
+            f1 = 2 * (precision * recall) / (precision + recall) if recall + precision > 0 else 0.0
             result.f1_at_k[k] = f1
 
         # Overall diagnostics
@@ -565,9 +561,7 @@ class SyntheticDatasetGenerator:
 
         for base_memory in self._sample_memories(memories, num_queries):
             query_text = self._build_query_text(base_memory)
-            relevant_ids = self._collect_relevant_ids(
-                base_memory, memories, relevance_threshold
-            )
+            relevant_ids = self._collect_relevant_ids(base_memory, memories, relevance_threshold)
             queries.append(
                 EvaluationQuery(
                     query_id=f"query_{len(queries) + 1}",
@@ -611,9 +605,7 @@ class SyntheticDatasetGenerator:
 
             if not generated_queries:
                 # Fallback: simple template-based query
-                generated_queries = [
-                    f"What is mentioned about: {memory.content[:40]}?"
-                ]
+                generated_queries = [f"What is mentioned about: {memory.content[:40]}?"]
 
             for query_text in generated_queries[:queries_per_memory]:
                 queries.append(

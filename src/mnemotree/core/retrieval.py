@@ -49,6 +49,7 @@ def __getattr__(name: str) -> Any:
 def __dir__() -> list[str]:
     return sorted(set(globals().keys()) | _HYBRID_EXPORTS)
 
+
 __all__ = [
     "Retriever",
     "BaseRetriever",
@@ -208,9 +209,12 @@ class VectorEntityRetriever(BaseRetriever):
         entity_memory_ids: set[str] = set()
         if isinstance(query, str):
             logger.debug("vector_entity recall start limit=%s scoring=%s", limit, scoring)
-            memories, query_embedding, query_keywords, entity_memory_ids = (
-                await self._recall_from_text(query, limit)
-            )
+            (
+                memories,
+                query_embedding,
+                query_keywords,
+                entity_memory_ids,
+            ) = await self._recall_from_text(query, limit)
         else:
             memories, query_embedding = await self._query_store(query)
 
@@ -289,7 +293,9 @@ class VectorEntityRetriever(BaseRetriever):
             similarity = cosine_similarity(memory.embedding, query_embedding)
             scored_entities.append((similarity, memory))
 
-        filtered = [memory for similarity, memory in scored_entities if similarity >= min_entity_similarity]
+        filtered = [
+            memory for similarity, memory in scored_entities if similarity >= min_entity_similarity
+        ]
         entity_memory_ids = {memory.memory_id for memory in filtered}
         return filtered, entity_memory_ids
 
@@ -428,9 +434,7 @@ class HybridFusionRetriever(BaseRetriever):
         set[str],
         asyncio.Task[list[str]] | None,
     ]:
-        vector_task = asyncio.create_task(
-            self._retrieve_vector_candidates(query, candidate_k)
-        )
+        vector_task = asyncio.create_task(self._retrieve_vector_candidates(query, candidate_k))
         entity_task = asyncio.create_task(self._retrieve_entity_candidates(query))
         keyword_task = (
             asyncio.create_task(self.keyword_extractor.extract(query))

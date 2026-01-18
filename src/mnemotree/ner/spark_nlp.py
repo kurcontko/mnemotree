@@ -56,9 +56,7 @@ class SparkNLPNER(BaseNER):
         except (TypeError, ValueError):
             return None
 
-    def _parse_item(
-        self, text: str, item: Any
-    ) -> tuple[str, str, float | None, str | None] | None:
+    def _parse_item(self, text: str, item: Any) -> tuple[str, str, float | None, str | None] | None:
         data = self._item_to_dict(item)
         if data is None:
             return None
@@ -68,10 +66,14 @@ class SparkNLPNER(BaseNER):
             return None
 
         metadata = data.get("metadata") or {}
-        entity_type = metadata.get("entity") or metadata.get("label") or metadata.get("ner") or "ENTITY"
+        entity_type = (
+            metadata.get("entity") or metadata.get("label") or metadata.get("ner") or "ENTITY"
+        )
         start, end = self._coerce_span(data.get("begin"), data.get("end"))
         score_f = self._coerce_score(metadata.get("confidence") or metadata.get("score"))
-        context = self._get_context(text, start, end) if start is not None and end is not None else None
+        context = (
+            self._get_context(text, start, end) if start is not None and end is not None else None
+        )
         return entity_text, str(entity_type), score_f, context
 
     @staticmethod

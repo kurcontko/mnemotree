@@ -54,4 +54,3 @@ def test_build_neo4j_where_clause_rejects_relationship_fields():
 def test_build_chroma_where_rejects_non_eq_filters():
     with pytest.raises(UnsupportedQueryError):
         build_chroma_where([MemoryFilter("importance", FilterOperator.GT, 0.5)])
-

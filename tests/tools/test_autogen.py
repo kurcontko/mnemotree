@@ -40,7 +40,7 @@ async def test_search_memories_scoring(mock_memory_core):
         content="test content",
         memory_type=MemoryType.EPISODIC,
         embedding=memory_embedding,
-        importance=0.5
+        importance=0.5,
     )
 
     # Mock output
@@ -72,7 +72,7 @@ async def test_search_memories_scoring_filter(mock_memory_core):
         content="irrelevant",
         memory_type=MemoryType.EPISODIC,
         embedding=memory_embedding,
-        importance=0.5
+        importance=0.5,
     )
 
     # Mock output
@@ -98,6 +98,4 @@ async def test_store_memory(mock_memory_core):
     result = await tool.store_memory(content="test", importance=0.8, tags=["tag1"])
 
     assert result == "mem-123"
-    mock_memory_core.remember.assert_called_once_with(
-        "test", importance=0.8, tags=["tag1"]
-    )
+    mock_memory_core.remember.assert_called_once_with("test", importance=0.8, tags=["tag1"])

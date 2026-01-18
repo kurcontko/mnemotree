@@ -74,10 +74,14 @@ class TransformersNER(BaseNER):
         if not entity_text:
             return None
 
-        entity_type = pred.get("entity_group") or pred.get("entity") or pred.get("label") or "ENTITY"
+        entity_type = (
+            pred.get("entity_group") or pred.get("entity") or pred.get("label") or "ENTITY"
+        )
         score_f = self._coerce_score(pred.get("score"))
         start, end = self._coerce_span(pred.get("start"), pred.get("end"))
-        context = self._get_context(text, start, end) if start is not None and end is not None else None
+        context = (
+            self._get_context(text, start, end) if start is not None and end is not None else None
+        )
         return entity_text, str(entity_type), score_f, context
 
     @staticmethod

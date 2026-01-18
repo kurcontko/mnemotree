@@ -16,15 +16,11 @@ def build_neo4j_memory_payload(
     memory: MemoryItem,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     embedding_list = (
-        memory.embedding.tolist()
-        if isinstance(memory.embedding, np.ndarray)
-        else memory.embedding
+        memory.embedding.tolist() if isinstance(memory.embedding, np.ndarray) else memory.embedding
     )
     context_json = json_dumps_safe(memory.context or {})
     valid_entities = {
-        str(text): str(etype)
-        for text, etype in (memory.entities or {}).items()
-        if text and etype
+        str(text): str(etype) for text, etype in (memory.entities or {}).items() if text and etype
     }
     payload = {
         "memory_id": memory.memory_id,
@@ -179,9 +175,7 @@ def sqlite_record_from_memory(memory: MemoryItem) -> dict[str, Any]:
         "linked_concepts": _serialize_list(memory.linked_concepts)
         if memory.linked_concepts
         else "",
-        "conflicts_with": _serialize_list(memory.conflicts_with)
-        if memory.conflicts_with
-        else "",
+        "conflicts_with": _serialize_list(memory.conflicts_with) if memory.conflicts_with else "",
         "previous_event_id": memory.previous_event_id,
         "next_event_id": memory.next_event_id,
     }

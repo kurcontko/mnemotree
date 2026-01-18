@@ -39,7 +39,7 @@ class LspManager:
             # Fallback to checking if 'pyright' module exposes it (common in uv/pip installs)
             # But usually it puts `pyright-langserver` in bin.
             # If not found, raise.
-             raise RuntimeError("pyright-langserver not found. Please install `pyright`.")
+            raise RuntimeError("pyright-langserver not found. Please install `pyright`.")
 
         cmd = [executable, "--stdio"]
         client = LspClient(cmd, self.root_dir)

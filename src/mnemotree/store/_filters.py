@@ -153,9 +153,7 @@ def _build_filter_clause(
     if operator == FilterOperator.MATCHES:
         raise UnsupportedQueryError("Full-text MATCHES queries are not supported.")
 
-    raise UnsupportedQueryError(
-        f"Unsupported filter operator {operator!r} for field {field!r}."
-    )
+    raise UnsupportedQueryError(f"Unsupported filter operator {operator!r} for field {field!r}.")
 
 
 def build_sqlite_filter_clauses(

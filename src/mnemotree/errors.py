@@ -16,7 +16,6 @@ class MnemotreeError(Exception):
     """
 
 
-
 class StoreError(MnemotreeError):
     """Store operation failed.
 
@@ -61,7 +60,6 @@ class SerializationError(MnemotreeError):
     """
 
 
-
 class InvalidQueryError(MnemotreeError):
     """Invalid query parameters or unsupported query operation.
 
@@ -70,7 +68,6 @@ class InvalidQueryError(MnemotreeError):
 
     This is a user error and should be handled by validating input.
     """
-
 
 
 class DependencyError(MnemotreeError):
@@ -113,14 +110,12 @@ class ConfigurationError(MnemotreeError):
     """
 
 
-
 class IndexError(MnemotreeError):
     """Index operation failed.
 
     Raised when building or querying an index (e.g., BM25, graph index)
     fails due to data issues or index corruption.
     """
-
 
 
 # Error handling guidelines:

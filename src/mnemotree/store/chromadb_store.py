@@ -30,8 +30,6 @@ from .sqlite_graph import SQLiteGraphIndex
 logger = logging.getLogger(__name__)
 
 
-
-
 class ChromaMemoryStore(BaseMemoryStore):
     store_type = "chroma"
 
@@ -110,9 +108,7 @@ class ChromaMemoryStore(BaseMemoryStore):
                         extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start)),
                     )
                     if self.graph_index_strict:
-                        raise MnemotreeIndexError(
-                            f"Failed to initialize graph index: {e}"
-                        ) from e
+                        raise MnemotreeIndexError(f"Failed to initialize graph index: {e}") from e
                     logger.warning(
                         "Continuing without graph index due to initialization failure",
                         extra=store_log_context(self.store_type),
@@ -502,9 +498,7 @@ class ChromaMemoryStore(BaseMemoryStore):
                 ),
             )
             if self.graph_index_strict:
-                raise MnemotreeIndexError(
-                    "Failed to query graph index by entities"
-                ) from exc
+                raise MnemotreeIndexError("Failed to query graph index by entities") from exc
             return None
         if not hits:
             return None
@@ -516,9 +510,7 @@ class ChromaMemoryStore(BaseMemoryStore):
         *,
         limit: int,
     ) -> list[MemoryItem]:
-        memories_by_id = await self._get_memories_by_ids(
-            [hit.memory_id for hit in hits]
-        )
+        memories_by_id = await self._get_memories_by_ids([hit.memory_id for hit in hits])
         results: list[MemoryItem] = []
         for hit in hits:
             memory = memories_by_id.get(hit.memory_id)
@@ -583,9 +575,7 @@ class ChromaMemoryStore(BaseMemoryStore):
                 extra=store_log_context(self.store_type),
             )
             if self.graph_index_strict:
-                raise MnemotreeIndexError(
-                    "Failed to reset graph index during rebuild"
-                ) from exc
+                raise MnemotreeIndexError("Failed to reset graph index during rebuild") from exc
             return False
         return True
 

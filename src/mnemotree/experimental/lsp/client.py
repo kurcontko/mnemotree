@@ -89,14 +89,31 @@ class LspClient:
             "rootUri": f"file://{self.root_dir}",
             "capabilities": {
                 "textDocument": {
-                    "synchronization": {"dynamicRegistration": True, "willSave": False, "didSave": False, "willSaveWaitUntil": False},
-                    "completion": {"dynamicRegistration": True, "completionItem": {"snippetSupport": False}},
-                    "hover": {"dynamicRegistration": True, "contentFormat": ["markdown", "plaintext"]},
-                    "signatureHelp": {"dynamicRegistration": True, "signatureInformation": {"documentationFormat": ["markdown", "plaintext"]}},
+                    "synchronization": {
+                        "dynamicRegistration": True,
+                        "willSave": False,
+                        "didSave": False,
+                        "willSaveWaitUntil": False,
+                    },
+                    "completion": {
+                        "dynamicRegistration": True,
+                        "completionItem": {"snippetSupport": False},
+                    },
+                    "hover": {
+                        "dynamicRegistration": True,
+                        "contentFormat": ["markdown", "plaintext"],
+                    },
+                    "signatureHelp": {
+                        "dynamicRegistration": True,
+                        "signatureInformation": {"documentationFormat": ["markdown", "plaintext"]},
+                    },
                     "definition": {"dynamicRegistration": True},
                     "references": {"dynamicRegistration": True},
                     "documentHighlight": {"dynamicRegistration": True},
-                    "documentSymbol": {"dynamicRegistration": True, "symbolKind": {"valueSet": list(range(1, 27))}},
+                    "documentSymbol": {
+                        "dynamicRegistration": True,
+                        "symbolKind": {"valueSet": list(range(1, 27))},
+                    },
                     "codeAction": {"dynamicRegistration": True},
                     "formatting": {"dynamicRegistration": True},
                     "rangeFormatting": {"dynamicRegistration": True},
@@ -186,7 +203,9 @@ class LspClient:
             else:
                 # It could be a server -> client request (not supported yet)
                 # Or just a mismatched ID
-                logger.debug(f"Received response/request with unknown ID: {req_id} (pending: {list(self._pending_requests.keys())})")
+                logger.debug(
+                    f"Received response/request with unknown ID: {req_id} (pending: {list(self._pending_requests.keys())})"
+                )
         else:
             # Notification
             pass
@@ -200,7 +219,9 @@ class LspClient:
                 break
             logger.debug(f"LSP STDERR: {line.decode().strip()}")
 
-    async def text_document_did_open(self, file_path: str, text: str, language_id: str = "python") -> None:
+    async def text_document_did_open(
+        self, file_path: str, text: str, language_id: str = "python"
+    ) -> None:
         """Sends textDocument/didOpen."""
         uri = f"file://{file_path}"
         params = {
@@ -220,7 +241,9 @@ class LspClient:
         result: Any = await self.request("textDocument/documentSymbol", params)
         return result
 
-    async def text_document_references(self, file_path: str, line: int, character: int) -> list[dict[str, Any]]:
+    async def text_document_references(
+        self, file_path: str, line: int, character: int
+    ) -> list[dict[str, Any]]:
         """Sends textDocument/references."""
         uri = f"file://{file_path}"
         params = {
