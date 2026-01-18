@@ -43,11 +43,11 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov-report=xml:coverage.xml
+          pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
 
       - name: SonarQube scan
         if: matrix.python-version == '3.12'
-        uses: sonarsource/sonarqube-scan-action@v2
+        uses: sonarsource/sonarqube-scan-action@aecaf43ae57e412bd97d70ef9ce6076e672fe0a9 # v2.3.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -62,4 +62,12 @@ jobs:
         with:
           name: coverage-report-${{ matrix.python-version }}
           path: coverage.xml
+          if-no-files-found: warn
+
+      - name: Upload test report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-report-${{ matrix.python-version }}
+          path: pytest-report.xml
           if-no-files-found: warn
