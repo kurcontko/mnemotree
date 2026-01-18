@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-from mnemotree.core.memory import MemoryCore, ModeDefaultsConfig, NerConfig
+from mnemotree.core.memory import MemoryCore, ModeDefaultsConfig, NerConfig, RecallFilters
 from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
 from mnemotree.ner import create_ner
 from mnemotree.store.protocols import SupportsMemoryListing
@@ -31,8 +31,59 @@ def _parse_memory_type(value: str | None) -> MemoryType | None:
     raise ValueError(f"Unknown memory_type '{value}'.")
 
 
-def _serialize_memory(memory: MemoryItem, *, include_embedding: bool) -> dict[str, Any]:
+def _ensure_list(value: Any) -> list[Any] | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _parse_recall_filters(filters: dict[str, Any] | None) -> RecallFilters | None:
+    if not filters:
+        return None
+
+    raw_memory_types = filters.get("memory_types") or filters.get("memory_type")
+    parsed_memory_types: list[MemoryType] | None = None
+    if raw_memory_types is not None:
+        parsed_list: list[MemoryType] = []
+        for raw_value in _ensure_list(raw_memory_types) or []:
+            if isinstance(raw_value, MemoryType):
+                parsed_list.append(raw_value)
+            else:
+                parsed = _parse_memory_type(str(raw_value))
+                if parsed is not None:
+                    parsed_list.append(parsed)
+        if parsed_list:
+            parsed_memory_types = parsed_list
+
+    tags = _ensure_list(filters.get("tags"))
+    if tags is not None:
+        tags = [str(tag) for tag in tags]
+
+    return RecallFilters(
+        memory_types=parsed_memory_types,
+        tags=tags,
+        min_importance=filters.get("min_importance"),
+        max_importance=filters.get("max_importance"),
+        since=filters.get("since"),
+        until=filters.get("until"),
+        source=filters.get("source"),
+        author=filters.get("author"),
+        conversation_id=filters.get("conversation_id"),
+        user_id=filters.get("user_id"),
+    )
+
+
+def _serialize_memory(
+    memory: MemoryItem,
+    *,
+    include_embedding: bool,
+    fields: list[str] | None = None,
+) -> dict[str, Any]:
     data = memory.model_dump(mode="json")
+    if fields:
+        return {field: data[field] for field in fields if field in data}
     if not include_embedding:
         data.pop("embedding", None)
     return data
@@ -209,22 +260,68 @@ async def remember(
     analyze: bool | None = None,
     summarize: bool | None = None,
     references: list[str] | None = None,
+    memory_id: str | None = None,
+    timestamp: str | None = None,
+    source: str | None = None,
+    author: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    conversation_id: str | None = None,
+    user_id: str | None = None,
     include_embedding: bool = False,
+    fields: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Store a memory entry and return the stored record."""
+    """Store a memory entry and return the stored record.
+
+    Args:
+        content: The text content to store.
+        memory_type: Optional type (semantic, episodic, procedural, declarative).
+        importance: Optional score 0.0-1.0.
+        tags: Optional list of tags for categorization.
+        context: Optional context dictionary.
+        analyze: Enable NER analysis if configured.
+        summarize: Generate a summary for the memory.
+        references: List of memory IDs this memory references.
+        memory_id: Custom ID (auto-generated if omitted).
+        timestamp: ISO-8601 timestamp (defaults to now).
+        source: Source identifier.
+        author: Author identifier.
+        metadata: Additional metadata dictionary.
+        conversation_id: Conversation identifier.
+        user_id: User identifier.
+        include_embedding: Include embedding vector in response.
+        fields: If provided, return only these fields (overrides include_embedding).
+
+    Returns:
+        The stored memory record as a dictionary.
+    """
     memory_core = await _get_memory_core()
     parsed_type = _parse_memory_type(memory_type)
-    memory = await memory_core.remember(
-        content=content,
-        memory_type=parsed_type,
-        importance=importance,
-        tags=tags,
-        context=context,
-        analyze=analyze,
-        summarize=summarize,
-        references=references,
-    )
-    return _serialize_memory(memory, include_embedding=include_embedding)
+    remember_kwargs: dict[str, Any] = {
+        "content": content,
+        "memory_type": parsed_type,
+        "importance": importance,
+        "tags": tags,
+        "context": context,
+        "analyze": analyze,
+        "summarize": summarize,
+        "references": references,
+    }
+    if memory_id is not None:
+        remember_kwargs["memory_id"] = memory_id
+    if timestamp is not None:
+        remember_kwargs["timestamp"] = timestamp
+    if source is not None:
+        remember_kwargs["source"] = source
+    if author is not None:
+        remember_kwargs["author"] = author
+    if metadata is not None:
+        remember_kwargs["metadata"] = metadata
+    if conversation_id is not None:
+        remember_kwargs["conversation_id"] = conversation_id
+    if user_id is not None:
+        remember_kwargs["user_id"] = user_id
+    memory = await memory_core.remember(**remember_kwargs)
+    return _serialize_memory(memory, include_embedding=include_embedding, fields=fields)
 
 
 async def recall(
@@ -233,16 +330,47 @@ async def recall(
     scoring: bool = True,
     update_access: bool = False,
     include_embedding: bool = False,
+    fields: list[str] | None = None,
+    filters: dict[str, Any] | None = None,
+    candidate_limit: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Retrieve memories relevant to a query string."""
+    """Retrieve memories relevant to a query string.
+
+    Args:
+        query: Search query text.
+        limit: Maximum results to return (default: 10).
+        scoring: Enable relevance scoring (default: True).
+        update_access: Update last_accessed timestamp (default: False).
+        include_embedding: Include embedding vectors in results.
+        fields: If provided, return only these fields (overrides include_embedding).
+        filters: Optional dict with keys:
+            - memory_types: List of types to include.
+            - tags: List of tags to filter by.
+            - min_importance / max_importance: Float thresholds.
+            - since / until: ISO-8601 timestamps for time range.
+            - source, author, conversation_id, user_id: String filters.
+        candidate_limit: Fetch more candidates before filtering (improves recall).
+
+    Returns:
+        List of matching memory dictionaries.
+    """
     memory_core = await _get_memory_core()
-    memories = await memory_core.recall(
-        query=query,
-        limit=limit,
-        scoring=scoring,
-        update_access=update_access,
-    )
-    return [_serialize_memory(memory, include_embedding=include_embedding) for memory in memories]
+    parsed_filters = _parse_recall_filters(filters)
+    recall_kwargs: dict[str, Any] = {
+        "query": query,
+        "limit": limit,
+        "scoring": scoring,
+        "update_access": update_access,
+    }
+    if parsed_filters is not None:
+        recall_kwargs["filters"] = parsed_filters
+    if candidate_limit is not None:
+        recall_kwargs["candidate_limit"] = candidate_limit
+    memories = await memory_core.recall(**recall_kwargs)
+    return [
+        _serialize_memory(memory, include_embedding=include_embedding, fields=fields)
+        for memory in memories
+    ]
 
 
 async def search_index(
@@ -250,7 +378,19 @@ async def search_index(
     limit: int = 10,
     include_summary: bool = True,
 ) -> list[dict[str, Any]]:
-    """Return compact search results for progressive disclosure workflows."""
+    """Return compact search results for progressive disclosure workflows.
+
+    Returns ranked results with memory_id, snippet, importance, tags, and timestamp.
+    Use get_memories() to fetch full records for selected IDs.
+
+    Args:
+        query: Search query text.
+        limit: Maximum results (default: 10).
+        include_summary: Include summary field in results (default: True).
+
+    Returns:
+        List of compact result dicts with rank and snippet.
+    """
     memory_core = await _get_memory_core()
     memories = await memory_core.recall(
         query=query,
@@ -275,7 +415,19 @@ async def timeline(
     include_anchor: bool = True,
     include_embedding: bool = False,
 ) -> list[dict[str, Any]]:
-    """Return memories around a given memory or timestamp in chronological order."""
+    """Return memories around a given memory or timestamp in chronological order.
+
+    Args:
+        memory_id: Anchor memory ID (provide this or timestamp).
+        timestamp: ISO-8601 anchor timestamp (provide this or memory_id).
+        before: Number of memories before anchor (default: 3).
+        after: Number of memories after anchor (default: 3).
+        include_anchor: Include anchor memory in results (default: True).
+        include_embedding: Include embedding vectors (default: False).
+
+    Returns:
+        List of memories sorted chronologically with offset from anchor.
+    """
     if not memory_id and not timestamp:
         raise ValueError("Provide either memory_id or timestamp.")
     memory_core = await _get_memory_core()
@@ -307,39 +459,71 @@ async def timeline(
 async def get_memories(
     memory_ids: list[str],
     include_embedding: bool = False,
+    fields: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch full memory records by ID."""
+    """Fetch full memory records by ID.
+
+    Args:
+        memory_ids: List of memory IDs to retrieve.
+        include_embedding: Include embedding vectors (default: False).
+        fields: If provided, return only these fields in each result.
+
+    Returns:
+        List of memory dictionaries (missing IDs are omitted).
+    """
     memory_core = await _get_memory_core()
     store = memory_core.store
     if not memory_ids:
         return []
     results = await asyncio.gather(*(store.get_memory(memory_id) for memory_id in memory_ids))
     return [
-        _serialize_memory(memory, include_embedding=include_embedding)
+        _serialize_memory(memory, include_embedding=include_embedding, fields=fields)
         for memory in results
         if memory is not None
     ]
 
 
 async def forget(memory_id: str) -> bool:
-    """Delete a memory by ID."""
+    """Delete a memory by ID.
+
+    Args:
+        memory_id: The ID of the memory to delete.
+
+    Returns:
+        True if deleted, False if not found.
+    """
     memory_core = await _get_memory_core()
     return await memory_core.forget(memory_id)
 
 
 async def reflect(min_importance: float = 0.7) -> dict[str, Any]:
-    """Summarize patterns across higher-importance memories."""
+    """Summarize patterns across higher-importance memories.
+
+    Args:
+        min_importance: Only include memories with importance >= this value (default: 0.7).
+
+    Returns:
+        Dictionary with pattern summary and insights.
+    """
     memory_core = await _get_memory_core()
     return await memory_core.reflect(min_importance=min_importance)
 
 
 def memory_types() -> list[str]:
-    """Return supported memory type values."""
+    """Return supported memory type values.
+
+    Returns:
+        List of valid memory_type strings: semantic, episodic, procedural, declarative.
+    """
     return [memory_type.value for memory_type in MemoryType]
 
 
 def health() -> dict[str, str]:
-    """Simple health check."""
+    """Simple health check.
+
+    Returns:
+        Dictionary with status key ("ok" if healthy).
+    """
     return {"status": "ok"}
 
 

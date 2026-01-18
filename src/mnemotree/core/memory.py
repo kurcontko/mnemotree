@@ -23,6 +23,7 @@ from ..store.base import BaseMemoryStore
 from ..store.protocols import (
     MemoryCRUDStore,
     SupportsConnections,
+    SupportsMetadataUpdate,
     SupportsStructuredQuery,
     SupportsVectorSearch,
 )
@@ -31,7 +32,7 @@ from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
-from .models import MemoryItem, MemoryType
+from .models import MemoryItem, MemoryType, coerce_datetime
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
 from .retrieval import HybridFusionRetriever, Retriever, VectorEntityRetriever
 from .scoring import MemoryScoring
@@ -89,6 +90,54 @@ class ModeConfig:
     analyze_default: bool
     summarize_default: bool
     enable_keywords: bool
+
+
+@dataclass(frozen=True)
+class RememberOptions:
+    """Optional remember() settings to reduce long argument lists."""
+
+    memory_type: MemoryType | None = None
+    importance: float | None = None
+    tags: list[str] | None = None
+    context: dict[str, Any] | None = None
+    analyze: bool | None = None
+    summarize: bool | None = None
+    references: list[str] | None = None
+    skip_store: bool = False
+    memory_id: str | None = None
+    timestamp: datetime | str | None = None
+    source: str | None = None
+    author: str | None = None
+    metadata: dict[str, Any] | None = None
+    conversation_id: str | None = None
+    user_id: str | None = None
+
+
+@dataclass(frozen=True)
+class RecallFilters:
+    """Optional recall() filters applied after retrieval."""
+
+    memory_types: list[MemoryType] | None = None
+    tags: list[str] | None = None
+    min_importance: float | None = None
+    max_importance: float | None = None
+    since: datetime | str | None = None
+    until: datetime | str | None = None
+    source: str | None = None
+    author: str | None = None
+    conversation_id: str | None = None
+    user_id: str | None = None
+
+
+@dataclass(frozen=True)
+class RecallOptions:
+    """Optional recall() settings to reduce long argument lists."""
+
+    limit: int | None = None
+    scoring: bool = True
+    update_access: bool = False
+    filters: RecallFilters | None = None
+    candidate_limit: int | None = None
 
 
 class MemoryCore:
@@ -182,9 +231,52 @@ class MemoryCore:
         analyze: bool | None = None,
         summarize: bool | None = None,
         references: list[str] | None = None,
-        skip_store: bool = False,
+        skip_store: bool | None = None,
+        memory_id: str | None = None,
+        timestamp: datetime | str | None = None,
+        source: str | None = None,
+        author: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        user_id: str | None = None,
+        options: RememberOptions | None = None,
     ) -> MemoryItem:
         """Store a new memory with optional analysis - delegating to EnrichmentPipeline."""
+        (
+            memory_type,
+            importance,
+            tags,
+            context,
+            analyze,
+            summarize,
+            references,
+            skip_store,
+            memory_id,
+            timestamp,
+            source,
+            author,
+            metadata,
+            conversation_id,
+            user_id,
+        ) = self._resolve_remember_options(
+            options=options,
+            memory_type=memory_type,
+            importance=importance,
+            tags=tags,
+            context=context,
+            analyze=analyze,
+            summarize=summarize,
+            references=references,
+            skip_store=skip_store,
+            memory_id=memory_id,
+            timestamp=timestamp,
+            source=source,
+            author=author,
+            metadata=metadata,
+            conversation_id=conversation_id,
+            user_id=user_id,
+        )
+
         if self.async_ingest and not skip_store:
             return await self.remember_async(
                 content,
@@ -195,6 +287,13 @@ class MemoryCore:
                 analyze=analyze,
                 summarize=summarize,
                 references=references,
+                memory_id=memory_id,
+                timestamp=timestamp,
+                source=source,
+                author=author,
+                metadata=metadata,
+                conversation_id=conversation_id,
+                user_id=user_id,
             )
         return await self._remember_sync(
             content,
@@ -206,6 +305,13 @@ class MemoryCore:
             summarize=summarize,
             references=references,
             skip_store=skip_store,
+            memory_id=memory_id,
+            timestamp=timestamp,
+            source=source,
+            author=author,
+            metadata=metadata,
+            conversation_id=conversation_id,
+            user_id=user_id,
         )
 
     async def remember_async(
@@ -219,13 +325,57 @@ class MemoryCore:
         analyze: bool | None = None,
         summarize: bool | None = None,
         references: list[str] | None = None,
+        memory_id: str | None = None,
+        timestamp: datetime | str | None = None,
+        source: str | None = None,
+        author: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        user_id: str | None = None,
+        options: RememberOptions | None = None,
     ) -> MemoryItem:
         """Queue memory ingestion for background processing."""
+        (
+            memory_type,
+            importance,
+            tags,
+            context,
+            analyze,
+            summarize,
+            references,
+            skip_store,
+            memory_id,
+            timestamp,
+            source,
+            author,
+            metadata,
+            conversation_id,
+            user_id,
+        ) = self._resolve_remember_options(
+            options=options,
+            memory_type=memory_type,
+            importance=importance,
+            tags=tags,
+            context=context,
+            analyze=analyze,
+            summarize=summarize,
+            references=references,
+            skip_store=None,
+            memory_id=memory_id,
+            timestamp=timestamp,
+            source=source,
+            author=author,
+            metadata=metadata,
+            conversation_id=conversation_id,
+            user_id=user_id,
+        )
+        if skip_store:
+            raise ValueError("remember_async does not support skip_store.")
         await self._ensure_ingestion_queue()
         queue = self._ingestion_queue
         assert queue is not None
-        memory_id = str(uuid4())
-        timestamp = datetime.now(timezone.utc)
+        memory_id = memory_id or str(uuid4())
+        timestamp = timestamp or datetime.now(timezone.utc)
         await queue.enqueue(
             IngestionRequest(
                 memory_id=memory_id,
@@ -238,6 +388,11 @@ class MemoryCore:
                 summarize=summarize,
                 references=references,
                 timestamp=timestamp,
+                source=source,
+                author=author,
+                metadata=metadata,
+                conversation_id=conversation_id,
+                user_id=user_id,
             )
         )
         return self._queued_memory_stub(
@@ -248,6 +403,11 @@ class MemoryCore:
             tags=tags,
             context=context,
             timestamp=timestamp,
+            source=source,
+            author=author,
+            metadata=metadata,
+            conversation_id=conversation_id,
+            user_id=user_id,
         )
 
     async def _remember_sync(
@@ -264,6 +424,11 @@ class MemoryCore:
         skip_store: bool = False,
         memory_id: str | None = None,
         timestamp: datetime | None = None,
+        source: str | None = None,
+        author: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        user_id: str | None = None,
     ) -> MemoryItem:
         analyze, summarize = self._resolve_analysis_flags(analyze, summarize)
 
@@ -291,12 +456,112 @@ class MemoryCore:
             emotional_valence=emotional_valence,
             emotional_arousal=emotional_arousal,
             timestamp=timestamp,
+            source=source,
+            author=author,
+            metadata=metadata,
+            conversation_id=conversation_id,
+            user_id=user_id,
         )
 
         memory = MemoryItem(**memory_data)
         memory = await self._apply_pre_remember_hooks(memory)
         await self._persist_memory(memory, references, skip_store)
         return memory
+
+    def _resolve_remember_options(
+        self,
+        *,
+        options: RememberOptions | None,
+        memory_type: MemoryType | None,
+        importance: float | None,
+        tags: list[str] | None,
+        context: dict[str, Any] | None,
+        analyze: bool | None,
+        summarize: bool | None,
+        references: list[str] | None,
+        skip_store: bool | None,
+        memory_id: str | None,
+        timestamp: datetime | str | None,
+        source: str | None,
+        author: str | None,
+        metadata: dict[str, Any] | None,
+        conversation_id: str | None,
+        user_id: str | None,
+    ) -> tuple[
+        MemoryType | None,
+        float | None,
+        list[str] | None,
+        dict[str, Any] | None,
+        bool | None,
+        bool | None,
+        list[str] | None,
+        bool,
+        str | None,
+        datetime | None,
+        str | None,
+        str | None,
+        dict[str, Any] | None,
+        str | None,
+        str | None,
+    ]:
+        if options:
+            if memory_type is None:
+                memory_type = options.memory_type
+            if importance is None:
+                importance = options.importance
+            if tags is None:
+                tags = options.tags
+            if context is None:
+                context = options.context
+            if analyze is None:
+                analyze = options.analyze
+            if summarize is None:
+                summarize = options.summarize
+            if references is None:
+                references = options.references
+            if skip_store is None:
+                skip_store = options.skip_store
+            if memory_id is None:
+                memory_id = options.memory_id
+            if timestamp is None:
+                timestamp = options.timestamp
+            if source is None:
+                source = options.source
+            if author is None:
+                author = options.author
+            if metadata is None:
+                metadata = options.metadata
+            if conversation_id is None:
+                conversation_id = options.conversation_id
+            if user_id is None:
+                user_id = options.user_id
+
+        if skip_store is None:
+            skip_store = False
+
+        if timestamp is not None:
+            parsed = coerce_datetime(timestamp, default=None)
+            if parsed is None:
+                raise ValueError("Invalid timestamp format.")
+            timestamp = parsed
+
+        return (
+            memory_type,
+            importance,
+            tags,
+            context,
+            analyze,
+            summarize,
+            references,
+            skip_store,
+            memory_id,
+            timestamp,
+            source,
+            author,
+            metadata,
+            conversation_id,
+            user_id,
+        )
 
     def _resolve_analysis_flags(
         self,
@@ -337,6 +602,11 @@ class MemoryCore:
         emotional_valence: float | None,
         emotional_arousal: float | None,
         timestamp: datetime | None,
+        source: str | None,
+        author: str | None,
+        metadata: dict[str, Any] | None,
+        conversation_id: str | None,
+        user_id: str | None,
     ) -> dict[str, Any]:
         data = {
             "memory_id": memory_id or str(uuid4()),
@@ -362,6 +632,16 @@ class MemoryCore:
             data["timestamp"] = (
                 serialize_datetime(timestamp) if isinstance(timestamp, datetime) else timestamp
             )
+        if source is not None:
+            data["source"] = source
+        if author is not None:
+            data["author"] = author
+        if metadata is not None:
+            data["metadata"] = metadata
+        if conversation_id is not None:
+            data["conversation_id"] = conversation_id
+        if user_id is not None:
+            data["user_id"] = user_id
         return data
 
     async def _apply_pre_remember_hooks(self, memory: MemoryItem) -> MemoryItem:
@@ -389,8 +669,11 @@ class MemoryCore:
         query: str | MemoryQuery | MemoryQueryBuilder,
         *,
         limit: int | None = None,
-        scoring: bool = True,
-        update_access: bool = False,
+        scoring: bool | None = None,
+        update_access: bool | None = None,
+        filters: RecallFilters | None = None,
+        candidate_limit: int | None = None,
+        options: RecallOptions | None = None,
     ) -> list[MemoryItem]:
         """
         Retrieve memories based on a query - delegating to the retriever.
@@ -398,14 +681,154 @@ class MemoryCore:
         Args:
             query: The query string, MemoryQuery object or MemoryQueryBuilder
             limit: Optional max results to return
+            scoring: If True, rank by relevance/recency/importance
             update_access: If True, update access metadata for returned memories
+            filters: Optional RecallFilters applied after retrieval
+            candidate_limit: Optional max candidates fetched before filtering
+            options: Optional RecallOptions (used when explicit args are None)
 
         Returns:
             List of matching MemoryItems
         """
-        return await self.retrieval.recall(
-            query=query, limit=limit, scoring=scoring, update_access=update_access
+        limit, scoring, update_access, filters, candidate_limit = self._resolve_recall_options(
+            limit=limit,
+            scoring=scoring,
+            update_access=update_access,
+            filters=filters,
+            candidate_limit=candidate_limit,
+            options=options,
         )
+
+        if filters:
+            candidate_limit = self._resolve_candidate_limit(limit, candidate_limit)
+            memories = await self.retrieval.recall(
+                query=query,
+                limit=candidate_limit,
+                scoring=scoring,
+                update_access=False,
+            )
+            memories = self._apply_recall_filters(memories, filters)
+            if limit is not None:
+                memories = memories[:limit]
+            if update_access:
+                await self._update_access_metadata(memories)
+            return memories
+
+        return await self.retrieval.recall(
+            query=query,
+            limit=limit,
+            scoring=scoring,
+            update_access=update_access,
+        )
+
+    def _resolve_recall_options(
+        self,
+        *,
+        limit: int | None,
+        scoring: bool | None,
+        update_access: bool | None,
+        filters: RecallFilters | None,
+        candidate_limit: int | None,
+        options: RecallOptions | None,
+    ) -> tuple[int | None, bool, bool, RecallFilters | None, int | None]:
+        if options:
+            if limit is None:
+                limit = options.limit
+            if scoring is None:
+                scoring = options.scoring
+            if update_access is None:
+                update_access = options.update_access
+            if filters is None:
+                filters = options.filters
+            if candidate_limit is None:
+                candidate_limit = options.candidate_limit
+
+        if scoring is None:
+            scoring = True
+        if update_access is None:
+            update_access = False
+
+        return limit, scoring, update_access, filters, candidate_limit
+
+    @staticmethod
+    def _resolve_candidate_limit(limit: int | None, candidate_limit: int | None) -> int | None:
+        if candidate_limit is None:
+            return limit
+        if limit is None:
+            return candidate_limit
+        return max(candidate_limit, limit)
+
+    @staticmethod
+    def _coerce_filter_timestamp(value: datetime | str | None, label: str) -> datetime | None:
+        if value is None:
+            return None
+        parsed = coerce_datetime(value, default=None)
+        if parsed is None:
+            raise ValueError(f"Invalid {label} timestamp format.")
+        return parsed
+
+    def _apply_recall_filters(
+        self,
+        memories: list[MemoryItem],
+        filters: RecallFilters,
+    ) -> list[MemoryItem]:
+        if not memories:
+            return []
+        memory_types = set(filters.memory_types) if filters.memory_types else None
+        tags = set(filters.tags) if filters.tags else None
+        since = self._coerce_filter_timestamp(filters.since, "since")
+        until = self._coerce_filter_timestamp(filters.until, "until")
+
+        filtered: list[MemoryItem] = []
+        for memory in memories:
+            if memory_types and memory.memory_type not in memory_types:
+                continue
+            if tags and not set(memory.tags).intersection(tags):
+                continue
+            if filters.min_importance is not None and memory.importance < filters.min_importance:
+                continue
+            if filters.max_importance is not None and memory.importance > filters.max_importance:
+                continue
+            if filters.source is not None and memory.source != filters.source:
+                continue
+            if filters.author is not None and memory.author != filters.author:
+                continue
+            if (
+                filters.conversation_id is not None
+                and memory.conversation_id != filters.conversation_id
+            ):
+                continue
+            if filters.user_id is not None and memory.user_id != filters.user_id:
+                continue
+            if since is not None or until is not None:
+                memory_timestamp = coerce_datetime(memory.timestamp, default=None)
+                if memory_timestamp is None:
+                    continue
+                if since is not None and memory_timestamp < since:
+                    continue
+                if until is not None and memory_timestamp > until:
+                    continue
+            filtered.append(memory)
+        return filtered
+
+    async def _update_access_metadata(self, memories: list[MemoryItem]) -> None:
+        if not isinstance(self.store, SupportsMetadataUpdate):
+            return
+        update_tasks = []
+        for memory in memories:
+            memory.update_access()
+            update_tasks.append(
+                self.store.update_memory_metadata(
+                    memory.memory_id,
+                    {
+                        "last_accessed": memory.last_accessed,
+                        "access_count": memory.access_count,
+                        "access_history": memory.access_history,
+                    },
+                )
+            )
+        if update_tasks:
+            await asyncio.gather(*update_tasks)
 
     async def reflect(
         self, query_builder: MemoryQueryBuilder | None = None, min_importance: float = 0.7
@@ -969,6 +1392,11 @@ class MemoryCore:
             references=request.references,
             memory_id=request.memory_id,
             timestamp=request.timestamp,
+            source=request.source,
+            author=request.author,
+            metadata=request.metadata,
+            conversation_id=request.conversation_id,
+            user_id=request.user_id,
             skip_store=False,
         )
 
@@ -982,20 +1410,37 @@ class MemoryCore:
         tags: list[str] | None,
         context: dict[str, Any] | None,
         timestamp: datetime | None,
+        source: str | None,
+        author: str | None,
+        metadata: dict[str, Any] | None,
+        conversation_id: str | None,
+        user_id: str | None,
     ) -> MemoryItem:
         resolved_type, resolved_importance = self._resolve_importance_and_type(
             memory_type,
             importance,
             None,
         )
-        return MemoryItem(
-            memory_id=memory_id,
-            content=content,
-            summary=None,
-            memory_type=resolved_type,
-            importance=resolved_importance,
-            tags=tags or [],
-            context=context or {},
-            metadata={"queued": True},
-            timestamp=timestamp or datetime.now(timezone.utc),
-        )
+        queued_metadata = {"queued": True}
+        if metadata:
+            queued_metadata.update(metadata)
+        memory_kwargs: dict[str, Any] = {
+            "memory_id": memory_id,
+            "content": content,
+            "summary": None,
+            "memory_type": resolved_type,
+            "importance": resolved_importance,
+            "tags": tags or [],
+            "context": context or {},
+            "metadata": queued_metadata,
+            "timestamp": timestamp or datetime.now(timezone.utc),
+        }
+        if source is not None:
+            memory_kwargs["source"] = source
+        if author is not None:
+            memory_kwargs["author"] = author
+        if conversation_id is not None:
+            memory_kwargs["conversation_id"] = conversation_id
+        if user_id is not None:
+            memory_kwargs["user_id"] = user_id
+        return MemoryItem(**memory_kwargs)
