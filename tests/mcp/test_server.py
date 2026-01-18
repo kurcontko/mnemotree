@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
+from mnemotree.core.memory import ModeDefaultsConfig, NerConfig
 from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.mcp import server
 
@@ -305,9 +306,14 @@ async def test_get_memory_core_remote_store_and_ner(monkeypatch):
     }
     assert core.store.initialized is True
     assert ner_calls == [("gliner", {"model_name": "ner-model"})]
-    assert core.kwargs["ner"] == "ner-instance"
-    assert core.kwargs["enable_ner"] is True
-    assert core.kwargs["enable_keywords"] is True
+    mode_defaults = core.kwargs["mode_defaults"]
+    ner_config = core.kwargs["ner_config"]
+    assert isinstance(mode_defaults, ModeDefaultsConfig)
+    assert mode_defaults.mode == "lite"
+    assert mode_defaults.enable_keywords is True
+    assert isinstance(ner_config, NerConfig)
+    assert ner_config.ner == "ner-instance"
+    assert ner_config.enable_ner is True
 
 
 @pytest.mark.asyncio
@@ -346,7 +352,13 @@ async def test_get_memory_core_persist_dir(monkeypatch):
         "persist_directory": "/tmp/mnemotree",
         "collection_name": "memories-local",
     }
-    assert core.kwargs["ner"] is None
+    mode_defaults = core.kwargs["mode_defaults"]
+    ner_config = core.kwargs["ner_config"]
+    assert isinstance(mode_defaults, ModeDefaultsConfig)
+    assert mode_defaults.enable_keywords is False
+    assert isinstance(ner_config, NerConfig)
+    assert ner_config.ner is None
+    assert ner_config.enable_ner is False
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-from mnemotree.core.memory import MemoryCore
+from mnemotree.core.memory import MemoryCore, ModeDefaultsConfig, NerConfig
 from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
 from mnemotree.ner import create_ner
 from mnemotree.store.protocols import SupportsMemoryListing
@@ -187,12 +187,15 @@ async def _get_memory_core() -> MemoryCore:
                     ner_kwargs["model"] = ner_model
             ner = create_ner(ner_backend, **ner_kwargs)
 
+        enable_ner = _env_bool("MNEMOTREE_MCP_ENABLE_NER", False)
+        enable_keywords = _env_bool("MNEMOTREE_MCP_ENABLE_KEYWORDS", False)
+        mode_defaults = ModeDefaultsConfig(mode="lite", enable_keywords=enable_keywords)
+        ner_config = NerConfig(ner=ner, enable_ner=enable_ner)
+
         _memory_core = MemoryCore(
             store=store,
-            mode="lite",
-            ner=ner,
-            enable_ner=_env_bool("MNEMOTREE_MCP_ENABLE_NER", False),
-            enable_keywords=_env_bool("MNEMOTREE_MCP_ENABLE_KEYWORDS", False),
+            mode_defaults=mode_defaults,
+            ner_config=ner_config,
         )
         return _memory_core
 
@@ -371,8 +374,8 @@ def _load_fastmcp() -> Any:
 def _get_mcp() -> Any:
     global _mcp_instance
     if _mcp_instance is None:
-        FastMCP = _load_fastmcp()
-        mcp_instance = FastMCP("Mnemotree Memory")
+        fastmcp_cls = _load_fastmcp()
+        mcp_instance = fastmcp_cls("Mnemotree Memory")
         _register_tools(mcp_instance)
         _mcp_instance = mcp_instance
     return _mcp_instance
