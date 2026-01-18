@@ -13,6 +13,7 @@ dependencies = [
     "networkx>=3.4.0,<4.0.0",
     "spacy>=3.8.0,<4.0.0",
     "urllib3>=2.6.0,<3.0.0",
+    "filelock>=3.20.3,<4.0.0",
     
     # Langchain
     "langchain>=0.3.7,<0.4.0",
