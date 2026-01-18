@@ -1142,7 +1142,9 @@ class TestSpacyNER:
             ner = spacy_module.SpacyNER()
 
             # Patch asyncio.to_thread to return our mock doc
-            with patch("mnemotree.ner.spacy.asyncio.to_thread", new=AsyncMock(return_value=mock_doc)):
+            with patch(
+                "mnemotree.ner.spacy.asyncio.to_thread", new=AsyncMock(return_value=mock_doc)
+            ):
                 result = await ner.extract_entities("")
 
             assert result.entities == {}

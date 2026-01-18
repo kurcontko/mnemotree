@@ -49,13 +49,17 @@ class TestCrossEncoderRerankerLoadModel:
         """ImportError is raised with helpful message when sentence-transformers not installed."""
         reranker = CrossEncoderReranker()
 
-        with patch.dict("sys.modules", {"sentence_transformers": None}), patch(
-            "mnemotree.rerankers.cross_encoder.CrossEncoderReranker._load_model",
-            side_effect=ImportError(
-                "sentence-transformers is required for CrossEncoderReranker. "
-                "Install with: pip install sentence-transformers"
+        with (
+            patch.dict("sys.modules", {"sentence_transformers": None}),
+            patch(
+                "mnemotree.rerankers.cross_encoder.CrossEncoderReranker._load_model",
+                side_effect=ImportError(
+                    "sentence-transformers is required for CrossEncoderReranker. "
+                    "Install with: pip install sentence-transformers"
+                ),
             ),
-        ), pytest.raises(ImportError, match="sentence-transformers is required"):
+            pytest.raises(ImportError, match="sentence-transformers is required"),
+        ):
             reranker._load_model()
 
     def test_load_model_only_runs_once(self):
