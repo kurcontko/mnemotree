@@ -360,12 +360,14 @@ class MemoryEvaluator:
         old_centroid = np.mean(old_memories, axis=0)
 
         # Euclidean distance between centroids (normalized)
-        drift = np.linalg.norm(recent_centroid - old_centroid)
+        drift = float(np.linalg.norm(recent_centroid - old_centroid).item())
 
         # Normalize to [0, 1] range
-        drift_rate = min(1.0, drift / 2.0)
+        drift_rate = drift / 2.0
+        if drift_rate > 1.0:
+            drift_rate = 1.0
 
-        return float(drift_rate)
+        return drift_rate
 
     def calculate_staleness_ratio(
         self, memories: list[MemoryItem], staleness_threshold_days: int = 90
@@ -425,12 +427,14 @@ class MemoryEvaluator:
             return 0.0
 
         # Average distance as diversity measure
-        avg_distance = np.mean(distances)
+        avg_distance = float(np.mean(distances).item())
 
         # Normalize to [0, 1] range
-        diversity = min(1.0, avg_distance / 2.0)
+        diversity = avg_distance / 2.0
+        if diversity > 1.0:
+            diversity = 1.0
 
-        return float(diversity)
+        return diversity
 
     def save_benchmark(self, benchmark: BenchmarkResult, filepath: Path):
         """Save benchmark results to file."""
