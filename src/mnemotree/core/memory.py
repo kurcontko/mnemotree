@@ -3,7 +3,7 @@ import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 from langchain_core.embeddings.embeddings import Embeddings
@@ -622,7 +622,8 @@ class MemoryCore:
             vector=query_embedding,
             limit=limit,
         )
-        return await self.store.query_memories(query)
+        store = cast(SupportsStructuredQuery, self.store)
+        return await store.query_memories(query)
 
     def _supports_structured_query(self) -> bool:
         if not isinstance(self.store, SupportsStructuredQuery):
