@@ -47,10 +47,6 @@ ner_hf = [
     "transformers>=4.38.0",
     "torch>=2.0.0",
 ]
-ner_flair = [
-    "flair>=0.13.0",
-    "torch>=2.0.0",
-]
 ner_stanza = ["stanza>=1.7.0"]
 ner_spark = [
     "pyspark>=3.4.0",
@@ -224,7 +220,6 @@ module = [
     "asyncpg.*",
     "psycopg.*",
     "streamlit.*",
-    "flair.*",
     "gliner.*",
     "pyspark.*",
     "sparknlp.*",

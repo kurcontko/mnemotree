@@ -216,7 +216,6 @@ memory_core = MemoryCore(store=store, mode="lite", ner=TransformersNER(model="ds
 Extras:
 - Transformers: `mnemotree[ner_hf]` (e.g. `dslim/distilbert-NER`)
 - GLiNER: `mnemotree[ner_gliner]`
-- Flair: `mnemotree[ner_flair]`
 - Stanza: `mnemotree[ner_stanza]`
 
 ### MCP Server (FastMCP)
@@ -260,7 +259,7 @@ or point them at a remote Chroma server.
 - `MNEMOTREE_MCP_COLLECTION` (default: `memories`)
 - `MNEMOTREE_MCP_CHROMA_HOST`, `MNEMOTREE_MCP_CHROMA_PORT`, `MNEMOTREE_MCP_CHROMA_SSL`
 - `MNEMOTREE_MCP_ENABLE_NER`, `MNEMOTREE_MCP_ENABLE_KEYWORDS` (both default to `false`)
-- `MNEMOTREE_MCP_NER_BACKEND` (e.g. `spacy`, `transformers`, `gliner`, `stanza`, `flair`)
+- `MNEMOTREE_MCP_NER_BACKEND` (e.g. `spacy`, `transformers`, `gliner`, `stanza`)
 - `MNEMOTREE_MCP_NER_MODEL` (backend-specific model id/path)
 
 **Docker (optional)**

@@ -1439,43 +1439,6 @@ wheels = [
 ]
 
 [[package]]
-name = "flair"
-version = "0.15.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "bioc" },
-    { name = "boto3" },
-    { name = "conllu" },
-    { name = "deprecated" },
-    { name = "ftfy" },
-    { name = "gdown" },
-    { name = "huggingface-hub" },
-    { name = "langdetect" },
-    { name = "lxml" },
-    { name = "matplotlib" },
-    { name = "more-itertools" },
-    { name = "mpld3" },
-    { name = "pptree" },
-    { name = "python-dateutil" },
-    { name = "pytorch-revgrad" },
-    { name = "regex" },
-    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "segtok" },
-    { name = "sqlitedict" },
-    { name = "tabulate" },
-    { name = "torch" },
-    { name = "tqdm" },
-    { name = "transformer-smaller-training-vocab" },
-    { name = "transformers", extra = ["sentencepiece"] },
-    { name = "wikipedia-api" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/70/bf/f6cc2ee7fd15946fef5f7747327eeed49837a3d7fd34460129bc936f0de7/flair-0.15.1.tar.gz", hash = "sha256:780b4eeffba044c4a181f1810872fc01201c2eaed8d2ef4bcb126a6464e91933", size = 388607, upload-time = "2025-02-05T14:45:44.322Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/b9/da0f10de728204eee8b582356a2dfab34bc02b1102fec061656d8db44630/flair-0.15.1-py3-none-any.whl", hash = "sha256:3b6b793f2380cd618e988e7b16fbadcec6502aaa8f11a0890390160303aed553", size = 1174604, upload-time = "2025-02-05T14:45:41.788Z" },
-]
-
-[[package]]
 name = "flashrank"
 version = "0.2.10"
 source = { registry = "https://pypi.org/simple" }
@@ -3481,10 +3444,6 @@ milvus = [
 neo4j = [
     { name = "neo4j" },
 ]
-ner-flair = [
-    { name = "flair" },
-    { name = "torch" },
-]
 ner-gliner = [
     { name = "gliner" },
 ]
@@ -3524,7 +3483,6 @@ requires-dist = [
     { name = "fastmcp", marker = "extra == 'all'", specifier = "<3" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = "<3" },
     { name = "fastmcp", marker = "extra == 'mcp-server'", specifier = "<3" },
-    { name = "flair", marker = "extra == 'ner-flair'", specifier = ">=0.13.0" },
     { name = "flashrank", marker = "extra == 'rerank-flashrank'", specifier = ">=0.2.0" },
     { name = "gliner", marker = "extra == 'ner-gliner'", specifier = ">=0.2.0" },
     { name = "langchain", specifier = ">=0.3.7,<0.4.0" },
@@ -3568,13 +3526,12 @@ requires-dist = [
     { name = "stanza", marker = "extra == 'ner-stanza'", specifier = ">=1.7.0" },
     { name = "streamlit", marker = "extra == 'all'", specifier = ">=1.40.0" },
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.40.0" },
-    { name = "torch", marker = "extra == 'ner-flair'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'ner-hf'", specifier = ">=2.0.0" },
     { name = "transformers", marker = "extra == 'ner-hf'", specifier = ">=4.38.0" },
     { name = "yake", marker = "extra == 'all'", specifier = ">=0.4.8" },
     { name = "yake", marker = "extra == 'keywords'", specifier = ">=0.4.8" },
 ]
-provides-extras = ["dev", "ner-gliner", "ner-hf", "ner-flair", "ner-stanza", "ner-spark", "neo4j", "milvus", "chroma", "sqlite-vec", "vectors", "lite", "rerank-flashrank", "keywords", "ui", "mcp", "mcp-server", "google", "anthropic", "aws", "huggingface", "all"]
+provides-extras = ["dev", "ner-gliner", "ner-hf", "ner-stanza", "ner-spark", "neo4j", "milvus", "chroma", "sqlite-vec", "vectors", "lite", "rerank-flashrank", "keywords", "ui", "mcp", "mcp-server", "google", "anthropic", "aws", "huggingface", "all"]
 
 [[package]]
 name = "more-itertools"
@@ -6742,12 +6699,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/80/76/97f33b1a2446f6ae55e59b33869bed4eafaf59b7f4c662c8d9491b6a714a/sqlite_vec-0.1.6-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux1_x86_64.whl", hash = "sha256:823b0493add80d7fe82ab0fe25df7c0703f4752941aee1c7b2b02cec9656cb24", size = 151556, upload-time = "2024-11-20T16:40:35.387Z" },
     { url = "https://files.pythonhosted.org/packages/6a/98/e8bc58b178266eae2fcf4c9c7a8303a8d41164d781b32d71097924a6bebe/sqlite_vec-0.1.6-py3-none-win_amd64.whl", hash = "sha256:c65bcfd90fa2f41f9000052bcb8bb75d38240b2dae49225389eca6c3136d3f0c", size = 281540, upload-time = "2024-11-20T16:40:37.296Z" },
 ]
-
-[[package]]
-name = "sqlitedict"
-version = "2.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/12/9a/7620d1e9dcb02839ed6d4b14064e609cdd7a8ae1e47289aa0456796dd9ca/sqlitedict-2.1.0.tar.gz", hash = "sha256:03d9cfb96d602996f1d4c2db2856f1224b96a9c431bdd16e78032a72940f9e8c", size = 21846, upload-time = "2022-12-03T13:39:13.102Z" }
 
 [[package]]
 name = "srsly"

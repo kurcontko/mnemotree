@@ -141,9 +141,9 @@ def parse_args() -> EvalConfig:
     )
     parser.add_argument(
         "--ner-type",
-        choices=["spacy", "llm", "gliner", "flair", "distilbert"],
+        choices=["spacy", "llm", "gliner", "distilbert"],
         default="spacy",
-        help="NER implementation type: spacy (fast, generic), llm (slow, domain-aware), gliner (fast, customizable), flair (torch-native), or distilbert (balanced speed+quality).",
+        help="NER implementation type: spacy (fast, generic), llm (slow, domain-aware), gliner (fast, customizable), or distilbert (balanced speed+quality).",
     )
 
     keywords_group = parser.add_mutually_exclusive_group()
@@ -949,10 +949,6 @@ async def run_benchmark(config: EvalConfig) -> dict[str, Any]:
             # Use culinary-specific entity types to match the test data
             entity_types = ["person", "location", "dish", "ingredient", "cuisine", "food", "spice"]
             ner = GLiNERNER(entity_types=entity_types, threshold=0.3)
-        elif config.ner_type == "flair":
-            from mnemotree.ner.flair import FlairNER
-            # Use XLM-RoBERTa large fine-tuned on OntoNotes (similar to Flair's approach)
-            ner = FlairNER(model_name="xlm-roberta-large-finetuned-conll03-english")
         elif config.ner_type == "distilbert":
             from mnemotree.ner.distilbert import DistilBERTNER
             ner = DistilBERTNER(model_name="dslim/distilbert-NER")
