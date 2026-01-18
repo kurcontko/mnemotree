@@ -50,16 +50,18 @@ class TestFlashRankRerankerLoad:
         """ImportError is raised with helpful message when flashrank not installed."""
         reranker = FlashRankReranker()
 
-        with patch.dict("sys.modules", {"flashrank": None}):
-            with patch(
+        with (
+            patch.dict("sys.modules", {"flashrank": None}),
+            patch(
                 "mnemotree.rerankers.flashrank.FlashRankReranker._load",
                 side_effect=ImportError(
                     "flashrank is required for FlashRankReranker. "
                     "Install with: pip install mnemotree[rerank_flashrank]"
                 ),
-            ):
-                with pytest.raises(ImportError, match="flashrank is required"):
-                    reranker._load()
+            ),
+            pytest.raises(ImportError, match="flashrank is required"),
+        ):
+            reranker._load()
 
     @patch("mnemotree.rerankers.flashrank.Ranker", create=True)
     @patch("mnemotree.rerankers.flashrank.RerankRequest", create=True)
@@ -79,8 +81,10 @@ class TestFlashRankRerankerLoad:
             if name == "flashrank"
             else __import__(name, *args),
         ):
-            # We need to test the actual _load behavior, so let's simulate it
-            pass
+            reranker._load()
+
+        assert reranker._ranker is mock_ranker
+        assert reranker._request_cls is mock_request_cls
 
     def test_load_only_runs_once(self):
         """_load() is idempotent - only loads once."""

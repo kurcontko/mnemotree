@@ -628,9 +628,8 @@ class MemoryCore:
     def _supports_structured_query(self) -> bool:
         if not isinstance(self.store, SupportsStructuredQuery):
             return False
-        if isinstance(self.store, BaseMemoryStore):
-            return type(self.store).query_memories is not BaseMemoryStore.query_memories
-        return True
+        query_memories = getattr(type(self.store), "query_memories", None)
+        return query_memories is not BaseMemoryStore.query_memories
 
     async def _query_vector(
         self,

@@ -350,7 +350,7 @@ class InMemoryVectorStore:
         def cosine(a: Sequence[float], b: Sequence[float]) -> float:
             if not a or not b or len(a) != len(b):
                 return 0.0
-            dot = sum(x * y for x, y in zip(a, b))
+            dot = sum(x * y for x, y in zip(a, b, strict=False))
             na = sum(x * x for x in a) ** 0.5
             nb = sum(y * y for y in b) ** 0.5
             if na == 0 or nb == 0:
@@ -417,7 +417,7 @@ def load_queries(path: Path) -> list[QueryCase]:
 def cosine_similarity(vec1: Sequence[float], vec2: Sequence[float]) -> float:
     if not vec1 or not vec2 or len(vec1) != len(vec2):
         return 0.0
-    dot = sum(a * b for a, b in zip(vec1, vec2))
+    dot = sum(a * b for a, b in zip(vec1, vec2, strict=False))
     norm1 = sum(a * a for a in vec1) ** 0.5
     norm2 = sum(b * b for b in vec2) ** 0.5
     if norm1 == 0 or norm2 == 0:
