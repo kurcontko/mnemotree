@@ -47,17 +47,6 @@ class LspClient:
         """Stops the language server."""
         self._loop_running = False
 
-        # Cancel reader first so it stops trying to read
-        if self._reader_task:
-            self._reader_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._reader_task
-
-        if self._stderr_task:
-            self._stderr_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._stderr_task
-
         if self.process:
             try:
                 # Close stdin to signal EOF
@@ -78,6 +67,22 @@ class LspClient:
                         pass
             except ProcessLookupError:
                 pass
+
+        # Let reader tasks finish once the process/pipes are closed.
+        for task in (self._reader_task, self._stderr_task):
+            if task:
+                try:
+                    await asyncio.wait_for(task, timeout=2.0)
+                except asyncio.TimeoutError:
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+
+        if self._pending_requests:
+            for future in self._pending_requests.values():
+                if not future.done():
+                    future.cancel()
+            self._pending_requests.clear()
 
         logger.info("LSP Client stopped")
 
