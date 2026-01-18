@@ -65,11 +65,11 @@ class MemoryChatUI:
                 border-radius: 50%;
                 margin-right: 5px;
             }
-            
+
             .status-online {
                 background-color: #4CAF50;
             }
-            
+
             .status-offline {
                 background-color: #F44336;
             }

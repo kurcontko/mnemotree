@@ -4,15 +4,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-# Load environment variables from .env file in project root
-env_path = Path(__file__).parent.parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
-
 from chat_ui import MemoryChatUI
-
 from mnemotree.core.memory import MemoryCore
 from mnemotree.core.scoring import MemoryScoring
 from mnemotree.store.chromadb_store import ChromaMemoryStore
+
+# Load environment variables from .env file in project root
+env_path = Path(__file__).parent.parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 async def init_memory_core() -> MemoryCore:
