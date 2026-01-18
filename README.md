@@ -4,6 +4,9 @@ An Advanced Memory Management and Retrieval System for LLM Agents
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![CI](https://github.com/kurcontko/mnemotree/actions/workflows/ci.yml/badge.svg)](https://github.com/kurcontko/mnemotree/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kurcontko_mnemotree&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kurcontko_mnemotree)
+[![CodeQL](https://github.com/kurcontko/mnemotree/actions/workflows/codeql.yml/badge.svg)](https://github.com/kurcontko/mnemotree/actions/workflows/codeql.yml)
 
 <p align="center">
   <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
@@ -15,31 +18,20 @@ Mnemotree is a framework that enhances Large Language Model (LLM) agents with bi
 
 It includes a ready-to-use **Model Context Protocol (MCP)** server, allowing easy integration with Claude Desktop, Codex CLI, and other MCP-compliant tools with a single command.
 
-## API Stability
+## ⚡ MCP Quickstart
 
-The project has a small set of stable public entry points and a larger set of experimental internals.
-See docs/API.md for what is considered public API, what is experimental, and what compatibility guarantees are provided.
-
-## ⚡ MCP Quickstart (FastMCP)
-
-Run the MCP server directly from the project source using `uvx`:
+Run mnemotree as an MCP server with zero setup:
 
 ```bash
-# Run via stdio (for Claude Desktop etc)
-uvx --from . --with mnemotree[mcp_server] mnemotree-mcp
+uvx --from "git+https://github.com/kurcontko/mnemotree.git" --with "mnemotree[mcp_server]" mnemotree-mcp
 ```
 
-Or connect via HTTP (for multiple clients):
+### Claude Desktop / Claude Code
 
-```bash
-uvx --from . --with mnemotree[mcp_server] mnemotree-mcp run --transport http --port 8000
-```
+Claude Desktop uses `claude_desktop_config.json` (Settings -> Developer -> Edit Config).
+Claude Code uses `.mcp.json` (project scope) or `~/.claude.json` (user/local scope).
 
-### Usage from other tools (Claude Desktop, etc.)
-
-To use this MCP server from other applications while developing locally, reference the absolute path to your repository.
-
-**Claude Desktop Config (`claude_desktop_config.json`):**
+Add to your config:
 
 ```json
 {
@@ -47,33 +39,119 @@ To use this MCP server from other applications while developing locally, referen
     "mnemotree": {
       "command": "uvx",
       "args": [
-        "--from",
-        "/absolute/path/to/mnemotree",
-        "--with",
-        "mnemotree[mcp_server]",
+        "--from", "git+https://github.com/kurcontko/mnemotree.git",
+        "--with", "mnemotree[mcp_server]",
         "mnemotree-mcp"
       ],
       "env": {
-        "MNEMOTREE_MCP_PERSIST_DIR": "/absolute/path/to/mnemotree/.mnemotree/chromadb"
+        "MNEMOTREE_MCP_PERSIST_DIR": "/Users/yourname/.mnemotree/chromadb"
       }
     }
   }
 }
 ```
 
-**Command Line (from any directory):**
+### Codex CLI
 
-```bash
-uvx --from /path/to/mnemotree --with mnemotree[mcp_server] mnemotree-mcp
+Add to your `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.mnemotree]
+command = "uvx"
+args = [
+  "--from", "git+https://github.com/kurcontko/mnemotree.git",
+  "--with", "mnemotree[mcp_server]",
+  "mnemotree-mcp",
+]
+startup_timeout_sec = 120
+env = { MNEMOTREE_MCP_PERSIST_DIR = "/Users/yourname/.mnemotree/chromadb" }
 ```
 
-### Usage directly from GitHub
+### Local Development
 
-You can also run the server without cloning the repository locally:
+When developing locally, point to your cloned repository instead of GitHub:
+
+**Claude Desktop (`claude_desktop_config.json`):**
+
+```json
+{
+  "mcpServers": {
+    "mnemotree": {
+      "command": "uvx",
+      "args": [
+        "--from", "/path/to/mnemotree",
+        "--with", "mnemotree[mcp_server]",
+        "mnemotree-mcp"
+      ],
+      "env": {
+        "MNEMOTREE_MCP_PERSIST_DIR": "/path/to/mnemotree/.mnemotree/chromadb"
+      }
+    }
+  }
+}
+```
+
+**Claude Code (`.mcp.json` or `~/.claude.json`):**
+
+```json
+{
+  "mcpServers": {
+    "mnemotree": {
+      "command": "uvx",
+      "args": [
+        "--from", "/path/to/mnemotree",
+        "--with", "mnemotree[mcp_server]",
+        "mnemotree-mcp"
+      ],
+      "env": {
+        "MNEMOTREE_MCP_PERSIST_DIR": "/path/to/mnemotree/.mnemotree/chromadb"
+      }
+    }
+  }
+}
+```
+
+**Codex CLI (`~/.codex/config.toml`):**
+
+```toml
+[mcp_servers.mnemotree]
+command = "uvx"
+args = [
+  "--from", "/path/to/mnemotree",
+  "--with", "mnemotree[mcp_server]",
+  "mnemotree-mcp",
+]
+startup_timeout_sec = 120
+env = { MNEMOTREE_MCP_PERSIST_DIR = "/path/to/mnemotree/.mnemotree/chromadb" }
+```
+
+### Persistence Directory
+
+The `MNEMOTREE_MCP_PERSIST_DIR` environment variable controls where memories are stored on disk.
+
+| Value | Behavior |
+|-------|----------|
+| Absolute path (e.g., `/Users/yourname/.mnemotree/chromadb`) | Memories persist across sessions in this directory |
+| Relative path (e.g., `.mnemotree/chromadb`) | Created relative to working directory (may vary per client) |
+| Omitted | Defaults to `.mnemotree/chromadb` in the working directory |
+
+**Recommendations:**
+- Use an **absolute path** for consistent storage across all clients
+- Use a **shared directory** (e.g., `~/.mnemotree/chromadb`) if you want Claude Desktop and Codex to share the same memory store
+- Use **separate directories** per tool if you want isolated memory stores
+
+### HTTP Transport (Multi-Client)
+
+For multiple clients sharing one memory store, run the server as a separate process:
 
 ```bash
-uvx --from "git+https://github.com/kurcontko/mnemotree.git" --with "mnemotree[mcp_server]" mnemotree-mcp
+uvx --from "git+https://github.com/kurcontko/mnemotree.git" \
+    --with "mnemotree[mcp_server]" \
+    mnemotree-mcp run --transport http --port 8000
 ```
+
+Then connect MCP clients to `http://localhost:8000/mcp`.
+
 
 ## 🌟 Key Features
 
@@ -183,6 +261,25 @@ insights = await memory_core.reflect(
 )
 ```
 
+### Option Objects (optional)
+
+```python
+from mnemotree import RecallFilters, RecallOptions, RememberOptions
+
+memory = await memory_core.remember(
+    content="Met Alex to discuss the roadmap.",
+    options=RememberOptions(tags=["meeting"], source="notes")
+)
+
+memories = await memory_core.recall(
+    "roadmap discussion",
+    options=RecallOptions(
+        limit=5,
+        filters=RecallFilters(tags=["meeting"], min_importance=0.3),
+    ),
+)
+```
+
 ### Lite Mode (CPU, no LLM)
 
 ```python
@@ -218,64 +315,40 @@ Extras:
 - GLiNER: `mnemotree[ner_gliner]`
 - Stanza: `mnemotree[ner_stanza]`
 
-### MCP Server (FastMCP)
+### MCP Server Configuration
 
-Mnemotree ships with a lightweight MCP server wrapper around `MemoryCore` (lite + Chroma).
+The MCP server uses lite mode (local CPU embeddings) with ChromaDB by default.
 
-**Install MCP + lite + Chroma extras**
+**Environment Variables**
 
-```bash
-uv pip install -e ".[mcp,lite,chroma]"
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MNEMOTREE_MCP_PERSIST_DIR` | `.mnemotree/chromadb` | ChromaDB storage directory |
+| `MNEMOTREE_MCP_COLLECTION` | `memories` | ChromaDB collection name |
+| `MNEMOTREE_MCP_CHROMA_HOST` | — | Remote ChromaDB host (optional) |
+| `MNEMOTREE_MCP_CHROMA_PORT` | — | Remote ChromaDB port (optional) |
+| `MNEMOTREE_MCP_CHROMA_SSL` | `false` | Use SSL for remote ChromaDB |
+| `MNEMOTREE_MCP_ENABLE_NER` | `false` | Enable named entity recognition |
+| `MNEMOTREE_MCP_ENABLE_KEYWORDS` | `false` | Enable keyword extraction |
+| `MNEMOTREE_MCP_NER_BACKEND` | — | NER backend: `spacy`, `transformers`, `gliner`, `stanza` |
+| `MNEMOTREE_MCP_NER_MODEL` | — | Backend-specific model ID/path |
 
-**Run via uvx (stdio, local)**
+**Concurrency Note**
 
-Use this when a client launches the server process itself (stdio transport).
-
-```bash
-uvx --from . --with mnemotree[mcp_server] mnemotree-mcp
-```
-
-**Run as a separate process (HTTP, shared)**
-
-Use this when multiple Codex instances should share one memory store.
-
-```bash
-uvx --from . --with mnemotree[mcp_server] mnemotree-mcp run --transport http --port 8000
-```
-
-Then connect MCP clients to `http://localhost:8000/mcp`.
-
-**Concurrency note**
-
-For shared memory, prefer a single MCP server process and have all clients connect to it.
 Avoid running multiple MCP processes against the same local Chroma persistence directory.
-If you need multiple MCP servers, set unique `MNEMOTREE_MCP_PERSIST_DIR` values per server,
-or point them at a remote Chroma server.
-
-**Environment variables**
-
-- `MNEMOTREE_MCP_PERSIST_DIR` (default: `.mnemotree/chromadb`)
-- `MNEMOTREE_MCP_COLLECTION` (default: `memories`)
-- `MNEMOTREE_MCP_CHROMA_HOST`, `MNEMOTREE_MCP_CHROMA_PORT`, `MNEMOTREE_MCP_CHROMA_SSL`
-- `MNEMOTREE_MCP_ENABLE_NER`, `MNEMOTREE_MCP_ENABLE_KEYWORDS` (both default to `false`)
-- `MNEMOTREE_MCP_NER_BACKEND` (e.g. `spacy`, `transformers`, `gliner`, `stanza`)
-- `MNEMOTREE_MCP_NER_MODEL` (backend-specific model id/path)
+For shared memory across clients, either:
+- Run a single HTTP MCP server and connect all clients to it
+- Use unique `MNEMOTREE_MCP_PERSIST_DIR` values per server
+- Point to a remote ChromaDB server
 
 **Docker (optional)**
 
-There is a lightweight Docker setup under `docker/mcp`.
-
-Build and run directly:
-
 ```bash
+# Build and run directly
 docker build -f docker/mcp/Dockerfile -t mnemotree-mcp .
 docker run --rm -p 8000:8000 -v "$PWD/.mnemotree:/data" mnemotree-mcp
-```
 
-Or use Compose:
-
-```bash
+# Or use Compose
 docker compose -f docker/mcp/docker-compose.yml up --build
 ```
 
