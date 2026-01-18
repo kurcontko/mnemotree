@@ -2714,6 +2714,7 @@ dependencies = [
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "spacy" },
+    { name = "urllib3" },
 ]
 
 [package.optional-dependencies]
@@ -2860,6 +2861,7 @@ requires-dist = [
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.40.0" },
     { name = "torch", marker = "extra == 'ner-hf'", specifier = ">=2.0.0" },
     { name = "transformers", marker = "extra == 'ner-hf'", specifier = ">=4.38.0" },
+    { name = "urllib3", specifier = ">=2.6.0,<3.0.0" },
     { name = "yake", marker = "extra == 'all'", specifier = ">=0.4.8" },
     { name = "yake", marker = "extra == 'keywords'", specifier = ">=0.4.8" },
 ]
