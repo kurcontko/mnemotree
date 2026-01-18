@@ -342,7 +342,7 @@ class InMemoryVectorStore:
 
     async def get_similar_memories(
         self,
-        _query: str,
+        query: str,
         query_embedding: list[float],
         top_k: int = 10,
         filters: dict[str, Any] | None = None,

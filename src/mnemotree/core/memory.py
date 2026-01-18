@@ -19,6 +19,7 @@ from ..embeddings.local import LocalSentenceTransformerEmbeddings
 from ..ner.base import BaseNER
 from ..ner.spacy import SpacyNER
 from ..rerankers import FlashRankReranker
+from ..store.base import BaseMemoryStore
 from ..store.protocols import (
     MemoryCRUDStore,
     SupportsConnections,
@@ -556,12 +557,13 @@ class MemoryCore:
         query_embedding = await self.get_embedding(query)
         filter_list = self._build_filter_list(filters)
 
-        if filter_list and not isinstance(self.store, SupportsStructuredQuery):
+        supports_structured = self._supports_structured_query()
+        if filter_list and not supports_structured:
             raise NotImplementedError(
                 "This store does not support structured queries with filters."
             )
 
-        if isinstance(self.store, SupportsStructuredQuery):
+        if supports_structured:
             return await self._query_structured(query_embedding, filter_list, limit)
 
         if not filter_list and isinstance(self.store, SupportsVectorSearch):
@@ -615,19 +617,19 @@ class MemoryCore:
         filter_list: list[MemoryFilter],
         limit: int,
     ) -> list[MemoryItem]:
-        # Use get_similar_memories for vector-based retrieval with structured filters
-        if hasattr(self.store, 'get_similar_memories'):
-            return await self.store.get_similar_memories(
-                query="",
-                query_embedding=query_embedding,
-                top_k=limit,
-                filters=filter_list,
-            )
-        # Fallback: get memories and filter manually
-        all_memories = await self.store.get_memory(memory_id="")  # Will fail gracefully
-        if all_memories:
-            return [all_memories][:limit]
-        return []
+        query = MemoryQuery(
+            filters=filter_list,
+            vector=query_embedding,
+            limit=limit,
+        )
+        return await self.store.query_memories(query)
+
+    def _supports_structured_query(self) -> bool:
+        if not isinstance(self.store, SupportsStructuredQuery):
+            return False
+        if isinstance(self.store, BaseMemoryStore):
+            return type(self.store).query_memories is not BaseMemoryStore.query_memories
+        return True
 
     async def _query_vector(
         self,

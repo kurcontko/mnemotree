@@ -45,7 +45,7 @@ class GLiNERNER(BaseNER):
         predictions = self.model.predict_entities(text, self.entity_types, threshold=self.threshold)
 
         entities: dict[str, str] = {}
-        mentions: dict[str, list[dict[str, Any]]] = {}
+        mentions: dict[str, list[str]] = {}
         confidence: dict[str, float] = {}
 
         for pred in predictions:
@@ -67,7 +67,7 @@ class GLiNERNER(BaseNER):
             start_idx = pred.get("start", 0)
             end_idx = pred.get("end", len(entity_text))
             context = self._get_context(text, start_idx, end_idx)
-            mentions[entity_text].append({"context": context, "position": (start_idx, end_idx)})
+            mentions[entity_text].append(context)
 
         return NERResult(entities=entities, mentions=mentions, confidence=confidence)
 
