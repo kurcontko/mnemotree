@@ -34,7 +34,8 @@ from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
 from .models import MemoryItem, MemoryType, coerce_datetime
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
-from .retrieval import HybridFusionRetriever, Retriever, VectorEntityRetriever
+from .retrieval import Retriever
+from .retriever_factory import RetrieverFactory
 from .scoring import MemoryScoring
 
 MemoryMode = Literal["lite", "pro"]
@@ -149,6 +150,7 @@ class MemoryCore:
         llm: BaseLanguageModel | None = None,
         embeddings: Embeddings | None = None,
         *,
+        retriever: Retriever | None = None,
         mode_defaults: ModeDefaultsConfig | None = None,
         ner_config: NerConfig | None = None,
         scoring_config: ScoringConfig | None = None,
@@ -162,6 +164,7 @@ class MemoryCore:
             store: The underlying storage for memory items.
             llm: Optional Language model for analysis if enabled.
             embeddings: Optional embeddings model. Defaults depend on mode if not provided.
+            retriever: Optional retriever instance to override default construction.
             mode_defaults: Mode defaults and keyword extraction settings.
             ner_config: Named entity recognition configuration.
             scoring_config: Scoring defaults and pre-remember hooks.
@@ -218,6 +221,7 @@ class MemoryCore:
             prf_terms=retrieval_config.prf_terms,
             enable_rrf_signal_rerank=retrieval_config.enable_rrf_signal_rerank,
             rerank_candidates=retrieval_config.rerank_candidates,
+            retriever=retriever,
         )
 
     async def remember(
@@ -1257,6 +1261,7 @@ class MemoryCore:
         prf_terms: int,
         enable_rrf_signal_rerank: bool,
         rerank_candidates: int,
+        retriever: Retriever | None,
     ) -> None:
         # _bm25_index/_bm25_cache are now managed by IndexManager
         # self._bm25_index and self._bm25_cache removed
@@ -1277,7 +1282,7 @@ class MemoryCore:
             analyzer=self.analyzer,
             summarizer=self.summarizer,
         )
-        self.retrieval: Retriever = self._build_retriever(
+        self.retrieval: Retriever = retriever or self._build_retriever(
             rrf_k=rrf_k,
             enable_rrf_signal_rerank=enable_rrf_signal_rerank,
             rerank_candidates=rerank_candidates,
@@ -1299,14 +1304,14 @@ class MemoryCore:
             "index_manager": self.index_manager,
         }
         if self.retrieval_mode == "hybrid":
-            return HybridFusionRetriever(
+            return RetrieverFactory.create_hybrid(
                 **common_retrieval_args,
                 rrf_k=rrf_k,
                 enable_rrf_signal_rerank=enable_rrf_signal_rerank,
                 reranker=self._flashrank_reranker,
                 rerank_candidates=rerank_candidates,
             )
-        return VectorEntityRetriever(**common_retrieval_args)
+        return RetrieverFactory.create_basic(**common_retrieval_args)
 
     def _resolve_embeddings(self, mode: MemoryMode) -> Embeddings:
         if mode == "lite":

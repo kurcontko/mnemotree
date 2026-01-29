@@ -18,6 +18,7 @@ from .memory import (
 )
 from .models import MemoryItem, MemoryType
 from .query import MemoryQuery, MemoryQueryBuilder
+from .retriever_factory import RetrieverFactory
 
 __all__ = [
     # Core
@@ -44,4 +45,5 @@ __all__ = [
     "NoOpReranker",
     "FusionStrategy",
     "RetrievalStage",
+    "RetrieverFactory",
 ]

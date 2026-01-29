@@ -8,14 +8,26 @@ This module implements a sophisticated retrieval strategy:
 4. Optional cross-encoder reranking (semantic precision)
 """
 
+import asyncio
+import logging
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from langchain_core.embeddings.embeddings import Embeddings
+
+from ..analysis.keywords import KeywordExtractor
+from ..ner.base import BaseNER
 from ..rerankers import BaseReranker, CrossEncoderReranker, NoOpReranker
+from ..store.protocols import MemoryCRUDStore
+from ._internal.indexing import IndexManager
 from .models import MemoryItem
-from .retrieval import rrf_fuse
-from .scoring import MemoryScoring
+from .query import MemoryQuery, MemoryQueryBuilder
+from .retrieval import BaseRetriever, VectorEntityRetriever, rrf_fuse
+from .scoring import MemoryScoring, cosine_similarity
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "RetrievalStage",
@@ -33,6 +45,7 @@ class RetrievalStage(str, Enum):
 
     VECTOR = "vector"
     ENTITY = "entity"
+    BM25 = "bm25"
     GRAPH = "graph"
     FUSION = "fusion"
     RERANK = "rerank"
@@ -78,6 +91,16 @@ class HybridRetriever:
         fusion_strategy: FusionStrategy = FusionStrategy.RRF,
         reranker: BaseReranker | None = None,
         memory_scoring: MemoryScoring | None = None,
+        *,
+        bm25_weight: float = 0.0,
+        store: MemoryCRUDStore | None = None,
+        embedder: Embeddings | None = None,
+        ner: BaseNER | None = None,
+        keyword_extractor: KeywordExtractor | None = None,
+        index_manager: IndexManager | None = None,
+        rrf_k: int = 60,
+        enable_rrf_signal_rerank: bool = False,
+        rerank_candidates: int = 50,
     ):
         """
         Initialize hybrid retriever.
@@ -93,12 +116,28 @@ class HybridRetriever:
         self.weights = {
             RetrievalStage.VECTOR: vector_weight,
             RetrievalStage.ENTITY: entity_weight,
+            RetrievalStage.BM25: bm25_weight,
             RetrievalStage.GRAPH: graph_weight,
         }
         self._normalize_weights()
         self.fusion_strategy = fusion_strategy
         self.reranker = reranker or NoOpReranker()
         self.memory_scoring = memory_scoring
+        self.rrf_k = rrf_k
+        self.enable_rrf_signal_rerank = enable_rrf_signal_rerank
+        self.rerank_candidates = rerank_candidates
+        self._backend: BaseRetriever | None = (
+            BaseRetriever(
+                store=store,
+                scoring_system=memory_scoring or MemoryScoring(),
+                ner=ner,
+                keyword_extractor=keyword_extractor,
+                embedder=embedder,
+                index_manager=index_manager,
+            )
+            if store is not None and embedder is not None
+            else None
+        )
 
     def _normalize_weights(self):
         """Normalize weights to sum to 1."""
@@ -112,6 +151,7 @@ class HybridRetriever:
         vector_candidates: list[tuple[MemoryItem, float]],
         entity_candidates: list[tuple[MemoryItem, float]],
         graph_candidates: list[tuple[MemoryItem, float]] | None = None,
+        bm25_candidates: list[tuple[MemoryItem, float]] | None = None,
         top_k: int = 10,
         apply_reranking: bool = True,
     ) -> list[RetrievalResult]:
@@ -137,6 +177,8 @@ class HybridRetriever:
 
         if graph_candidates:
             stage_candidates[RetrievalStage.GRAPH] = graph_candidates
+        if bm25_candidates:
+            stage_candidates[RetrievalStage.BM25] = bm25_candidates
 
         # Stage 4: Fusion - combine scores from different stages
         fused_results = self._fuse_candidates(stage_candidates)
@@ -161,6 +203,193 @@ class HybridRetriever:
             fused_results.sort(key=lambda x: x.final_score, reverse=True)
 
         return fused_results[:top_k]
+
+    async def recall(
+        self,
+        query: str | MemoryQuery | MemoryQueryBuilder,
+        limit: int | None,
+        scoring: bool,
+        update_access: bool,
+    ) -> list[MemoryItem]:
+        """
+        Retrieve memories based on a query using the hybrid pipeline.
+
+        This mirrors the core Retriever protocol and requires store/embedder wiring.
+        """
+        backend = self._require_backend()
+        started = time.perf_counter()
+
+        if not isinstance(query, str):
+            memories, query_embedding = await backend._query_store(query)
+            if scoring:
+                memories = backend.memory_scorer.rank(memories, query_embedding)
+            if limit is not None:
+                memories = memories[:limit]
+            if update_access and memories:
+                await backend._update_access(memories)
+            logger.debug(
+                "hybrid recall done (structured) returned=%d duration_ms=%.2f",
+                len(memories),
+                (time.perf_counter() - started) * 1000.0,
+            )
+            return memories
+
+        resolved_limit = limit if limit is not None else 10
+        cache_len = backend.index_manager.doc_count if backend.index_manager else 0
+        candidate_k = min(
+            max(50, resolved_limit * 5),
+            max(resolved_limit, cache_len or resolved_limit),
+        )
+
+        vector_task = asyncio.create_task(backend._retrieve_vector_candidates(query, candidate_k))
+        entity_task = asyncio.create_task(backend._retrieve_entity_candidates(query))
+        keyword_task = (
+            asyncio.create_task(backend.keyword_extractor.extract(query))
+            if self.enable_rrf_signal_rerank and backend.keyword_extractor
+            else None
+        )
+        (vector_memories, query_embedding), entity_memories = await asyncio.gather(
+            vector_task, entity_task
+        )
+
+        entity_memories, entity_memory_ids = VectorEntityRetriever._filter_entity_candidates(
+            entity_memories, query_embedding
+        )
+        if query_embedding:
+            entity_memories = sorted(
+                entity_memories,
+                key=lambda memory: cosine_similarity(memory.embedding, query_embedding),
+                reverse=True,
+            )
+
+        bm25_candidates: list[tuple[MemoryItem, float]] = []
+        if backend.index_manager:
+            ranked = backend.index_manager.search(query, k=candidate_k)
+            for memory_id, score in ranked:
+                cached_memory = backend.index_manager.get_memory(memory_id)
+                if cached_memory:
+                    bm25_candidates.append((cached_memory, score))
+
+        vector_candidates = self._score_candidates(vector_memories, query_embedding)
+        entity_candidates = self._score_candidates(entity_memories, query_embedding)
+
+        results = await self.retrieve(
+            query=query,
+            vector_candidates=vector_candidates,
+            entity_candidates=entity_candidates,
+            graph_candidates=None,
+            bm25_candidates=bm25_candidates,
+            top_k=candidate_k,
+            apply_reranking=False,
+        )
+
+        if scoring:
+            results = self._apply_scoring_filter(
+                backend=backend, results=results, query_embedding=query_embedding
+            )
+
+        if (
+            self.enable_rrf_signal_rerank
+            and query_embedding
+            and self.fusion_strategy == FusionStrategy.RRF
+        ):
+            query_keywords = await keyword_task if keyword_task else []
+            rrf_scores = {result.memory.memory_id: result.final_score for result in results}
+            ranked_memories = backend.signal_ranker.rank(
+                [result.memory for result in results],
+                query_embedding,
+                extra_signals={
+                    "rrf_scores": rrf_scores,
+                    "query_keywords": query_keywords,
+                    "entity_memory_ids": entity_memory_ids,
+                },
+            )
+            results = self._reorder_results(results, ranked_memories)
+
+        results = await self._maybe_rerank_results(query, results)
+
+        if limit is not None:
+            results = results[:limit]
+        memories = [result.memory for result in results]
+        if update_access and memories:
+            await backend._update_access(memories)
+
+        logger.debug(
+            "hybrid recall done returned=%d duration_ms=%.2f",
+            len(memories),
+            (time.perf_counter() - started) * 1000.0,
+        )
+        return memories
+
+    def _require_backend(self) -> BaseRetriever:
+        if self._backend is None:
+            raise RuntimeError(
+                "HybridRetriever recall requires store and embedder. "
+                "Use retrieve() with explicit candidates instead."
+            )
+        return self._backend
+
+    @staticmethod
+    def _score_candidates(
+        memories: list[MemoryItem],
+        query_embedding: list[float] | None,
+    ) -> list[tuple[MemoryItem, float]]:
+        if not memories:
+            return []
+        if not query_embedding:
+            return [(memory, 0.0) for memory in memories]
+        return [
+            (memory, max(0.0, cosine_similarity(memory.embedding, query_embedding)))
+            for memory in memories
+        ]
+
+    @staticmethod
+    def _apply_scoring_filter(
+        *,
+        backend: BaseRetriever,
+        results: list[RetrievalResult],
+        query_embedding: list[float] | None,
+    ) -> list[RetrievalResult]:
+        if not results:
+            return results
+        memories = backend.memory_scorer.rank(
+            [result.memory for result in results],
+            query_embedding,
+        )
+        allowed = {memory.memory_id for memory in memories}
+        return [result for result in results if result.memory.memory_id in allowed]
+
+    @staticmethod
+    def _reorder_results(
+        results: list[RetrievalResult],
+        ordered_memories: list[MemoryItem],
+    ) -> list[RetrievalResult]:
+        if not results:
+            return results
+        result_map = {result.memory.memory_id: result for result in results}
+        return [
+            result_map[memory.memory_id]
+            for memory in ordered_memories
+            if memory.memory_id in result_map
+        ]
+
+    async def _maybe_rerank_results(
+        self,
+        query: str,
+        results: list[RetrievalResult],
+    ) -> list[RetrievalResult]:
+        if not self.reranker or self.rerank_candidates <= 0:
+            return results
+        rerank_limit = min(self.rerank_candidates, len(results))
+        if rerank_limit <= 0:
+            return results
+        rerank_slice = [result.memory for result in results[:rerank_limit]]
+        reranked_tuples = await self.reranker.rerank(query, rerank_slice)
+        reranked_ids = [memory.memory_id for memory, _score in reranked_tuples]
+        result_map = {result.memory.memory_id: result for result in results}
+        reranked = [result_map[memory_id] for memory_id in reranked_ids if memory_id in result_map]
+        remaining = [result for result in results if result.memory.memory_id not in reranked_ids]
+        return reranked + remaining
 
     def _fuse_candidates(
         self, stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]]

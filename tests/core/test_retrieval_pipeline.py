@@ -1,12 +1,12 @@
 import pytest
 
-from mnemotree.core.models import MemoryItem, MemoryType
-from mnemotree.core.retrieval import (
-    BaseReranker,
+from mnemotree.core.hybrid_retrieval import (
     FusionStrategy,
     HybridRetriever,
     RetrievalStage,
 )
+from mnemotree.core.models import MemoryItem, MemoryType
+from mnemotree.rerankers import BaseReranker
 
 
 def _memory(memory_id: str, content: str) -> MemoryItem:
