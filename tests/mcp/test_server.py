@@ -424,7 +424,7 @@ async def test_get_memory_core_import_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_remember_recall_search_index(monkeypatch):
+async def test_remember_recall_compact(monkeypatch):
     ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
     memory = _make_memory("mem-remember", ts, summary="summary", embedding=[0.3])
 
@@ -467,15 +467,50 @@ async def test_remember_recall_search_index(monkeypatch):
         include_embedding=True,
     )
     assert recalled[0]["embedding"] == [0.3]
-    memory_core.recall.assert_awaited_once_with(
-        query="hello",
-        limit=5,
-        scoring=False,
-        update_access=True,
+    results = await server.recall(query="hello", limit=3, compact=True, include_summary=False)
+    assert "summary" not in results[0]
+    assert results[0]["rank"] == 1
+
+    memory_core.recall.assert_has_awaits(
+        [
+            call(query="hello", limit=5, scoring=False, update_access=True),
+            call(query="hello", limit=3, scoring=True, update_access=False),
+        ]
+    )
+    assert memory_core.recall.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_update_memory_applies_patch_and_reembed(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-remember", ts, summary="summary", embedding=[0.3])
+    memory.metadata = {"old": 1}
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    store.store_memory = AsyncMock()
+
+    memory_core = MagicMock()
+    memory_core.store = store
+    memory_core.get_embedding = AsyncMock(return_value=[0.9])
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    updated = await server.update_memory(
+        memory_id="mem-remember",
+        patch={"content": "updated", "tags": ["new"], "metadata": {"k": "v"}},
+        reembed=True,
+        include_embedding=True,
     )
 
-    results = await server.search_index(query="hello", limit=3, include_summary=False)
-    assert "summary" not in results[0]
+    assert updated["content"] == "updated"
+    assert updated["tags"] == ["new"]
+    assert updated["metadata"]["old"] == 1
+    assert updated["metadata"]["k"] == "v"
+    assert updated["embedding"] == [0.9]
+
+    memory_core.get_embedding.assert_awaited_once_with("updated")
+    store.store_memory.assert_awaited_once()
 
 
 @pytest.mark.asyncio
