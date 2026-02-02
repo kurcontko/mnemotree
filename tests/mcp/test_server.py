@@ -220,7 +220,7 @@ def test_get_mcp_registers_tools(monkeypatch):
     instance = server._get_mcp()
 
     assert isinstance(instance, DummyFastMCP)
-    assert len(instance.tools) == 9
+    assert len(instance.tools) == 5
 
 
 def test_memory_timestamp_fallbacks():
@@ -440,10 +440,6 @@ async def test_remember_recall_compact(monkeypatch):
         importance=0.9,
         tags=["tag"],
         context={"source": "test"},
-        analyze=True,
-        summarize=False,
-        references=["ref"],
-        include_embedding=False,
     )
 
     assert stored["memory_id"] == "mem-remember"
@@ -454,26 +450,22 @@ async def test_remember_recall_compact(monkeypatch):
         importance=0.9,
         tags=["tag"],
         context={"source": "test"},
-        analyze=True,
-        summarize=False,
-        references=["ref"],
     )
 
     recalled = await server.recall(
         query="hello",
         limit=5,
-        scoring=False,
-        update_access=True,
-        include_embedding=True,
+        compact=False,
     )
-    assert recalled[0]["embedding"] == [0.3]
+    assert "embedding" not in recalled[0]
+
     results = await server.recall(query="hello", limit=3, compact=True, include_summary=False)
     assert "summary" not in results[0]
     assert results[0]["rank"] == 1
 
     memory_core.recall.assert_has_awaits(
         [
-            call(query="hello", limit=5, scoring=False, update_access=True),
+            call(query="hello", limit=5, scoring=True, update_access=False),
             call(query="hello", limit=3, scoring=True, update_access=False),
         ]
     )
@@ -500,14 +492,13 @@ async def test_update_memory_applies_patch_and_reembed(monkeypatch):
         memory_id="mem-remember",
         patch={"content": "updated", "tags": ["new"], "metadata": {"k": "v"}},
         reembed=True,
-        include_embedding=True,
     )
 
     assert updated["content"] == "updated"
     assert updated["tags"] == ["new"]
     assert updated["metadata"]["old"] == 1
     assert updated["metadata"]["k"] == "v"
-    assert updated["embedding"] == [0.9]
+    assert "embedding" not in updated
 
     memory_core.get_embedding.assert_awaited_once_with("updated")
     store.store_memory.assert_awaited_once()
@@ -575,7 +566,7 @@ async def test_get_memories_filters_missing(monkeypatch):
 
     monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
 
-    results = await server.get_memories(["mem-keep", "mem-missing"], include_embedding=True)
+    results = await server.get_memories(["mem-keep", "mem-missing"])
 
     assert [item["memory_id"] for item in results] == ["mem-keep"]
     store.get_memory.assert_has_awaits([call("mem-keep"), call("mem-missing")])
