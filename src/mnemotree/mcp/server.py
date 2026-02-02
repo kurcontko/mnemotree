@@ -5,7 +5,13 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-from mnemotree.core.memory import MemoryCore, ModeDefaultsConfig, NerConfig, RecallFilters
+from mnemotree.core.memory import (
+    MemoryCore,
+    ModeDefaultsConfig,
+    NerConfig,
+    RecallFilters,
+    RetrievalConfig,
+)
 from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
 from mnemotree.ner import create_ner
 from mnemotree.store.protocols import SupportsMemoryListing
@@ -247,13 +253,19 @@ async def _get_memory_core() -> MemoryCore:
 
         enable_ner = _env_bool("MNEMOTREE_MCP_ENABLE_NER", False)
         enable_keywords = _env_bool("MNEMOTREE_MCP_ENABLE_KEYWORDS", False)
+        enable_bm25 = _env_bool("MNEMOTREE_MCP_ENABLE_BM25", True)
         mode_defaults = ModeDefaultsConfig(mode="lite", enable_keywords=enable_keywords)
         ner_config = NerConfig(ner=ner, enable_ner=enable_ner)
+        retrieval_config = RetrievalConfig(
+            retrieval_mode="hybrid",
+            enable_bm25=enable_bm25,
+        )
 
         _memory_core = MemoryCore(
             store=store,
             mode_defaults=mode_defaults,
             ner_config=ner_config,
+            retrieval_config=retrieval_config,
         )
         return _memory_core
 
