@@ -11,9 +11,10 @@ from langchain_core.embeddings.embeddings import Embeddings
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from mnemotree.core import MemoryCore
-from mnemotree.core.hybrid_retrieval import FusionStrategy, HybridRetriever
+from mnemotree.core import MemoryCore, RetrievalConfig, RetrieverFactory
+from mnemotree.core.hybrid_retrieval import FusionStrategy
 from mnemotree.core.models import MemoryType
+from mnemotree.core.retrieval import Retriever
 from mnemotree.experimental import (
     AdaptiveImportanceSystem,
     ClaimsRegistry,
@@ -74,20 +75,36 @@ class MemorySystemConfig:
             OpenAIEmbeddings(model=embedding_model) if embedding_model else OpenAIEmbeddings()
         )
 
+        retrieval_config = RetrievalConfig(
+            retrieval_mode="hybrid" if self.use_hybrid_retrieval else "basic",
+        )
+
         # Core memory
         memory_core = MemoryCore(
             store=store,
             llm=llm,
             embeddings=embeddings,
+            retrieval_config=retrieval_config,
         )
 
         # Hybrid retrieval
         retriever = None
         if self.use_hybrid_retrieval:
-            retriever = HybridRetriever(
+            retriever = RetrieverFactory.create_hybrid(
+                store=store,
+                scoring_system=memory_core.memory_scoring,
+                ner=memory_core.ner,
+                keyword_extractor=memory_core.keyword_extractor,
+                embedder=memory_core.embedder,
+                index_manager=memory_core.index_manager,
                 fusion_strategy=self.fusion_strategy,
                 reranker=CrossEncoderReranker() if self.use_reranking else NoOpReranker(),
+                rrf_k=memory_core.rrf_k,
+                enable_rrf_signal_rerank=memory_core.enable_rrf_signal_rerank,
+                rerank_candidates=memory_core.rerank_candidates,
+                use_fusion_retriever=False,
             )
+            memory_core.retrieval = retriever
 
         # Consolidation
         consolidator = None
@@ -133,7 +150,7 @@ class ConfiguredMemorySystem:
     """A fully configured memory system with all components."""
 
     memory_core: MemoryCore
-    retriever: HybridRetriever | None = None
+    retriever: Retriever | None = None
     consolidator: MemoryConsolidator | None = None
     claims_registry: ClaimsRegistry | None = None
     adaptive_system: AdaptiveImportanceSystem | None = None

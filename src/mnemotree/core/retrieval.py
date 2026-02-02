@@ -26,30 +26,6 @@ from .scoring import MemoryScoring
 
 logger = logging.getLogger(__name__)
 
-# Backwards-compatible re-exports for the hybrid retrieval API.
-_HYBRID_EXPORTS = {
-    "BaseReranker",
-    "CrossEncoderReranker",
-    "FusionStrategy",
-    "HybridRetriever",
-    "NoOpReranker",
-    "RetrievalResult",
-    "RetrievalStage",
-}
-
-
-def __getattr__(name: str) -> Any:
-    if name in _HYBRID_EXPORTS:
-        from . import hybrid_retrieval as _hybrid
-
-        return getattr(_hybrid, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def __dir__() -> list[str]:
-    return sorted(set(globals().keys()) | _HYBRID_EXPORTS)
-
-
 __all__ = [
     "Retriever",
     "BaseRetriever",
