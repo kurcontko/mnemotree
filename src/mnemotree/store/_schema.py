@@ -24,6 +24,23 @@ NEO4J_SCHEMA_STATEMENTS = (
     CREATE INDEX memory_importance IF NOT EXISTS
     FOR (m:MemoryItem) ON (m.importance)
     """,
+    # Knowledge Graph schema
+    """
+    CREATE INDEX link_source_id IF NOT EXISTS
+    FOR ()-[r:LINKS_TO]-() ON (r.source_id)
+    """,
+    """
+    CREATE INDEX link_target_id IF NOT EXISTS
+    FOR ()-[r:LINKS_TO]-() ON (r.target_id)
+    """,
+    """
+    CREATE INDEX link_type IF NOT EXISTS
+    FOR ()-[r:LINKS_TO]-() ON (r.link_type)
+    """,
+    """
+    CREATE INDEX link_strength IF NOT EXISTS
+    FOR ()-[r:LINKS_TO]-() ON (r.strength)
+    """,
 )
 
 

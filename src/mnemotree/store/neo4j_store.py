@@ -4,14 +4,14 @@ import json
 import logging
 import time
 from asyncio import Lock
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from neo4j import AsyncGraphDatabase
 from neo4j.exceptions import Neo4jError
 from pydantic import ValidationError
 
-from ..core.models import MemoryItem
+from ..core.models import LinkType, MemoryItem, MemoryLink
 from ..core.query import MemoryQuery
 from ..errors import StoreError
 from ._records import build_neo4j_memory_payload, parse_neo4j_node_data
@@ -1018,6 +1018,613 @@ class Neo4jMemoryStore(BaseMemoryStore):
                     "Failed to update memory metadata in Neo4j",
                     store_type=self.store_type,
                     memory_id=memory_id,
+                    original_error=e,
+                ) from e
+
+    # Knowledge Graph Operations
+
+    async def create_link(
+        self,
+        source_id: str,
+        target_id: str,
+        link_type: LinkType,
+        *,
+        strength: float = 1.0,
+        context: str | None = None,
+        bidirectional: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> MemoryLink:
+        """Create a directed link between two memories."""
+        await self.initialize()
+        start = time.perf_counter()
+
+        link = MemoryLink(
+            source_id=source_id,
+            target_id=target_id,
+            link_type=link_type,
+            strength=strength,
+            context=context,
+            metadata=metadata or {},
+        )
+
+        async with self.driver.session() as session:
+            tx = await session.begin_transaction()
+            try:
+                # Create the LINKS_TO relationship
+                await tx.run(
+                    """
+                    MATCH (source:MemoryItem {memory_id: $source_id})
+                    MATCH (target:MemoryItem {memory_id: $target_id})
+                    MERGE (source)-[r:LINKS_TO {link_id: $link_id}]->(target)
+                    SET r.source_id = $source_id,
+                        r.target_id = $target_id,
+                        r.link_type = $link_type,
+                        r.strength = $strength,
+                        r.context = $context,
+                        r.created_at = $created_at,
+                        r.last_accessed = $last_accessed,
+                        r.access_count = $access_count,
+                        r.created_by = $created_by,
+                        r.similarity_score = $similarity_score,
+                        r.metadata = $metadata
+                    """,
+                    {
+                        "link_id": link.link_id,
+                        "source_id": source_id,
+                        "target_id": target_id,
+                        "link_type": link_type.value,
+                        "strength": strength,
+                        "context": context,
+                        "created_at": serialize_datetime(link.created_at),
+                        "last_accessed": serialize_datetime(link.last_accessed),
+                        "access_count": link.access_count,
+                        "created_by": link.created_by,
+                        "similarity_score": link.similarity_score,
+                        "metadata": json.dumps(metadata or {}),
+                    },
+                )
+
+                # Create reverse link if bidirectional
+                if bidirectional:
+                    reverse_link = MemoryLink(
+                        source_id=target_id,
+                        target_id=source_id,
+                        link_type=link_type,
+                        strength=strength,
+                        context=context,
+                        metadata=metadata or {},
+                    )
+                    await tx.run(
+                        """
+                        MATCH (source:MemoryItem {memory_id: $source_id})
+                        MATCH (target:MemoryItem {memory_id: $target_id})
+                        MERGE (source)-[r:LINKS_TO {link_id: $link_id}]->(target)
+                        SET r.source_id = $source_id,
+                            r.target_id = $target_id,
+                            r.link_type = $link_type,
+                            r.strength = $strength,
+                            r.context = $context,
+                            r.created_at = $created_at,
+                            r.last_accessed = $last_accessed,
+                            r.access_count = $access_count,
+                            r.created_by = $created_by,
+                            r.similarity_score = $similarity_score,
+                            r.metadata = $metadata
+                        """,
+                        {
+                            "link_id": reverse_link.link_id,
+                            "source_id": target_id,
+                            "target_id": source_id,
+                            "link_type": link_type.value,
+                            "strength": strength,
+                            "context": context,
+                            "created_at": serialize_datetime(reverse_link.created_at),
+                            "last_accessed": serialize_datetime(reverse_link.last_accessed),
+                            "access_count": reverse_link.access_count,
+                            "created_by": reverse_link.created_by,
+                            "similarity_score": reverse_link.similarity_score,
+                            "metadata": json.dumps(metadata or {}),
+                        },
+                    )
+
+                await tx.commit()
+                logger.info(
+                    "Created link %s from %s to %s",
+                    link.link_id,
+                    source_id,
+                    target_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return link
+
+            except Neo4jError as e:
+                await tx.rollback()
+                logger.exception(
+                    "Failed to create link from %s to %s",
+                    source_id,
+                    target_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise StoreError(
+                    "Failed to create link in Neo4j",
+                    store_type=self.store_type,
+                    original_error=e,
+                ) from e
+
+    async def get_links(
+        self,
+        memory_id: str,
+        *,
+        direction: Literal["outgoing", "incoming", "both"] = "both",
+        link_types: list[LinkType] | None = None,
+        min_strength: float = 0.0,
+    ) -> list[MemoryLink]:
+        """Get all links for a memory."""
+        await self.initialize()
+        start = time.perf_counter()
+
+        # Build direction clause
+        if direction == "outgoing":
+            direction_clause = "(m)-[r:LINKS_TO]->()"
+        elif direction == "incoming":
+            direction_clause = "()-[r:LINKS_TO]->(m)"
+        else:  # both
+            direction_clause = "(m)-[r:LINKS_TO]-()"
+
+        # Build type filter
+        type_clause = ""
+        if link_types:
+            type_values = [lt.value for lt in link_types]
+            type_clause = f"AND r.link_type IN {type_values}"
+
+        query = f"""
+            MATCH (m:MemoryItem {{memory_id: $memory_id}})
+            MATCH {direction_clause}
+            WHERE r.strength >= $min_strength {type_clause}
+            RETURN r
+        """
+
+        async with self.driver.session() as session:
+            try:
+                result = await session.run(
+                    query,
+                    {
+                        "memory_id": memory_id,
+                        "min_strength": min_strength,
+                    },
+                )
+
+                links = []
+                async for record in result:
+                    r = record["r"]
+                    metadata_str = r.get("metadata", "{}")
+                    links.append(
+                        MemoryLink(
+                            link_id=r["link_id"],
+                            source_id=r["source_id"],
+                            target_id=r["target_id"],
+                            link_type=LinkType(r["link_type"]),
+                            strength=r["strength"],
+                            context=r.get("context"),
+                            created_at=r["created_at"],
+                            last_accessed=r["last_accessed"],
+                            access_count=r["access_count"],
+                            created_by=r["created_by"],
+                            similarity_score=r.get("similarity_score"),
+                            metadata=json.loads(metadata_str)
+                            if isinstance(metadata_str, str)
+                            else metadata_str,
+                        )
+                    )
+
+                logger.info(
+                    "Retrieved %d links for memory %s",
+                    len(links),
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return links
+
+            except Neo4jError as e:
+                logger.exception(
+                    "Failed to get links for memory %s",
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise StoreError(
+                    "Failed to get links from Neo4j",
+                    store_type=self.store_type,
+                    memory_id=memory_id,
+                    original_error=e,
+                ) from e
+
+    async def get_backlinks(
+        self,
+        memory_id: str,
+        *,
+        link_types: list[LinkType] | None = None,
+    ) -> list[MemoryItem]:
+        """Get all memories that link TO this memory."""
+        await self.initialize()
+        start = time.perf_counter()
+
+        # Build type filter
+        type_clause = ""
+        if link_types:
+            type_values = [lt.value for lt in link_types]
+            type_clause = f"AND r.link_type IN {type_values}"
+
+        query = f"""
+            MATCH (source:MemoryItem)-[r:LINKS_TO]->(target:MemoryItem {{memory_id: $memory_id}})
+            WHERE true {type_clause}
+            RETURN source
+        """
+
+        async with self.driver.session() as session:
+            try:
+                result = await session.run(query, {"memory_id": memory_id})
+
+                memories = []
+                async for record in result:
+                    node_data = dict(record["source"])
+                    try:
+                        memory = parse_neo4j_node_data(node_data)
+                        memories.append(memory)
+                    except (ValidationError, ValueError) as e:
+                        logger.warning(
+                            "Skipping invalid memory node: %s",
+                            e,
+                            extra=store_log_context(self.store_type),
+                        )
+                        continue
+
+                logger.info(
+                    "Retrieved %d backlinks for memory %s",
+                    len(memories),
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return memories
+
+            except Neo4jError as e:
+                logger.exception(
+                    "Failed to get backlinks for memory %s",
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise StoreError(
+                    "Failed to get backlinks from Neo4j",
+                    store_type=self.store_type,
+                    memory_id=memory_id,
+                    original_error=e,
+                ) from e
+
+    async def traverse_graph(
+        self,
+        start_id: str,
+        *,
+        max_depth: int = 3,
+        link_types: list[LinkType] | None = None,
+        strategy: Literal["bfs", "dfs"] = "bfs",
+    ) -> list[tuple[MemoryItem, int, list[MemoryLink]]]:
+        """Traverse the knowledge graph from a starting memory."""
+        await self.initialize()
+        start_time = time.perf_counter()
+
+        # Limit max depth for performance
+        max_depth = min(max_depth, 5)
+
+        # Build relationship pattern
+        if link_types:
+            type_values = [lt.value for lt in link_types]
+            rel_pattern = f"[r:LINKS_TO*1..{max_depth}]"
+            type_filter = f"AND ALL(rel IN r WHERE rel.link_type IN {type_values})"
+        else:
+            rel_pattern = f"[:LINKS_TO*1..{max_depth}]"
+            type_filter = ""
+
+        query = f"""
+            MATCH path = (start:MemoryItem {{memory_id: $start_id}})-{rel_pattern}->(end:MemoryItem)
+            WHERE start.memory_id <> end.memory_id {type_filter}
+            RETURN end, length(path) as depth, relationships(path) as rels
+            ORDER BY depth
+        """
+
+        async with self.driver.session() as session:
+            try:
+                result = await session.run(query, {"start_id": start_id})
+
+                traversal_result = []
+                async for record in result:
+                    node_data = dict(record["end"])
+                    depth = record["depth"]
+                    rels = record["rels"]
+
+                    try:
+                        memory = parse_neo4j_node_data(node_data)
+                        path_links = []
+                        for r in rels:
+                            metadata_str = r.get("metadata", "{}")
+                            path_links.append(
+                                MemoryLink(
+                                    link_id=r["link_id"],
+                                    source_id=r["source_id"],
+                                    target_id=r["target_id"],
+                                    link_type=LinkType(r["link_type"]),
+                                    strength=r["strength"],
+                                    context=r.get("context"),
+                                    created_at=r["created_at"],
+                                    last_accessed=r["last_accessed"],
+                                    access_count=r["access_count"],
+                                    created_by=r["created_by"],
+                                    similarity_score=r.get("similarity_score"),
+                                    metadata=json.loads(metadata_str)
+                                    if isinstance(metadata_str, str)
+                                    else metadata_str,
+                                )
+                            )
+                        traversal_result.append((memory, depth, path_links))
+                    except (ValidationError, ValueError) as e:
+                        logger.warning(
+                            "Skipping invalid node in traversal: %s",
+                            e,
+                            extra=store_log_context(self.store_type),
+                        )
+                        continue
+
+                logger.info(
+                    "Traversed graph from %s, found %d nodes",
+                    start_id,
+                    len(traversal_result),
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start_time),
+                    ),
+                )
+                return traversal_result
+
+            except Neo4jError as e:
+                logger.exception(
+                    "Failed to traverse graph from %s",
+                    start_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start_time),
+                    ),
+                )
+                raise StoreError(
+                    "Failed to traverse graph in Neo4j",
+                    store_type=self.store_type,
+                    original_error=e,
+                ) from e
+
+    async def find_path(
+        self,
+        source_id: str,
+        target_id: str,
+        *,
+        max_depth: int = 5,
+    ) -> list[tuple[MemoryItem, MemoryLink]] | None:
+        """Find shortest path between two memories."""
+        await self.initialize()
+        start_time = time.perf_counter()
+
+        query = f"""
+            MATCH (source:MemoryItem {{memory_id: $source_id}})
+            MATCH (target:MemoryItem {{memory_id: $target_id}})
+            MATCH path = shortestPath((source)-[:LINKS_TO*1..{max_depth}]->(target))
+            RETURN nodes(path) as nodes, relationships(path) as rels
+        """
+
+        async with self.driver.session() as session:
+            try:
+                result = await session.run(
+                    query,
+                    {
+                        "source_id": source_id,
+                        "target_id": target_id,
+                    },
+                )
+
+                record = await result.single()
+                if not record:
+                    return None
+
+                nodes = record["nodes"]
+                rels = record["rels"]
+
+                path = []
+                # Skip first node (source), include others
+                for _i, (node, rel) in enumerate(zip(nodes[1:], rels, strict=False)):
+                    node_data = dict(node)
+                    memory = parse_neo4j_node_data(node_data)
+
+                    metadata_str = rel.get("metadata", "{}")
+                    link = MemoryLink(
+                        link_id=rel["link_id"],
+                        source_id=rel["source_id"],
+                        target_id=rel["target_id"],
+                        link_type=LinkType(rel["link_type"]),
+                        strength=rel["strength"],
+                        context=rel.get("context"),
+                        created_at=rel["created_at"],
+                        last_accessed=rel["last_accessed"],
+                        access_count=rel["access_count"],
+                        created_by=rel["created_by"],
+                        similarity_score=rel.get("similarity_score"),
+                        metadata=json.loads(metadata_str)
+                        if isinstance(metadata_str, str)
+                        else metadata_str,
+                    )
+                    path.append((memory, link))
+
+                logger.info(
+                    "Found path from %s to %s with %d hops",
+                    source_id,
+                    target_id,
+                    len(path),
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start_time),
+                    ),
+                )
+                return path
+
+            except Neo4jError as e:
+                logger.exception(
+                    "Failed to find path from %s to %s",
+                    source_id,
+                    target_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start_time),
+                    ),
+                )
+                raise StoreError(
+                    "Failed to find path in Neo4j",
+                    store_type=self.store_type,
+                    original_error=e,
+                ) from e
+
+    async def suggest_links(
+        self,
+        memory_id: str,
+        *,
+        limit: int = 10,
+        min_similarity: float = 0.7,
+        use_llm: bool = False,
+    ) -> list[tuple[MemoryItem, LinkType, float, str | None]]:
+        """Suggest potential links for a memory.
+
+        Note: This is a placeholder that returns empty list.
+        Full implementation requires integration with embedding search
+        and will be added in the LinkSuggester module.
+        """
+        # This method requires access to embedding search and entity matching
+        # which are part of the LinkSuggester module (Phase 2).
+        # For now, return empty list.
+        return []
+
+    async def update_link_strength(
+        self,
+        link_id: str,
+        strength: float,
+    ) -> bool:
+        """Update the strength of an existing link."""
+        await self.initialize()
+        start = time.perf_counter()
+
+        async with self.driver.session() as session:
+            try:
+                result = await session.run(
+                    """
+                    MATCH ()-[r:LINKS_TO {link_id: $link_id}]->()
+                    SET r.strength = $strength
+                    RETURN r
+                    """,
+                    {
+                        "link_id": link_id,
+                        "strength": strength,
+                    },
+                )
+
+                record = await result.single()
+                success = record is not None
+
+                if success:
+                    logger.info(
+                        "Updated link strength for %s to %f",
+                        link_id,
+                        strength,
+                        extra=store_log_context(
+                            self.store_type,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                return success
+
+            except Neo4jError as e:
+                logger.exception(
+                    "Failed to update link strength for %s",
+                    link_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise StoreError(
+                    "Failed to update link strength in Neo4j",
+                    store_type=self.store_type,
+                    original_error=e,
+                ) from e
+
+    async def delete_link(
+        self,
+        link_id: str,
+    ) -> bool:
+        """Delete a link."""
+        await self.initialize()
+        start = time.perf_counter()
+
+        async with self.driver.session() as session:
+            try:
+                result = await session.run(
+                    """
+                    MATCH ()-[r:LINKS_TO {link_id: $link_id}]->()
+                    DELETE r
+                    RETURN count(r) as deleted
+                    """,
+                    {"link_id": link_id},
+                )
+
+                record = await result.single()
+                success = record and record["deleted"] > 0
+
+                if success:
+                    logger.info(
+                        "Deleted link %s",
+                        link_id,
+                        extra=store_log_context(
+                            self.store_type,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                return success
+
+            except Neo4jError as e:
+                logger.exception(
+                    "Failed to delete link %s",
+                    link_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise StoreError(
+                    "Failed to delete link in Neo4j",
+                    store_type=self.store_type,
                     original_error=e,
                 ) from e
 
