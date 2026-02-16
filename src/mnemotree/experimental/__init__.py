@@ -3,7 +3,7 @@ Experimental features for mnemotree.
 
 This module contains advanced features that are useful but still in development:
 
-- **AdaptiveImportanceSystem**: Dynamic decay based on usage patterns, recency, and novelty
+- **AdaptiveDecaySystem** (formerly AdaptiveImportanceSystem): Dynamic decay based on usage patterns
 - **MemoryConsolidator**: Intelligently merges similar memories to reduce redundancy
 - **ClaimsRegistry**: Tracks factual claims and detects conflicts/staleness
 - **ContextAwareWriteGate**: Quality filtering before storing new memories
@@ -11,16 +11,19 @@ This module contains advanced features that are useful but still in development:
 These features are imported by `mnemotree.configs` for pre-configured setups.
 
 Usage:
-    from mnemotree.experimental import AdaptiveImportanceSystem, DecayParameters
+    from mnemotree.experimental import AdaptiveDecaySystem, DecayParameters
+    from mnemotree.experimental import AdaptiveImportanceSystem  # deprecated alias
     from mnemotree.experimental import MemoryConsolidator, ConsolidationConfig
     from mnemotree.experimental import ClaimsRegistry
     from mnemotree.experimental import ContextAwareWriteGate, WritePolicy
 """
 
 from .adaptive_decay import (
+    AdaptiveDecaySystem,
     AdaptiveImportanceSystem,
     DecayParameters,
     DecayProfile,
+    FSRSSchedule,
     NoveltyLevel,
     SpacedRepetitionSchedule,
 )
@@ -43,9 +46,11 @@ from .write_gate import (
 
 __all__ = [
     # Adaptive decay
+    "AdaptiveDecaySystem",
     "AdaptiveImportanceSystem",
     "DecayParameters",
     "DecayProfile",
+    "FSRSSchedule",
     "NoveltyLevel",
     "SpacedRepetitionSchedule",
     # Consolidation

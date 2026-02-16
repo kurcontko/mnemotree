@@ -799,10 +799,14 @@ class TestGetEmbedding:
 class TestDecayAndReinforce:
     """Test decay_and_reinforce method."""
 
-    def test_decay_and_reinforce_returns_none(self, basic_memory_core):
-        """Test decay_and_reinforce currently returns None (stub)."""
-        result = basic_memory_core.decay_and_reinforce()
-        assert result is None
+    @pytest.mark.asyncio
+    async def test_decay_and_reinforce_returns_stats(self, basic_memory_core):
+        """Test decay_and_reinforce returns a stats dict."""
+        result = await basic_memory_core.decay_and_reinforce()
+        assert isinstance(result, dict)
+        assert "processed" in result
+        assert "decayed" in result
+        assert "reinforced" in result
 
 
 class TestModeConfiguration:

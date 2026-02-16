@@ -16,6 +16,24 @@ from mnemotree.core.memory import ModeDefaultsConfig, NerConfig, RetrievalConfig
 from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.mcp import server
 
+DEFAULT_TIMESTAMP = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def mock_memory_core_with_store(monkeypatch):
+    """Factory fixture to create a mock memory core with store."""
+
+    def _create(memory: MemoryItem | None = None, store_memory_side_effect=None):
+        store = MagicMock()
+        store.get_memory = AsyncMock(return_value=memory)
+        store.store_memory = AsyncMock(side_effect=store_memory_side_effect)
+        memory_core = MagicMock(store=store)
+        memory_core.get_embedding = AsyncMock(return_value=[0.5])
+        monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+        return memory_core, store
+
+    return _create
+
 
 def _make_memory(
     memory_id: str,
@@ -747,75 +765,46 @@ async def test_update_memory_unknown_fields_raises(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_memory_not_found_raises(monkeypatch):
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=None)
-    memory_core = MagicMock(store=store)
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+async def test_update_memory_not_found_raises(mock_memory_core_with_store):
+    mock_memory_core_with_store(memory=None)
 
     with pytest.raises(ValueError, match="Memory not found"):
         await server.update_memory(memory_id="missing", patch={"content": "new"})
 
 
 @pytest.mark.asyncio
-async def test_update_memory_importance_null_raises(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    memory = _make_memory("mem-1", ts)
-
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=memory)
-    memory_core = MagicMock(store=store)
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+async def test_update_memory_importance_null_raises(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    mock_memory_core_with_store(memory=memory)
 
     with pytest.raises(ValueError, match="importance cannot be null"):
         await server.update_memory(memory_id="mem-1", patch={"importance": None})
 
 
 @pytest.mark.asyncio
-async def test_update_memory_importance_out_of_range_raises(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    memory = _make_memory("mem-1", ts)
-
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=memory)
-    memory_core = MagicMock(store=store)
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+async def test_update_memory_importance_out_of_range_raises(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    mock_memory_core_with_store(memory=memory)
 
     with pytest.raises(ValueError, match="importance must be between 0 and 1"):
         await server.update_memory(memory_id="mem-1", patch={"importance": 1.5})
 
 
 @pytest.mark.asyncio
-async def test_update_memory_metadata_invalid_type_raises(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    memory = _make_memory("mem-1", ts)
+async def test_update_memory_metadata_invalid_type_raises(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
     memory.metadata = {}
-
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=memory)
-    memory_core = MagicMock(store=store)
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+    mock_memory_core_with_store(memory=memory)
 
     with pytest.raises(ValueError, match="metadata must be a dict"):
         await server.update_memory(memory_id="mem-1", patch={"metadata": "not-a-dict"})
 
 
 @pytest.mark.asyncio
-async def test_update_memory_metadata_null_clears(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    memory = _make_memory("mem-1", ts)
+async def test_update_memory_metadata_null_clears(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
     memory.metadata = {"old": "value"}
-
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=memory)
-    store.store_memory = AsyncMock()
-    memory_core = MagicMock(store=store)
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+    mock_memory_core_with_store(memory=memory)
 
     updated = await server.update_memory(memory_id="mem-1", patch={"metadata": None})
 
@@ -823,18 +812,11 @@ async def test_update_memory_metadata_null_clears(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_memory_summary_and_context(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    memory = _make_memory("mem-1", ts, summary="old summary")
+async def test_update_memory_summary_and_context(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP, summary="old summary")
     memory.context = {"old": "context"}
     memory.metadata = {}
-
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=memory)
-    store.store_memory = AsyncMock()
-    memory_core = MagicMock(store=store)
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+    mock_memory_core_with_store(memory=memory)
 
     updated = await server.update_memory(
         memory_id="mem-1",
@@ -846,18 +828,10 @@ async def test_update_memory_summary_and_context(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_memory_no_reembed(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    memory = _make_memory("mem-1", ts, embedding=[0.1, 0.2])
+async def test_update_memory_no_reembed(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP, embedding=[0.1, 0.2])
     memory.metadata = {}
-
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=memory)
-    store.store_memory = AsyncMock()
-    memory_core = MagicMock(store=store)
-    memory_core.get_embedding = AsyncMock()
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+    memory_core, store = mock_memory_core_with_store(memory=memory)
 
     await server.update_memory(
         memory_id="mem-1",
@@ -870,17 +844,10 @@ async def test_update_memory_no_reembed(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_memory_valid_importance(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    memory = _make_memory("mem-1", ts)
+async def test_update_memory_valid_importance(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
     memory.metadata = {}
-
-    store = MagicMock()
-    store.get_memory = AsyncMock(return_value=memory)
-    store.store_memory = AsyncMock()
-    memory_core = MagicMock(store=store)
-
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+    _, store = mock_memory_core_with_store(memory=memory)
 
     updated = await server.update_memory(
         memory_id="mem-1",

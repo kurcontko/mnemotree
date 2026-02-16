@@ -72,7 +72,8 @@ def create_sqlite_schema(
             linked_concepts TEXT,
             conflicts_with TEXT,
             previous_event_id TEXT,
-            next_event_id TEXT
+            next_event_id TEXT,
+            stability_seconds REAL
         )
         """
     )
@@ -109,6 +110,18 @@ def create_sqlite_schema(
         """
     )
     conn.commit()
+
+
+def migrate_sqlite_add_stability(
+    conn: sqlite3.Connection,
+    collection_name: str,
+) -> None:
+    """Idempotent migration: add stability_seconds column if missing."""
+    cursor = conn.execute(f'PRAGMA table_info("{collection_name}")')
+    columns = {row[1] for row in cursor.fetchall()}
+    if "stability_seconds" not in columns:
+        conn.execute(f'ALTER TABLE "{collection_name}" ADD COLUMN stability_seconds REAL')
+        conn.commit()
 
 
 def ensure_sqlite_vector_table(
