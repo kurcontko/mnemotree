@@ -74,8 +74,6 @@ def parse_neo4j_node_data(
             parsed.get("entity_mentions"), strict=strict_json
         )
     parsed["memory_type"] = MemoryType(parsed["memory_type"])
-    if "stability_seconds" in parsed:
-        parsed["stability_seconds"] = parsed["stability_seconds"]  # pass through (may be None)
     return parsed
 
 
