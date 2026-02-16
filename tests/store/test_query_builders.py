@@ -20,7 +20,7 @@ def test_build_neo4j_where_clause_maps_operators_and_normalizes_enums():
     )
     assert "m.importance >= $filter_0" in where
     assert "m.memory_type = $filter_1" in where
-    assert params == {"filter_0": 0.7, "filter_1": "semantic"}
+    assert params == {"filter_0": pytest.approx(0.7), "filter_1": "semantic"}
 
 
 def test_build_neo4j_where_clause_contains_on_string_uses_contains():
