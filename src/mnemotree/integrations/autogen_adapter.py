@@ -90,7 +90,7 @@ class MnemotreeAutoGenMemory:
             """Wrap reply generation with memory retrieval."""
             if messages:
                 # Get last message as query
-                last_msg = messages[-1] if messages else {}
+                last_msg = messages[-1]
                 query = last_msg.get("content", "")
 
                 # Retrieve relevant memories
