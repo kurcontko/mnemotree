@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
-from mnemotree.core.memory import ModeDefaultsConfig, NerConfig
+from mnemotree.core.memory import ModeDefaultsConfig, NerConfig, RetrievalConfig
 from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.mcp import server
 
@@ -37,6 +37,63 @@ def _make_memory(
     )
 
 
+# Fixtures for common test setup
+
+
+@pytest.fixture
+def dummy_store_class():
+    """Reusable DummyStore class for testing."""
+
+    class DummyStore:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+            self.initialized = False
+
+        async def initialize(self) -> None:
+            self.initialized = True
+
+    return DummyStore
+
+
+@pytest.fixture
+def dummy_memory_core_class():
+    """Reusable DummyMemoryCore class for testing."""
+
+    class DummyMemoryCore:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+            self.store = kwargs["store"]
+
+    return DummyMemoryCore
+
+
+@pytest.fixture
+def memory_core_env_setup(monkeypatch, dummy_store_class, dummy_memory_core_class):
+    """Common setup for memory core environment tests."""
+    fake_store_module = types.ModuleType("mnemotree.store")
+    fake_store_module.ChromaMemoryStore = dummy_store_class
+
+    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
+    monkeypatch.setattr(server, "MemoryCore", dummy_memory_core_class)
+    monkeypatch.setattr(server, "_memory_core", None)
+
+    return {"store_module": fake_store_module, "store_class": dummy_store_class}
+
+
+@pytest.fixture
+def timeline_setup(monkeypatch):
+    """Factory for setting up timeline tests with custom memories."""
+
+    def _setup(memories):
+        async def _fake_get_all_memories(_, *, include_embeddings):
+            return memories
+
+        monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
+        monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+
+    return _setup
+
+
 def test_env_bool_default_and_values(monkeypatch):
     monkeypatch.delenv("MNEMO_BOOL", raising=False)
     assert server._env_bool("MNEMO_BOOL", True) is True
@@ -48,12 +105,104 @@ def test_env_bool_default_and_values(monkeypatch):
     assert server._env_bool("MNEMO_BOOL", False) is True
 
 
+def test_ensure_list_none():
+    assert server._ensure_list(None) is None
+
+
+def test_ensure_list_already_list():
+    assert server._ensure_list([1, 2, 3]) == [1, 2, 3]
+
+
+def test_ensure_list_scalar_to_list():
+    assert server._ensure_list("single") == ["single"]
+    assert server._ensure_list(42) == [42]
+
+
+def test_coerce_tags_none():
+    assert server._coerce_tags(None) == []
+
+
+def test_coerce_tags_list():
+    assert server._coerce_tags(["a", "b"]) == ["a", "b"]
+
+
+def test_coerce_tags_single_value():
+    assert server._coerce_tags("single") == ["single"]
+
+
+def test_coerce_tags_converts_to_string():
+    assert server._coerce_tags([1, 2, 3]) == ["1", "2", "3"]
+
+
 def test_parse_memory_type():
     assert server._parse_memory_type(None) is None
     assert server._parse_memory_type(" semantic ") == MemoryType.SEMANTIC
     assert server._parse_memory_type("EPISODIC") == MemoryType.EPISODIC
     with pytest.raises(ValueError, match="Unknown memory_type"):
         server._parse_memory_type("unknown")
+
+
+def test_parse_recall_filters_empty():
+    assert server._parse_recall_filters(None) is None
+    assert server._parse_recall_filters({}) is None
+
+
+def test_parse_recall_filters_memory_types_list():
+    filters = server._parse_recall_filters({"memory_types": ["semantic", "episodic"]})
+    assert filters is not None
+    assert filters.memory_types == [MemoryType.SEMANTIC, MemoryType.EPISODIC]
+
+
+def test_parse_recall_filters_memory_type_single():
+    filters = server._parse_recall_filters({"memory_type": "semantic"})
+    assert filters is not None
+    assert filters.memory_types == [MemoryType.SEMANTIC]
+
+
+def test_parse_recall_filters_memory_type_enum_passthrough():
+    filters = server._parse_recall_filters({"memory_types": [MemoryType.PROCEDURAL]})
+    assert filters is not None
+    assert filters.memory_types == [MemoryType.PROCEDURAL]
+
+
+def test_parse_recall_filters_tags_single():
+    filters = server._parse_recall_filters({"tags": "single-tag"})
+    assert filters is not None
+    assert filters.tags == ["single-tag"]
+
+
+def test_parse_recall_filters_tags_list():
+    filters = server._parse_recall_filters({"tags": ["a", "b"]})
+    assert filters is not None
+    assert filters.tags == ["a", "b"]
+
+
+def test_parse_recall_filters_all_fields():
+    filters = server._parse_recall_filters(
+        {
+            "memory_types": ["semantic"],
+            "tags": ["tag1"],
+            "min_importance": 0.5,
+            "max_importance": 0.9,
+            "since": "2024-01-01",
+            "until": "2024-12-31",
+            "source": "test",
+            "author": "user",
+            "conversation_id": "conv-1",
+            "user_id": "user-1",
+        }
+    )
+    assert filters is not None
+    assert filters.memory_types == [MemoryType.SEMANTIC]
+    assert filters.tags == ["tag1"]
+    assert filters.min_importance == pytest.approx(0.5)
+    assert filters.max_importance == pytest.approx(0.9)
+    assert filters.since == "2024-01-01"
+    assert filters.until == "2024-12-31"
+    assert filters.source == "test"
+    assert filters.author == "user"
+    assert filters.conversation_id == "conv-1"
+    assert filters.user_id == "user-1"
 
 
 def test_serialize_memory_excludes_embedding():
@@ -64,6 +213,23 @@ def test_serialize_memory_excludes_embedding():
     )
     data = server._serialize_memory(memory, include_embedding=False)
     assert data["memory_id"] == "mem-1"
+    assert "embedding" not in data
+
+
+def test_serialize_memory_with_fields_filter():
+    memory = _make_memory(
+        "mem-fields",
+        datetime(2024, 1, 1, tzinfo=timezone.utc),
+        summary="test summary",
+        embedding=[0.1, 0.2],
+    )
+    data = server._serialize_memory(
+        memory,
+        include_embedding=True,
+        fields=["memory_id", "content", "nonexistent"],
+    )
+    assert data == {"memory_id": "mem-fields", "content": "content-mem-fields"}
+    assert "summary" not in data
     assert "embedding" not in data
 
 
@@ -98,49 +264,34 @@ async def test_timeline_requires_anchor():
 
 
 @pytest.mark.asyncio
-async def test_timeline_missing_memory_id_returns_empty(monkeypatch):
+async def test_timeline_missing_memory_id_returns_empty(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     result = await server.timeline(memory_id="missing")
     assert result == []
 
 
 @pytest.mark.asyncio
-async def test_timeline_invalid_timestamp_raises(monkeypatch):
+async def test_timeline_invalid_timestamp_raises(timeline_setup):
     memories = [_make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc))]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     with pytest.raises(ValueError, match="Invalid timestamp format"):
         await server.timeline(timestamp="not-a-date")
 
 
 @pytest.mark.asyncio
-async def test_timeline_offsets_and_embeddings(monkeypatch):
+async def test_timeline_offsets_and_embeddings(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc), embedding=[1.0]),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc), embedding=[2.0]),
         _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc), embedding=[3.0]),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(
         memory_id="mem-2",
@@ -153,24 +304,19 @@ async def test_timeline_offsets_and_embeddings(monkeypatch):
     assert [item["memory_id"] for item in results] == ["mem-1", "mem-2", "mem-3"]
     assert [item["offset"] for item in results] == [-1, 0, 1]
     assert results[1]["anchor"] is True
-    assert results[0]["embedding"] == [1.0]
-    assert results[1]["embedding"] == [2.0]
-    assert results[2]["embedding"] == [3.0]
+    assert results[0]["embedding"] == pytest.approx([1.0])
+    assert results[1]["embedding"] == pytest.approx([2.0])
+    assert results[2]["embedding"] == pytest.approx([3.0])
 
 
 @pytest.mark.asyncio
-async def test_timeline_excludes_anchor(monkeypatch):
+async def test_timeline_excludes_anchor(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
         _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(
         memory_id="mem-2",
@@ -220,7 +366,7 @@ def test_get_mcp_registers_tools(monkeypatch):
     instance = server._get_mcp()
 
     assert isinstance(instance, DummyFastMCP)
-    assert len(instance.tools) == 9
+    assert len(instance.tools) == 5
 
 
 def test_memory_timestamp_fallbacks():
@@ -258,33 +404,16 @@ async def test_get_all_memories_lists_memories():
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_remote_store_and_ner(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.initialized = False
-
-        async def initialize(self) -> None:
-            self.initialized = True
-
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
-
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
-
+async def test_get_memory_core_remote_store_and_ner(
+    monkeypatch, memory_core_env_setup, dummy_memory_core_class
+):
     ner_calls: list[tuple[str, dict[str, str]]] = []
 
     def _fake_create_ner(backend: str, **kwargs) -> str:
         ner_calls.append((backend, kwargs))
         return "ner-instance"
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.setenv("MNEMOTREE_MCP_CHROMA_HOST", "localhost")
     monkeypatch.setenv("MNEMOTREE_MCP_CHROMA_PORT", "1234")
@@ -297,7 +426,7 @@ async def test_get_memory_core_remote_store_and_ner(monkeypatch):
 
     core = await server._get_memory_core()
 
-    assert isinstance(core, DummyMemoryCore)
+    assert isinstance(core, dummy_memory_core_class)
     assert core.store.kwargs == {
         "host": "localhost",
         "port": 1234,
@@ -317,29 +446,11 @@ async def test_get_memory_core_remote_store_and_ner(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_persist_dir(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-
-        async def initialize(self) -> None:
-            return None
-
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
-
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
-
+async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called without backend config")
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_PORT", raising=False)
@@ -362,38 +473,60 @@ async def test_get_memory_core_persist_dir(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_ner_model_non_gliner(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
+async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_env_setup):
+    def _fake_create_ner(*args, **kwargs) -> None:
+        raise AssertionError("create_ner should not be called")
 
-        async def initialize(self) -> None:
-            return None
+    monkeypatch.setattr(server, "create_ner", _fake_create_ner)
 
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
+    monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
+    monkeypatch.setenv("MNEMOTREE_MCP_ENABLE_BM25", "1")
 
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
+    core = await server._get_memory_core()
+
+    retrieval_config = core.kwargs["retrieval_config"]
+    assert isinstance(retrieval_config, RetrievalConfig)
+    assert retrieval_config.retrieval_mode == "hybrid"
+    assert retrieval_config.enable_bm25 is True
+
+
+@pytest.mark.asyncio
+async def test_get_memory_core_retrieval_config_bm25_disabled(monkeypatch, memory_core_env_setup):
+    def _fake_create_ner(*args, **kwargs) -> None:
+        raise AssertionError("create_ner should not be called")
+
+    monkeypatch.setattr(server, "create_ner", _fake_create_ner)
+
+    monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
+    monkeypatch.setenv("MNEMOTREE_MCP_ENABLE_BM25", "0")
+
+    core = await server._get_memory_core()
+
+    retrieval_config = core.kwargs["retrieval_config"]
+    assert isinstance(retrieval_config, RetrievalConfig)
+    assert retrieval_config.enable_bm25 is False
+
+
+@pytest.mark.asyncio
+async def test_get_memory_core_ner_model_non_gliner(
+    monkeypatch, memory_core_env_setup, dummy_memory_core_class
+):
     ner_calls: list[tuple[str, dict[str, str]]] = []
 
     def _fake_create_ner(backend: str, **kwargs) -> str:
         ner_calls.append((backend, kwargs))
         return "ner-instance"
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.setenv("MNEMOTREE_MCP_NER_BACKEND", "spacy")
     monkeypatch.setenv("MNEMOTREE_MCP_NER_MODEL", "ner-model")
 
     core = await server._get_memory_core()
 
-    assert isinstance(core, DummyMemoryCore)
+    assert isinstance(core, dummy_memory_core_class)
     assert ner_calls == [("spacy", {"model": "ner-model"})]
 
 
@@ -424,7 +557,7 @@ async def test_get_memory_core_import_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_remember_recall_search_index(monkeypatch):
+async def test_remember_recall_compact(monkeypatch):
     ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
     memory = _make_memory("mem-remember", ts, summary="summary", embedding=[0.3])
 
@@ -440,10 +573,6 @@ async def test_remember_recall_search_index(monkeypatch):
         importance=0.9,
         tags=["tag"],
         context={"source": "test"},
-        analyze=True,
-        summarize=False,
-        references=["ref"],
-        include_embedding=False,
     )
 
     assert stored["memory_id"] == "mem-remember"
@@ -454,53 +583,284 @@ async def test_remember_recall_search_index(monkeypatch):
         importance=0.9,
         tags=["tag"],
         context={"source": "test"},
-        analyze=True,
-        summarize=False,
-        references=["ref"],
     )
 
     recalled = await server.recall(
         query="hello",
         limit=5,
-        scoring=False,
-        update_access=True,
-        include_embedding=True,
+        compact=False,
     )
-    assert recalled[0]["embedding"] == [0.3]
-    memory_core.recall.assert_awaited_once_with(
-        query="hello",
-        limit=5,
-        scoring=False,
-        update_access=True,
-    )
+    assert "embedding" not in recalled[0]
 
-    results = await server.search_index(query="hello", limit=3, include_summary=False)
+    results = await server.recall(query="hello", limit=3, compact=True, include_summary=False)
     assert "summary" not in results[0]
+    assert results[0]["rank"] == 1
+
+    memory_core.recall.assert_has_awaits(
+        [
+            call(query="hello", limit=5, scoring=True, update_access=False),
+            call(query="hello", limit=3, scoring=True, update_access=False),
+        ]
+    )
+    assert memory_core.recall.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_timeline_empty_memories(monkeypatch):
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return []
+async def test_remember_with_metadata(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-meta", ts)
+    memory.metadata = {"key": "value"}
 
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
+    memory_core = MagicMock()
+    memory_core.remember = AsyncMock(return_value=memory)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    stored = await server.remember(
+        content="test content",
+        metadata={"key": "value"},
+    )
+
+    assert stored["metadata"]["key"] == "value"
+    memory_core.remember.assert_awaited_once()
+    call_kwargs = memory_core.remember.call_args.kwargs
+    assert call_kwargs["metadata"] == {"key": "value"}
+
+
+@pytest.mark.asyncio
+async def test_recall_with_filters(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-filtered", ts)
+
+    memory_core = MagicMock()
+    memory_core.recall = AsyncMock(return_value=[memory])
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    results = await server.recall(
+        query="test",
+        limit=5,
+        filters={"tags": ["important"], "min_importance": 0.5},
+    )
+
+    assert len(results) == 1
+    memory_core.recall.assert_awaited_once()
+    call_kwargs = memory_core.recall.call_args.kwargs
+    assert "filters" in call_kwargs
+    assert call_kwargs["filters"].tags == ["important"]
+    assert call_kwargs["filters"].min_importance == pytest.approx(0.5)
+
+
+@pytest.mark.asyncio
+async def test_update_memory_applies_patch_and_reembed(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-remember", ts, summary="summary", embedding=[0.3])
+    memory.metadata = {"old": 1}
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    store.store_memory = AsyncMock()
+
+    memory_core = MagicMock()
+    memory_core.store = store
+    memory_core.get_embedding = AsyncMock(return_value=[0.9])
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    updated = await server.update_memory(
+        memory_id="mem-remember",
+        patch={"content": "updated", "tags": ["new"], "metadata": {"k": "v"}},
+        reembed=True,
+    )
+
+    assert updated["content"] == "updated"
+    assert updated["tags"] == ["new"]
+    assert updated["metadata"]["old"] == 1
+    assert updated["metadata"]["k"] == "v"
+    assert "embedding" not in updated
+
+    memory_core.get_embedding.assert_awaited_once_with("updated")
+    store.store_memory.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_memory_empty_patch_raises():
+    with pytest.raises(ValueError, match="patch is required"):
+        await server.update_memory(memory_id="mem-1", patch={})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_unknown_fields_raises(monkeypatch):
     monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
 
+    with pytest.raises(ValueError, match="Unknown update fields.*invalid_field"):
+        await server.update_memory(memory_id="mem-1", patch={"invalid_field": "value"})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_not_found_raises(monkeypatch):
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=None)
+    memory_core = MagicMock(store=store)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="Memory not found"):
+        await server.update_memory(memory_id="missing", patch={"content": "new"})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_importance_null_raises(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-1", ts)
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    memory_core = MagicMock(store=store)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="importance cannot be null"):
+        await server.update_memory(memory_id="mem-1", patch={"importance": None})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_importance_out_of_range_raises(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-1", ts)
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    memory_core = MagicMock(store=store)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="importance must be between 0 and 1"):
+        await server.update_memory(memory_id="mem-1", patch={"importance": 1.5})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_metadata_invalid_type_raises(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-1", ts)
+    memory.metadata = {}
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    memory_core = MagicMock(store=store)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="metadata must be a dict"):
+        await server.update_memory(memory_id="mem-1", patch={"metadata": "not-a-dict"})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_metadata_null_clears(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-1", ts)
+    memory.metadata = {"old": "value"}
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    store.store_memory = AsyncMock()
+    memory_core = MagicMock(store=store)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    updated = await server.update_memory(memory_id="mem-1", patch={"metadata": None})
+
+    assert updated["metadata"] == {}
+
+
+@pytest.mark.asyncio
+async def test_update_memory_summary_and_context(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-1", ts, summary="old summary")
+    memory.context = {"old": "context"}
+    memory.metadata = {}
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    store.store_memory = AsyncMock()
+    memory_core = MagicMock(store=store)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    updated = await server.update_memory(
+        memory_id="mem-1",
+        patch={"summary": "new summary", "context": {"new": "context"}},
+    )
+
+    assert updated["summary"] == "new summary"
+    assert updated["context"] == {"new": "context"}
+
+
+@pytest.mark.asyncio
+async def test_update_memory_no_reembed(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-1", ts, embedding=[0.1, 0.2])
+    memory.metadata = {}
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    store.store_memory = AsyncMock()
+    memory_core = MagicMock(store=store)
+    memory_core.get_embedding = AsyncMock()
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    await server.update_memory(
+        memory_id="mem-1",
+        patch={"content": "updated content"},
+        reembed=False,
+    )
+
+    memory_core.get_embedding.assert_not_awaited()
+    store.store_memory.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_memory_valid_importance(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-1", ts)
+    memory.metadata = {}
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=memory)
+    store.store_memory = AsyncMock()
+    memory_core = MagicMock(store=store)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    updated = await server.update_memory(
+        memory_id="mem-1",
+        patch={"importance": 0.75},
+    )
+
+    assert updated["importance"] == pytest.approx(0.75)
+    store.store_memory.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_timeline_empty_memories(timeline_setup):
+    timeline_setup([])
     assert await server.timeline(memory_id="mem-1") == []
 
 
 @pytest.mark.asyncio
-async def test_timeline_timestamp_after_all(monkeypatch):
+async def test_timeline_empty_memories_with_timestamp(timeline_setup):
+    timeline_setup([])
+    assert await server.timeline(timestamp="2024-01-01T00:00:00+00:00") == []
+
+
+@pytest.mark.asyncio
+async def test_timeline_timestamp_after_all(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(timestamp="2024-02-01T00:00:00+00:00", before=0, after=0)
 
@@ -510,18 +870,13 @@ async def test_timeline_timestamp_after_all(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_timeline_timestamp_between(monkeypatch):
+async def test_timeline_timestamp_between(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
         _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(timestamp="2024-01-02T12:00:00+00:00", before=0, after=0)
 
@@ -540,7 +895,7 @@ async def test_get_memories_filters_missing(monkeypatch):
 
     monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
 
-    results = await server.get_memories(["mem-keep", "mem-missing"], include_embedding=True)
+    results = await server.get_memories(["mem-keep", "mem-missing"])
 
     assert [item["memory_id"] for item in results] == ["mem-keep"]
     store.get_memory.assert_has_awaits([call("mem-keep"), call("mem-missing")])

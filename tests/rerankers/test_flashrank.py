@@ -75,11 +75,11 @@ class TestFlashRankRerankerLoad:
         # Manually patch the import inside _load
         with patch(
             "builtins.__import__",
-            side_effect=lambda name, *args: MagicMock(
-                Ranker=mock_ranker_cls, RerankRequest=mock_request_cls
-            )
-            if name == "flashrank"
-            else __import__(name, *args),
+            side_effect=lambda name, *args: (
+                MagicMock(Ranker=mock_ranker_cls, RerankRequest=mock_request_cls)
+                if name == "flashrank"
+                else __import__(name, *args)
+            ),
         ):
             reranker._load()
 

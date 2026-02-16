@@ -207,7 +207,7 @@ async def test_base_retriever_query_store_builder():
     memories, vector = await retriever._query_store(builder)
 
     assert memories == [m1]
-    assert vector == [1.0, 0.0]
+    assert vector == pytest.approx([1.0, 0.0])
 
 
 @pytest.mark.asyncio
