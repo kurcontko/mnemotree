@@ -57,7 +57,7 @@ class TestCachedEmbeddings:
         result2 = await cached.aembed_query("hello async")
         assert mock_embedder.aembed_query.call_count == 1
         assert result1 == result2
-        assert cached.hit_rate == 0.5  # 1 hit, 1 miss
+        assert cached.hit_rate == pytest.approx(0.5)  # 1 hit, 1 miss
 
     def test_cache_miss_different_content(self, mock_embedder):
         """Test that different content misses cache."""
