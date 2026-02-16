@@ -37,6 +37,63 @@ def _make_memory(
     )
 
 
+# Fixtures for common test setup
+
+
+@pytest.fixture
+def dummy_store_class():
+    """Reusable DummyStore class for testing."""
+
+    class DummyStore:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+            self.initialized = False
+
+        async def initialize(self) -> None:
+            self.initialized = True
+
+    return DummyStore
+
+
+@pytest.fixture
+def dummy_memory_core_class():
+    """Reusable DummyMemoryCore class for testing."""
+
+    class DummyMemoryCore:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+            self.store = kwargs["store"]
+
+    return DummyMemoryCore
+
+
+@pytest.fixture
+def memory_core_env_setup(monkeypatch, dummy_store_class, dummy_memory_core_class):
+    """Common setup for memory core environment tests."""
+    fake_store_module = types.ModuleType("mnemotree.store")
+    fake_store_module.ChromaMemoryStore = dummy_store_class
+
+    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
+    monkeypatch.setattr(server, "MemoryCore", dummy_memory_core_class)
+    monkeypatch.setattr(server, "_memory_core", None)
+
+    return {"store_module": fake_store_module, "store_class": dummy_store_class}
+
+
+@pytest.fixture
+def timeline_setup(monkeypatch):
+    """Factory for setting up timeline tests with custom memories."""
+
+    def _setup(memories):
+        async def _fake_get_all_memories(_, *, include_embeddings):
+            return memories
+
+        monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
+        monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+
+    return _setup
+
+
 def test_env_bool_default_and_values(monkeypatch):
     monkeypatch.delenv("MNEMO_BOOL", raising=False)
     assert server._env_bool("MNEMO_BOOL", True) is True
@@ -207,49 +264,34 @@ async def test_timeline_requires_anchor():
 
 
 @pytest.mark.asyncio
-async def test_timeline_missing_memory_id_returns_empty(monkeypatch):
+async def test_timeline_missing_memory_id_returns_empty(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     result = await server.timeline(memory_id="missing")
     assert result == []
 
 
 @pytest.mark.asyncio
-async def test_timeline_invalid_timestamp_raises(monkeypatch):
+async def test_timeline_invalid_timestamp_raises(timeline_setup):
     memories = [_make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc))]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     with pytest.raises(ValueError, match="Invalid timestamp format"):
         await server.timeline(timestamp="not-a-date")
 
 
 @pytest.mark.asyncio
-async def test_timeline_offsets_and_embeddings(monkeypatch):
+async def test_timeline_offsets_and_embeddings(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc), embedding=[1.0]),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc), embedding=[2.0]),
         _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc), embedding=[3.0]),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(
         memory_id="mem-2",
@@ -268,18 +310,13 @@ async def test_timeline_offsets_and_embeddings(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_timeline_excludes_anchor(monkeypatch):
+async def test_timeline_excludes_anchor(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
         _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(
         memory_id="mem-2",
@@ -367,33 +404,16 @@ async def test_get_all_memories_lists_memories():
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_remote_store_and_ner(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.initialized = False
-
-        async def initialize(self) -> None:
-            self.initialized = True
-
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
-
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
-
+async def test_get_memory_core_remote_store_and_ner(
+    monkeypatch, memory_core_env_setup, dummy_memory_core_class
+):
     ner_calls: list[tuple[str, dict[str, str]]] = []
 
     def _fake_create_ner(backend: str, **kwargs) -> str:
         ner_calls.append((backend, kwargs))
         return "ner-instance"
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.setenv("MNEMOTREE_MCP_CHROMA_HOST", "localhost")
     monkeypatch.setenv("MNEMOTREE_MCP_CHROMA_PORT", "1234")
@@ -406,7 +426,7 @@ async def test_get_memory_core_remote_store_and_ner(monkeypatch):
 
     core = await server._get_memory_core()
 
-    assert isinstance(core, DummyMemoryCore)
+    assert isinstance(core, dummy_memory_core_class)
     assert core.store.kwargs == {
         "host": "localhost",
         "port": 1234,
@@ -426,29 +446,11 @@ async def test_get_memory_core_remote_store_and_ner(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_persist_dir(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-
-        async def initialize(self) -> None:
-            return None
-
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
-
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
-
+async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called without backend config")
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_PORT", raising=False)
@@ -471,29 +473,11 @@ async def test_get_memory_core_persist_dir(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_retrieval_config_bm25(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-
-        async def initialize(self) -> None:
-            return None
-
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
-
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
-
+async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_env_setup):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called")
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
     monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
@@ -508,29 +492,11 @@ async def test_get_memory_core_retrieval_config_bm25(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_retrieval_config_bm25_disabled(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-
-        async def initialize(self) -> None:
-            return None
-
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
-
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
-
+async def test_get_memory_core_retrieval_config_bm25_disabled(monkeypatch, memory_core_env_setup):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called")
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
     monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
@@ -544,38 +510,23 @@ async def test_get_memory_core_retrieval_config_bm25_disabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_ner_model_non_gliner(monkeypatch):
-    class DummyStore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-
-        async def initialize(self) -> None:
-            return None
-
-    class DummyMemoryCore:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.store = kwargs["store"]
-
-    fake_store_module = types.ModuleType("mnemotree.store")
-    fake_store_module.ChromaMemoryStore = DummyStore
+async def test_get_memory_core_ner_model_non_gliner(
+    monkeypatch, memory_core_env_setup, dummy_memory_core_class
+):
     ner_calls: list[tuple[str, dict[str, str]]] = []
 
     def _fake_create_ner(backend: str, **kwargs) -> str:
         ner_calls.append((backend, kwargs))
         return "ner-instance"
 
-    monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
-    monkeypatch.setattr(server, "MemoryCore", DummyMemoryCore)
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
-    monkeypatch.setattr(server, "_memory_core", None)
 
     monkeypatch.setenv("MNEMOTREE_MCP_NER_BACKEND", "spacy")
     monkeypatch.setenv("MNEMOTREE_MCP_NER_MODEL", "ner-model")
 
     core = await server._get_memory_core()
 
-    assert isinstance(core, DummyMemoryCore)
+    assert isinstance(core, dummy_memory_core_class)
     assert ner_calls == [("spacy", {"model": "ner-model"})]
 
 
@@ -892,39 +843,24 @@ async def test_update_memory_valid_importance(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_timeline_empty_memories(monkeypatch):
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return []
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
-
+async def test_timeline_empty_memories(timeline_setup):
+    timeline_setup([])
     assert await server.timeline(memory_id="mem-1") == []
 
 
 @pytest.mark.asyncio
-async def test_timeline_empty_memories_with_timestamp(monkeypatch):
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return []
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
-
+async def test_timeline_empty_memories_with_timestamp(timeline_setup):
+    timeline_setup([])
     assert await server.timeline(timestamp="2024-01-01T00:00:00+00:00") == []
 
 
 @pytest.mark.asyncio
-async def test_timeline_timestamp_after_all(monkeypatch):
+async def test_timeline_timestamp_after_all(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(timestamp="2024-02-01T00:00:00+00:00", before=0, after=0)
 
@@ -934,18 +870,13 @@ async def test_timeline_timestamp_after_all(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_timeline_timestamp_between(monkeypatch):
+async def test_timeline_timestamp_between(timeline_setup):
     memories = [
         _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
         _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
         _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc)),
     ]
-
-    async def _fake_get_all_memories(_, *, include_embeddings):
-        return memories
-
-    monkeypatch.setattr(server, "_get_all_memories", _fake_get_all_memories)
-    monkeypatch.setattr(server, "_get_memory_core", AsyncMock())
+    timeline_setup(memories)
 
     results = await server.timeline(timestamp="2024-01-02T12:00:00+00:00", before=0, after=0)
 
