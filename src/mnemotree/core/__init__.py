@@ -16,7 +16,7 @@ from .memory import (
     RetrievalMode,
     ScoringConfig,
 )
-from .models import MemoryItem, MemoryType
+from .models import LinkType, MemoryItem, MemoryLink, MemoryType
 from .query import MemoryQuery, MemoryQueryBuilder
 
 __all__ = [
@@ -25,9 +25,11 @@ __all__ = [
     "MemoryCoreBuilder",
     "MemoryMode",
     "MemoryItem",
+    "MemoryLink",
     "MemoryQuery",
     "MemoryQueryBuilder",
     "MemoryType",
+    "LinkType",
     "RememberOptions",
     "RecallFilters",
     "RecallOptions",
