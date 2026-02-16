@@ -29,7 +29,7 @@ class TestNERResult:
             mentions={"Apple": ["Apple Inc."]},
             confidence={"Apple": 0.95},
         )
-        assert result.confidence == {"Apple": 0.95}
+        assert result.confidence == {"Apple": pytest.approx(0.95)}
 
 
 class TestCreateNerFactory:

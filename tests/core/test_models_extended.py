@@ -127,7 +127,7 @@ class TestMemoryItemValidationEdgeCases:
             importance=0.5,
             emotional_valence=-1.0,
         )
-        assert mem1.emotional_valence == -1.0
+        assert mem1.emotional_valence == pytest.approx(-1.0)
 
         mem2 = MemoryItem(
             content="test",

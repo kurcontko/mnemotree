@@ -75,28 +75,28 @@ class TestBuildSqliteFilterClauses:
         filters = [MemoryFilter(field="importance", operator=FilterOperator.GT, value=0.5)]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["importance > ?"]
-        assert params == [0.5]
+        assert params == pytest.approx([0.5])
 
     def test_gte_operator(self):
         """GTE operator generates correct clause."""
         filters = [MemoryFilter(field="importance", operator=FilterOperator.GTE, value=0.8)]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["importance >= ?"]
-        assert params == [0.8]
+        assert params == pytest.approx([0.8])
 
     def test_lt_operator(self):
         """LT operator generates correct clause."""
         filters = [MemoryFilter(field="confidence", operator=FilterOperator.LT, value=0.9)]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["confidence < ?"]
-        assert params == [0.9]
+        assert params == pytest.approx([0.9])
 
     def test_lte_operator(self):
         """LTE operator generates correct clause."""
         filters = [MemoryFilter(field="confidence", operator=FilterOperator.LTE, value=1.0)]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["confidence <= ?"]
-        assert params == [1.0]
+        assert params == pytest.approx([1.0])
 
     # --- IN and NOT_IN operators ---
 
@@ -221,7 +221,7 @@ class TestBuildSqliteFilterClauses:
         ]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == ["memory_type = ?", "importance >= ?"]
-        assert params == ["semantic", 0.7]
+        assert params == ["semantic", pytest.approx(0.7)]
 
     # --- Value normalization ---
 

@@ -138,8 +138,8 @@ def test_parse_recall_filters_all_fields():
     assert filters is not None
     assert filters.memory_types == [MemoryType.SEMANTIC]
     assert filters.tags == ["tag1"]
-    assert filters.min_importance == 0.5
-    assert filters.max_importance == 0.9
+    assert filters.min_importance == pytest.approx(0.5)
+    assert filters.max_importance == pytest.approx(0.9)
     assert filters.since == "2024-01-01"
     assert filters.until == "2024-12-31"
     assert filters.source == "test"
@@ -262,9 +262,9 @@ async def test_timeline_offsets_and_embeddings(monkeypatch):
     assert [item["memory_id"] for item in results] == ["mem-1", "mem-2", "mem-3"]
     assert [item["offset"] for item in results] == [-1, 0, 1]
     assert results[1]["anchor"] is True
-    assert results[0]["embedding"] == [1.0]
-    assert results[1]["embedding"] == [2.0]
-    assert results[2]["embedding"] == [3.0]
+    assert results[0]["embedding"] == pytest.approx([1.0])
+    assert results[1]["embedding"] == pytest.approx([2.0])
+    assert results[2]["embedding"] == pytest.approx([3.0])
 
 
 @pytest.mark.asyncio
@@ -697,7 +697,7 @@ async def test_recall_with_filters(monkeypatch):
     call_kwargs = memory_core.recall.call_args.kwargs
     assert "filters" in call_kwargs
     assert call_kwargs["filters"].tags == ["important"]
-    assert call_kwargs["filters"].min_importance == 0.5
+    assert call_kwargs["filters"].min_importance == pytest.approx(0.5)
 
 
 @pytest.mark.asyncio
@@ -887,7 +887,7 @@ async def test_update_memory_valid_importance(monkeypatch):
         patch={"importance": 0.75},
     )
 
-    assert updated["importance"] == 0.75
+    assert updated["importance"] == pytest.approx(0.75)
     store.store_memory.assert_awaited_once()
 
 
