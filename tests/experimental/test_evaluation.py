@@ -153,7 +153,7 @@ class TestBenchmarkResult:
             total_memories=50,
         )
         result_dict = result.to_dict()
-        assert result_dict["avg_recall_at_k"] == {1: 0.8, 5: 0.9}
+        assert result_dict["avg_recall_at_k"] == {1: pytest.approx(0.8), 5: pytest.approx(0.9)}
         assert result_dict["avg_mrr"] == pytest.approx(0.85)
         assert result_dict["total_queries"] == 10
 

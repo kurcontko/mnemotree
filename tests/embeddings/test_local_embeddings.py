@@ -53,8 +53,8 @@ class TestLocalSentenceTransformerEmbeddings:
             result = embeddings.embed_documents(["Hello", "World"])
 
             assert len(result) == 2
-            assert result[0] == [0.1, 0.2]
-            assert result[1] == [0.3, 0.4]
+            assert result[0] == pytest.approx([0.1, 0.2])
+            assert result[1] == pytest.approx([0.3, 0.4])
 
     def test_embed_documents_empty_list(self):
         """embed_documents returns empty list for empty input."""
@@ -86,7 +86,7 @@ class TestLocalSentenceTransformerEmbeddings:
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
             result = embeddings.embed_query("Test query")
 
-            assert result == [0.5, 0.6, 0.7]
+            assert result == pytest.approx([0.5, 0.6, 0.7])
 
     def test_batch_size_passed_to_encode(self):
         """Batch size is passed to model.encode()."""
@@ -165,7 +165,7 @@ class TestLocalSentenceTransformerEmbeddings:
             embeddings = local_module.LocalSentenceTransformerEmbeddings()
             result = await embeddings.aembed_query("Async test")
 
-            assert result == [1.0, 2.0]
+            assert result == pytest.approx([1.0, 2.0])
 
     @pytest.mark.asyncio
     async def test_aembed_documents(self):

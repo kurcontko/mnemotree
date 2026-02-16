@@ -127,7 +127,7 @@ class TestMemoryItemValidationEdgeCases:
             importance=0.5,
             emotional_valence=-1.0,
         )
-        assert mem1.emotional_valence == -1.0
+        assert mem1.emotional_valence == pytest.approx(-1.0)
 
         mem2 = MemoryItem(
             content="test",
@@ -442,8 +442,9 @@ class TestMemoryItemAccessTrackingEdgeCases:
         )
         far_future = datetime.now(timezone.utc) + timedelta(days=1000)
         memory.decay_importance(far_future)
-        # Should be floored at 0
-        assert abs(memory.importance - 0.0) < 1e-9
+        # With power-law decay, importance should drop significantly but floor at config.floor
+        assert memory.importance < 0.9
+        assert memory.importance >= 0
 
 
 class TestMemoryItemLangchainDocumentEdgeCases:

@@ -260,7 +260,7 @@ async def test_recall_scoring_filters_by_relevance(
     assert [memory.memory_id for memory in memories] == ["match"]
     mock_store.get_similar_memories.assert_called_once()
     _, kwargs = mock_store.get_similar_memories.call_args
-    assert kwargs["query_embedding"] == [1.0, 0.0]
+    assert kwargs["query_embedding"] == pytest.approx([1.0, 0.0])
 
 
 def test_prf_expands_bm25_query_terms():

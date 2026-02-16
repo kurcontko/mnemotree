@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from typing import Any, Literal
+from typing import Any, Literal  # noqa: F401 — Any used for adaptive_decay type
 
 from langchain_core.embeddings.embeddings import Embeddings
 from langchain_core.language_models.base import BaseLanguageModel
@@ -73,6 +73,41 @@ class MemoryCoreBuilder:
 
     def with_memory_scoring(self, memory_scoring: MemoryScoring | None) -> MemoryCoreBuilder:
         self._scoring_config = replace(self._scoring_config, memory_scoring=memory_scoring)
+        return self
+
+    def with_decay(
+        self,
+        *,
+        enable: bool = True,
+        stability_days: float = 7.0,
+        floor: float = 0.1,
+        decay_power: float = 0.5,
+        target_retention: float = 0.9,
+        per_type_decay: bool = False,
+    ) -> MemoryCoreBuilder:
+        """Configure importance decay based on time since last access."""
+        self._scoring_config = replace(
+            self._scoring_config,
+            enable_decay=enable,
+            decay_stability_seconds=stability_days * 86400.0,
+            decay_floor=floor,
+            decay_power=decay_power,
+            target_retention=target_retention,
+            per_type_decay=per_type_decay,
+        )
+        return self
+
+    def disable_decay(self) -> MemoryCoreBuilder:
+        """Disable importance decay (use raw stored importance)."""
+        return self.with_decay(enable=False)
+
+    def with_adaptive_decay(self, system: Any) -> MemoryCoreBuilder:
+        """Attach an AdaptiveDecaySystem and auto-enable decay."""
+        self._scoring_config = replace(
+            self._scoring_config,
+            adaptive_decay=system,
+            enable_decay=True,
+        )
         return self
 
     def with_ner(self, ner: BaseNER | None, *, enable: bool = True) -> MemoryCoreBuilder:
@@ -223,6 +258,13 @@ class MemoryCoreBuilder:
             "default_importance": "default_importance",
             "pre_remember_hooks": "pre_remember_hooks",
             "memory_scoring": "memory_scoring",
+            "enable_decay": "enable_decay",
+            "decay_stability_seconds": "decay_stability_seconds",
+            "decay_floor": "decay_floor",
+            "decay_power": "decay_power",
+            "target_retention": "target_retention",
+            "per_type_decay": "per_type_decay",
+            "adaptive_decay": "adaptive_decay",
         }
         scoring_field = scoring_fields.get(name)
         if scoring_field:
