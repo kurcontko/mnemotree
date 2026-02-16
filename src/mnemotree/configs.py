@@ -17,8 +17,10 @@ from mnemotree.core.adaptive import (
     DecayParameters,
 )
 from mnemotree.core.hybrid_retrieval import FusionStrategy, HybridRetriever
+from mnemotree.core.memory import RetrievalConfig
 from mnemotree.core.models import MemoryType
 from mnemotree.core.retrieval import Retriever
+from mnemotree.core.retriever_factory import RetrieverFactory
 from mnemotree.experimental import (
     ClaimsRegistry,
     ConsolidationConfig,
