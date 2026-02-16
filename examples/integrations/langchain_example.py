@@ -82,20 +82,20 @@ async def example_semantic_memory():
     response1 = await asyncio.to_thread(
         conversation.predict, input="I really like Python for its readability"
     )
-    print(f"User: I really like Python for its readability")
+    print("User: I really like Python for its readability")
     print(f"AI: {response1}\n")
 
     response2 = await asyncio.to_thread(
         conversation.predict, input="What about Rust for systems programming?"
     )
-    print(f"User: What about Rust for systems programming?")
+    print("User: What about Rust for systems programming?")
     print(f"AI: {response2}\n")
 
     # Later conversation - memory will retrieve relevant past context
     response3 = await asyncio.to_thread(
         conversation.predict, input="What programming languages have we discussed?"
     )
-    print(f"User: What programming languages have we discussed?")
+    print("User: What programming languages have we discussed?")
     print(f"AI: {response3}\n")
 
     print("--- Conversation End ---")
