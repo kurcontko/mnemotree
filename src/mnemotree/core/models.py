@@ -38,6 +38,21 @@ class MemoryType(Enum):
         else:
             raise ValueError(f"Unknown category for memory type: {self}")
 
+    @property
+    def is_episodic(self) -> bool:
+        """True for episodic/autobiographical (personal experience) memories."""
+        return self in [self.EPISODIC, self.AUTOBIOGRAPHICAL]
+
+    @property
+    def is_semantic(self) -> bool:
+        """True for semantic (factual knowledge) memories."""
+        return self == self.SEMANTIC
+
+    @property
+    def is_procedural(self) -> bool:
+        """True for procedural (skill/habit) memories."""
+        return self in [self.PROCEDURAL, self.PRIMING, self.CONDITIONING]
+
 
 class EmotionCategory(str, Enum):
     JOY = "joy"
