@@ -16,7 +16,7 @@ from mnemotree.core.adaptive import (
     AdaptiveDecaySystem,
     DecayParameters,
 )
-from mnemotree.core.hybrid_retrieval import FusionStrategy, HybridRetriever
+from mnemotree.core.hybrid_retrieval import FusionStrategy
 from mnemotree.core.memory import RetrievalConfig
 from mnemotree.core.models import MemoryType
 from mnemotree.core.retrieval import Retriever
