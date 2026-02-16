@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 from collections.abc import Iterable
@@ -50,6 +51,7 @@ def build_neo4j_memory_payload(
         "context": context_json,
         "entities": json_dumps_safe(valid_entities),
         "entity_mentions": json_dumps_safe(memory.entity_mentions),
+        "stability_seconds": memory.stability_seconds,
     }
     return payload, valid_entities
 
@@ -178,6 +180,7 @@ def sqlite_record_from_memory(memory: MemoryItem) -> dict[str, Any]:
         "conflicts_with": _serialize_list(memory.conflicts_with) if memory.conflicts_with else "",
         "previous_event_id": memory.previous_event_id,
         "next_event_id": memory.next_event_id,
+        "stability_seconds": memory.stability_seconds,
     }
 
 
@@ -222,6 +225,9 @@ def sqlite_memory_from_row(row: sqlite3.Row) -> MemoryItem:
         "previous_event_id": row["previous_event_id"] or None,
         "next_event_id": row["next_event_id"] or None,
     }
+    # stability_seconds may not exist in old DBs
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["stability_seconds"] = row["stability_seconds"]
     return MemoryItem(**memory_data)
 
 

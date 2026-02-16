@@ -61,6 +61,15 @@ class ScoringConfig:
     default_importance: float = 0.5
     pre_remember_hooks: list[Callable[[MemoryItem], Awaitable[MemoryItem]]] | None = None
     memory_scoring: MemoryScoring | None = None
+    # Decay config (used when memory_scoring is None, opt-in to avoid silent behavioral changes)
+    enable_decay: bool = False
+    decay_stability_seconds: float = 604800.0  # 7 days
+    decay_floor: float = 0.1
+    # Power-law decay parameters
+    decay_power: float = 0.5
+    target_retention: float = 0.9
+    per_type_decay: bool = False
+    adaptive_decay: Any = None  # AdaptiveDecaySystem | None (avoids circular import)
 
 
 @dataclass(frozen=True)
@@ -207,6 +216,13 @@ class MemoryCore:
             memory_scoring=scoring_config.memory_scoring,
             default_importance=scoring_config.default_importance,
             pre_remember_hooks=scoring_config.pre_remember_hooks,
+            enable_decay=scoring_config.enable_decay,
+            decay_stability_seconds=scoring_config.decay_stability_seconds,
+            decay_floor=scoring_config.decay_floor,
+            decay_power=scoring_config.decay_power,
+            target_retention=scoring_config.target_retention,
+            per_type_decay=scoring_config.per_type_decay,
+            adaptive_decay=scoring_config.adaptive_decay,
         )
         self._init_components(
             enable_bm25=retrieval_config.enable_bm25,
@@ -1106,13 +1122,70 @@ class MemoryCore:
 
         return memories, results
 
-    def decay_and_reinforce(self):
-        """
-        Decay and reinforce memory importance scores.
+    async def decay_and_reinforce(self, *, dry_run: bool = False) -> dict[str, int]:
+        """Decay and reinforce memory importance scores.
 
-        This method should be called periodically to update memory importance scores.
+        Fetches all memories from the store, applies power-law decay to each,
+        and persists updated importance values.
+
+        Args:
+            dry_run: If True, compute decay without persisting changes.
+
+        Returns:
+            Stats dict with keys: processed, decayed, reinforced.
         """
-        return None
+        from .decay import MEMORY_TYPE_DEFAULTS, DecayConfig, compute_decayed_importance
+
+        current_time = datetime.now(timezone.utc)
+
+        # Fetch all memories via structured query if supported
+        if not isinstance(self.store, SupportsStructuredQuery):
+            return {"processed": 0, "decayed": 0, "reinforced": 0}
+
+        from .query import MemoryQuery
+
+        all_memories = await self.store.query_memories(MemoryQuery(limit=10000))
+
+        stats = {"processed": 0, "decayed": 0, "reinforced": 0}
+        update_tasks = []
+
+        for memory in all_memories:
+            stats["processed"] += 1
+            original_importance = memory.importance
+
+            last_accessed = coerce_datetime(memory.last_accessed, default=current_time)
+            elapsed = max(0.0, (current_time - last_accessed).total_seconds())
+
+            config = MEMORY_TYPE_DEFAULTS.get(memory.memory_type, DecayConfig())
+            if memory.stability_seconds is not None:
+                config = DecayConfig(
+                    stability_seconds=memory.stability_seconds,
+                    decay_power=config.decay_power,
+                    floor=config.floor,
+                    target_retention=config.target_retention,
+                )
+
+            new_importance = compute_decayed_importance(original_importance, elapsed, config)
+
+            if new_importance < original_importance:
+                stats["decayed"] += 1
+            elif new_importance > original_importance:
+                stats["reinforced"] += 1
+
+            if not dry_run and new_importance != original_importance:
+                memory.importance = new_importance
+                if isinstance(self.store, SupportsMetadataUpdate):
+                    update_tasks.append(
+                        self.store.update_memory_metadata(
+                            memory.memory_id,
+                            {"importance": new_importance},
+                        )
+                    )
+
+        if update_tasks:
+            await asyncio.gather(*update_tasks)
+
+        return stats
 
     async def get_embedding(self, text: str) -> Any:
         """Get the embedding for a given text."""
@@ -1240,8 +1313,23 @@ class MemoryCore:
         memory_scoring: MemoryScoring | None,
         default_importance: float,
         pre_remember_hooks: list[Callable[[MemoryItem], Awaitable[MemoryItem]]] | None,
+        enable_decay: bool,
+        decay_stability_seconds: float,
+        decay_floor: float,
+        decay_power: float = 0.5,
+        target_retention: float = 0.9,
+        per_type_decay: bool = False,
+        adaptive_decay: Any = None,
     ) -> None:
-        self.memory_scoring = memory_scoring or MemoryScoring()
+        self.memory_scoring = memory_scoring or MemoryScoring(
+            enable_decay=enable_decay,
+            decay_stability_seconds=decay_stability_seconds,
+            decay_floor=decay_floor,
+            decay_power=decay_power,
+            target_retention=target_retention,
+            per_type_decay=per_type_decay,
+            adaptive_system=adaptive_decay,
+        )
         self.default_importance = default_importance
         self.pre_remember_hooks = pre_remember_hooks or []
 

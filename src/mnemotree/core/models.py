@@ -177,7 +177,11 @@ class MemoryItem(BaseModel):
 
     # Metrics
     importance: float  # Should be between 0 and 1
-    decay_rate: float = 0.01
+    decay_rate: float = 0.01  # Deprecated: kept for DB backward compat, not used in new decay code
+    stability_seconds: float | None = (
+        None  # Per-instance stability override (None = use type default)
+    )
+    reinforcement_rate: float = 0.05  # Controls importance boost on access (separate from decay)
     confidence: float = 1.0
     fidelity: float = 1.0
 
@@ -212,21 +216,37 @@ class MemoryItem(BaseModel):
             raise ValueError("importance must be between 0 and 1")
         return v
 
-    def update_access(self):
+    def update_access(self, retrievability: float | None = None):
         self.access_count += 1
         self.last_accessed = datetime.now(timezone.utc)
         self.access_history.append(self.last_accessed)
         self.importance = min(
-            1.0, self.importance + self.decay_rate
+            1.0, self.importance + self.reinforcement_rate
         )  # Reinforce importance upon access
 
-    def decay_importance(self, current_time: datetime):
-        last_accessed_dt = coerce_datetime(self.last_accessed, default=current_time)
+        # Grow stability on successful recall when per-instance stability is set
+        if retrievability is not None and self.stability_seconds is not None:
+            from .decay import StabilityUpdater
 
-        # Calculate the time difference in seconds
-        time_diff = (current_time - last_accessed_dt).total_seconds()
-        decay_amount = self.decay_rate * time_diff
-        self.importance = max(0, self.importance - decay_amount)
+            updater = StabilityUpdater()
+            self.stability_seconds = updater.update(self.stability_seconds, retrievability)
+
+    def decay_importance(self, current_time: datetime):
+        from .decay import MEMORY_TYPE_DEFAULTS, DecayConfig, compute_decayed_importance
+
+        last_accessed_dt = coerce_datetime(self.last_accessed, default=current_time)
+        elapsed = max(0.0, (current_time - last_accessed_dt).total_seconds())
+
+        config = MEMORY_TYPE_DEFAULTS.get(self.memory_type, DecayConfig())
+        if self.stability_seconds is not None:
+            config = DecayConfig(
+                stability_seconds=self.stability_seconds,
+                decay_power=config.decay_power,
+                floor=config.floor,
+                target_retention=config.target_retention,
+            )
+
+        self.importance = compute_decayed_importance(self.importance, elapsed, config)
 
     def to_str(self) -> str:
         """

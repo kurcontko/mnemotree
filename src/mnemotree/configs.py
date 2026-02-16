@@ -12,14 +12,16 @@ from langchain_core.language_models.base import BaseLanguageModel
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from mnemotree.core import MemoryCore
+from mnemotree.core.adaptive import (
+    AdaptiveDecaySystem,
+    DecayParameters,
+)
 from mnemotree.core.hybrid_retrieval import FusionStrategy, HybridRetriever
 from mnemotree.core.models import MemoryType
 from mnemotree.experimental import (
-    AdaptiveImportanceSystem,
     ClaimsRegistry,
     ConsolidationConfig,
     ContextAwareWriteGate,
-    DecayParameters,
     MemoryConsolidator,
     WritePolicy,
 )
@@ -107,7 +109,7 @@ class MemorySystemConfig:
         adaptive_system = None
         if self.enable_adaptive_decay:
             params = self.decay_params or DecayParameters.default()
-            adaptive_system = AdaptiveImportanceSystem(
+            adaptive_system = AdaptiveDecaySystem(
                 decay_params=params,
                 enable_spaced_repetition=self.enable_spaced_repetition,
             )
@@ -136,7 +138,7 @@ class ConfiguredMemorySystem:
     retriever: HybridRetriever | None = None
     consolidator: MemoryConsolidator | None = None
     claims_registry: ClaimsRegistry | None = None
-    adaptive_system: AdaptiveImportanceSystem | None = None
+    adaptive_system: AdaptiveDecaySystem | None = None
     write_gate: ContextAwareWriteGate | None = None
 
 

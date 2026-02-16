@@ -125,7 +125,8 @@ class Neo4jMemoryStore(BaseMemoryStore):
                             context: $context,
 
                             entities: $entities,
-                            entity_mentions: $entity_mentions
+                            entity_mentions: $entity_mentions,
+                            stability_seconds: $stability_seconds
                         })
                     """,
                     payload,
