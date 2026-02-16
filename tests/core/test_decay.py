@@ -38,7 +38,7 @@ class TestForgettingCurve:
 
     def test_retrievability_with_zero_stability(self):
         curve = ForgettingCurve()
-        assert curve.retrievability(100, 0) == 0.0
+        assert curve.retrievability(100, 0) == pytest.approx(0.0)
 
     def test_different_target_retention(self):
         curve = ForgettingCurve(target_retention=0.8)
@@ -70,10 +70,10 @@ class TestDecayConfig:
 
     def test_defaults(self):
         config = DecayConfig()
-        assert config.stability_seconds == 604800.0
-        assert config.decay_power == 0.5
-        assert config.floor == 0.1
-        assert config.target_retention == 0.9
+        assert config.stability_seconds == pytest.approx(604800.0)
+        assert config.decay_power == pytest.approx(0.5)
+        assert config.floor == pytest.approx(0.1)
+        assert config.target_retention == pytest.approx(0.9)
 
 
 class TestComputeDecayedImportance:
@@ -128,4 +128,4 @@ class TestStabilityUpdater:
 
     def test_zero_stability_unchanged(self):
         updater = StabilityUpdater()
-        assert updater.update(0, 0.5) == 0
+        assert updater.update(0, 0.5) == pytest.approx(0)

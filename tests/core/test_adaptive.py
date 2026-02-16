@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from mnemotree.core.adaptive import (
     AdaptiveDecaySystem,
     FSRSSchedule,
@@ -116,7 +118,7 @@ class TestFSRSSchedule:
     def test_again_resets_stability(self):
         schedule = FSRSSchedule(memory_id="m1", stability_seconds=86400)
         schedule.schedule_next_review(grade=1)
-        assert schedule.stability_seconds == 60.0
+        assert schedule.stability_seconds == pytest.approx(60.0)
         assert schedule.repetition_count == 0
 
     def test_good_grows_stability(self):
