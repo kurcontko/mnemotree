@@ -18,7 +18,7 @@ from ..analysis.summarizer import Summarizer
 from ..embeddings.local import LocalSentenceTransformerEmbeddings
 from ..ner.base import BaseNER
 from ..ner.spacy import SpacyNER
-from ..rerankers import FlashRankReranker
+from ..rerankers import BaseReranker, create_reranker
 from ..store.base import BaseMemoryStore
 from ..store.protocols import (
     MemoryCRUDStore,
@@ -35,7 +35,8 @@ from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
 from .models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
-from .retrieval import HybridFusionRetriever, Retriever, VectorEntityRetriever
+from .retrieval import Retriever
+from .retriever_factory import RetrieverFactory
 from .scoring import MemoryScoring
 
 MemoryMode = Literal["lite", "pro"]
@@ -84,7 +85,7 @@ class RetrievalConfig:
     prf_docs: int = 5
     prf_terms: int = 8
     enable_rrf_signal_rerank: bool = False
-    reranker_backend: Literal["none", "flashrank"] = "none"
+    reranker_backend: Literal["none", "flashrank", "cross_encoder"] = "none"
     reranker_model: str = "ms-marco-TinyBERT-L-2-v2"
     rerank_candidates: int = 50
 
@@ -166,6 +167,7 @@ class MemoryCore:
         llm: BaseLanguageModel | None = None,
         embeddings: Embeddings | None = None,
         *,
+        retriever: Retriever | None = None,
         mode_defaults: ModeDefaultsConfig | None = None,
         ner_config: NerConfig | None = None,
         scoring_config: ScoringConfig | None = None,
@@ -180,6 +182,7 @@ class MemoryCore:
             store: The underlying storage for memory items.
             llm: Optional Language model for analysis if enabled.
             embeddings: Optional embeddings model. Defaults depend on mode if not provided.
+            retriever: Optional retriever instance to override default construction.
             mode_defaults: Mode defaults and keyword extraction settings.
             ner_config: Named entity recognition configuration.
             scoring_config: Scoring defaults and pre-remember hooks.
@@ -245,6 +248,7 @@ class MemoryCore:
             prf_terms=retrieval_config.prf_terms,
             enable_rrf_signal_rerank=retrieval_config.enable_rrf_signal_rerank,
             rerank_candidates=retrieval_config.rerank_candidates,
+            retriever=retriever,
         )
         self._init_normalizer(normalization_config)
 
@@ -1463,7 +1467,7 @@ class MemoryCore:
         prf_docs: int,
         prf_terms: int,
         enable_rrf_signal_rerank: bool,
-        reranker_backend: Literal["none", "flashrank"],
+        reranker_backend: Literal["none", "flashrank", "cross_encoder"],
         reranker_model: str,
         rerank_candidates: int,
         async_ingest: bool,
@@ -1480,11 +1484,14 @@ class MemoryCore:
         self.reranker_backend = reranker_backend
         self.reranker_model = reranker_model
         self.rerank_candidates = max(0, int(rerank_candidates))
-        self._flashrank_reranker = (
-            FlashRankReranker(model_name=reranker_model)
-            if reranker_backend == "flashrank"
-            else None
-        )
+        self._reranker: BaseReranker | None
+        if reranker_backend != "none":
+            kwargs: dict[str, str] = {}
+            if reranker_model != RetrievalConfig.reranker_model:
+                kwargs["model_name"] = reranker_model
+            self._reranker = create_reranker(reranker_backend, **kwargs)
+        else:
+            self._reranker = None
         self.async_ingest = async_ingest
         self.ingestion_queue_size = max(1, int(ingestion_queue_size))
         self._ingestion_queue: MemoryIngestionQueue | None = None
@@ -1583,6 +1590,7 @@ class MemoryCore:
         prf_terms: int,
         enable_rrf_signal_rerank: bool,
         rerank_candidates: int,
+        retriever: Retriever | None,
     ) -> None:
         # _bm25_index/_bm25_cache are now managed by IndexManager
         # self._bm25_index and self._bm25_cache removed
@@ -1603,7 +1611,7 @@ class MemoryCore:
             analyzer=self.analyzer,
             summarizer=self.summarizer,
         )
-        self.retrieval: Retriever = self._build_retriever(
+        self.retrieval: Retriever = retriever or self._build_retriever(
             rrf_k=rrf_k,
             enable_rrf_signal_rerank=enable_rrf_signal_rerank,
             rerank_candidates=rerank_candidates,
@@ -1634,14 +1642,14 @@ class MemoryCore:
             "index_manager": self.index_manager,
         }
         if self.retrieval_mode == "hybrid":
-            return HybridFusionRetriever(
+            return RetrieverFactory.create_hybrid(
                 **common_retrieval_args,
                 rrf_k=rrf_k,
                 enable_rrf_signal_rerank=enable_rrf_signal_rerank,
-                reranker=self._flashrank_reranker,
+                reranker=self._reranker,
                 rerank_candidates=rerank_candidates,
             )
-        return VectorEntityRetriever(**common_retrieval_args)
+        return RetrieverFactory.create_basic(**common_retrieval_args)
 
     def _resolve_embeddings(self, mode: MemoryMode) -> Embeddings:
         if mode == "lite":

@@ -206,14 +206,14 @@ class TestBuildMemorySystem:
     @patch("mnemotree.configs.ChatOpenAI")
     @patch("mnemotree.configs.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
-    @patch("mnemotree.configs.HybridRetriever")
+    @patch("mnemotree.configs.RetrieverFactory.create_hybrid")
     def test_build_creates_hybrid_retriever(
-        self, mock_retriever_cls, mock_core_cls, mock_embeddings_cls, mock_llm_cls
+        self, mock_create_hybrid, mock_core_cls, mock_embeddings_cls, mock_llm_cls
     ):
         """build_memory_system creates HybridRetriever when enabled."""
         mock_store = MagicMock()
         mock_core_cls.return_value = MagicMock()
-        mock_retriever_cls.return_value = MagicMock()
+        mock_create_hybrid.return_value = MagicMock()
 
         config = MemorySystemConfig(
             use_hybrid_retrieval=True,
@@ -224,7 +224,7 @@ class TestBuildMemorySystem:
         )
         system = config.build_memory_system(mock_store)
 
-        mock_retriever_cls.assert_called_once()
+        mock_create_hybrid.assert_called_once()
         assert system.retriever is not None
 
     @patch("mnemotree.configs.ChatOpenAI")

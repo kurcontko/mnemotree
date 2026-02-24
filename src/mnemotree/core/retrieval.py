@@ -26,30 +26,6 @@ from .scoring import MemoryScoring
 
 logger = logging.getLogger(__name__)
 
-# Backwards-compatible re-exports for the hybrid retrieval API.
-_HYBRID_EXPORTS = {
-    "BaseReranker",
-    "CrossEncoderReranker",
-    "FusionStrategy",
-    "HybridRetriever",
-    "NoOpReranker",
-    "RetrievalResult",
-    "RetrievalStage",
-}
-
-
-def __getattr__(name: str) -> Any:
-    if name in _HYBRID_EXPORTS:
-        from . import hybrid_retrieval as _hybrid
-
-        return getattr(_hybrid, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def __dir__() -> list[str]:
-    return sorted(set(globals().keys()) | _HYBRID_EXPORTS)
-
-
 __all__ = [
     "Retriever",
     "BaseRetriever",
@@ -499,7 +475,7 @@ class HybridFusionRetriever(BaseRetriever):
         bm25_memories: list[MemoryItem],
         rrf_k: int,
     ) -> tuple[list[MemoryItem], dict[str, float]]:
-        weights = {"vector": 0.6, "bm25": 0.3, "entity": 0.1}
+        weights = {"vector": 0.50, "bm25": 0.35, "entity": 0.15}
         fused, scores, _stage_scores = rrf_fuse(
             stage_candidates={
                 "vector": vector_memories,
