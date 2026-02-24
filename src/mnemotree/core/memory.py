@@ -90,6 +90,13 @@ class RetrievalConfig:
 
 
 @dataclass(frozen=True)
+class NormalizationConfig:
+    enable_coref: bool = False
+    enable_temporal: bool = False
+    coref_backend: str = "heuristic"
+
+
+@dataclass(frozen=True)
 class IngestionConfig:
     async_ingest: bool = False
     ingestion_queue_size: int = 100
@@ -164,6 +171,7 @@ class MemoryCore:
         scoring_config: ScoringConfig | None = None,
         retrieval_config: RetrievalConfig | None = None,
         ingestion_config: IngestionConfig | None = None,
+        normalization_config: NormalizationConfig | None = None,
     ):
         """
         Initializes the MemoryCore.
@@ -177,6 +185,7 @@ class MemoryCore:
             scoring_config: Scoring defaults and pre-remember hooks.
             retrieval_config: Retrieval and reranking configuration.
             ingestion_config: Async ingestion configuration.
+            normalization_config: Content normalization configuration.
         """
         self.store = store
 
@@ -185,6 +194,7 @@ class MemoryCore:
         scoring_config = scoring_config or ScoringConfig()
         retrieval_config = retrieval_config or RetrievalConfig()
         ingestion_config = ingestion_config or IngestionConfig()
+        normalization_config = normalization_config or NormalizationConfig()
 
         self._init_runtime_settings(
             mode=mode_defaults.mode,
@@ -236,6 +246,7 @@ class MemoryCore:
             enable_rrf_signal_rerank=retrieval_config.enable_rrf_signal_rerank,
             rerank_candidates=retrieval_config.rerank_candidates,
         )
+        self._init_normalizer(normalization_config)
 
     async def remember(
         self,
@@ -448,6 +459,9 @@ class MemoryCore:
         user_id: str | None = None,
     ) -> MemoryItem:
         analyze, summarize = self._resolve_analysis_flags(analyze, summarize)
+
+        if self.normalizer:
+            content = await self.normalizer.normalize(content, context)
 
         enrichment = await self.enrichment.enrich(
             content, context, analyze=analyze, summarize=summarize
@@ -1593,6 +1607,15 @@ class MemoryCore:
             rrf_k=rrf_k,
             enable_rrf_signal_rerank=enable_rrf_signal_rerank,
             rerank_candidates=rerank_candidates,
+        )
+
+    def _init_normalizer(self, config: NormalizationConfig) -> None:
+        from ..normalization import create_normalization_pipeline
+
+        self.normalizer = create_normalization_pipeline(
+            enable_coref=config.enable_coref,
+            enable_temporal=config.enable_temporal,
+            coref_backend=config.coref_backend,
         )
 
     def _build_retriever(
