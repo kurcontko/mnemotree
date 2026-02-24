@@ -29,7 +29,6 @@ class MemoryClassificationResult(BaseModel):
 
 
 class EmotionAnalysisResult(BaseModel):
-    # emotions: Union[List[EmotionCategory], List[str]] = Field(description=f"List of emotions, possible values: {[e.value for e in EmotionCategory]}")
     emotions: list[str] = Field(
         description=f"List of emotions, possible values: {[e.value for e in EmotionCategory]}"
     )
