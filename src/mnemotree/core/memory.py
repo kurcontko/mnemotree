@@ -18,7 +18,7 @@ from ..analysis.summarizer import Summarizer
 from ..embeddings.local import LocalSentenceTransformerEmbeddings
 from ..ner.base import BaseNER
 from ..ner.spacy import SpacyNER
-from ..rerankers import create_reranker
+from ..rerankers import BaseReranker, create_reranker
 from ..store.base import BaseMemoryStore
 from ..store.protocols import (
     MemoryCRUDStore,
@@ -1466,6 +1466,7 @@ class MemoryCore:
         self.reranker_backend = reranker_backend
         self.reranker_model = reranker_model
         self.rerank_candidates = max(0, int(rerank_candidates))
+        self._reranker: BaseReranker | None
         if reranker_backend != "none":
             kwargs: dict[str, str] = {}
             if reranker_model != RetrievalConfig.reranker_model:
