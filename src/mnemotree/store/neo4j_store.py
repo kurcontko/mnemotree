@@ -1282,7 +1282,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 async for record in result:
                     node_data = dict(record["source"])
                     try:
-                        memory = parse_neo4j_node_data(node_data)
+                        memory = MemoryItem(**parse_neo4j_node_data(node_data))
                         memories.append(memory)
                     except (ValidationError, ValueError) as e:
                         logger.warning(
@@ -1363,7 +1363,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                     rels = record["rels"]
 
                     try:
-                        memory = parse_neo4j_node_data(node_data)
+                        memory = MemoryItem(**parse_neo4j_node_data(node_data))
                         path_links = []
                         for r in rels:
                             metadata_str = r.get("metadata", "{}")
@@ -1459,7 +1459,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
                 # Skip first node (source), include others
                 for _i, (node, rel) in enumerate(zip(nodes[1:], rels, strict=False)):
                     node_data = dict(node)
-                    memory = parse_neo4j_node_data(node_data)
+                    memory = MemoryItem(**parse_neo4j_node_data(node_data))
 
                     metadata_str = rel.get("metadata", "{}")
                     link = MemoryLink(
