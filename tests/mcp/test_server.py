@@ -88,10 +88,16 @@ def dummy_memory_core_class():
 @pytest.fixture
 def memory_core_env_setup(monkeypatch, dummy_store_class, dummy_memory_core_class):
     """Common setup for memory core environment tests."""
+    # Patch ChromaDB store for backward-compatibility tests
     fake_store_module = types.ModuleType("mnemotree.store")
     fake_store_module.ChromaMemoryStore = dummy_store_class
-
     monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
+
+    # Patch SQLite store for default-path tests
+    fake_sqlite_module = types.ModuleType("mnemotree.store.sqlite_vec_store")
+    fake_sqlite_module.SQLiteVecMemoryStore = dummy_store_class
+    monkeypatch.setitem(sys.modules, "mnemotree.store.sqlite_vec_store", fake_sqlite_module)
+
     monkeypatch.setattr(server, "MemoryCore", dummy_memory_core_class)
     monkeypatch.setattr(server, "_memory_core", None)
 
@@ -464,22 +470,24 @@ async def test_get_memory_core_remote_store_and_ner(
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup):
+async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup, tmp_path):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called without backend config")
 
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
 
+    db_path = str(tmp_path / "mnemotree.sqlite")
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_PORT", raising=False)
-    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/mnemotree")
-    monkeypatch.setenv("MNEMOTREE_MCP_COLLECTION", "memories-local")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", db_path)
+    monkeypatch.setenv("MNEMOTREE_MCP_COLLECTION", "memories_local")
 
     core = await server._get_memory_core()
 
+    # Default path now uses SQLiteVecMemoryStore
     assert core.store.kwargs == {
-        "persist_directory": "/tmp/mnemotree",
-        "collection_name": "memories-local",
+        "db_path": db_path,
+        "collection_name": "memories_local",
     }
     mode_defaults = core.kwargs["mode_defaults"]
     ner_config = core.kwargs["ner_config"]
@@ -491,14 +499,14 @@ async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_env_setup):
+async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_env_setup, tmp_path):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called")
 
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
-    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", str(tmp_path / "test.sqlite"))
     monkeypatch.setenv("MNEMOTREE_MCP_ENABLE_BM25", "1")
 
     core = await server._get_memory_core()
@@ -510,14 +518,16 @@ async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_en
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_retrieval_config_bm25_disabled(monkeypatch, memory_core_env_setup):
+async def test_get_memory_core_retrieval_config_bm25_disabled(
+    monkeypatch, memory_core_env_setup, tmp_path
+):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called")
 
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
-    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", str(tmp_path / "test.sqlite"))
     monkeypatch.setenv("MNEMOTREE_MCP_ENABLE_BM25", "0")
 
     core = await server._get_memory_core()
@@ -569,8 +579,10 @@ async def test_get_memory_core_import_error(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", _blocked_import)
     monkeypatch.setattr(server, "_memory_core", None)
+    # Explicitly request chroma backend to trigger the ChromaDB import path
+    monkeypatch.setenv("MNEMOTREE_MCP_STORE_BACKEND", "chroma")
 
-    with pytest.raises(ModuleNotFoundError, match="ChromaMemoryStore is required"):
+    with pytest.raises(ModuleNotFoundError, match="ChromaMemoryStore requires optional"):
         await server._get_memory_core()
 
 

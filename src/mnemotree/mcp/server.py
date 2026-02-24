@@ -14,6 +14,7 @@ from mnemotree.core.memory import (
 )
 from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
 from mnemotree.ner import create_ner
+from mnemotree.store.base import BaseMemoryStore
 from mnemotree.store.protocols import SupportsMemoryListing
 
 _memory_lock = asyncio.Lock()
@@ -210,30 +211,43 @@ async def _get_memory_core() -> MemoryCore:
         if _memory_core is not None:
             return _memory_core
 
-        persist_dir = os.getenv("MNEMOTREE_MCP_PERSIST_DIR", ".mnemotree/chromadb")
+        persist_dir = os.getenv("MNEMOTREE_MCP_PERSIST_DIR", ".mnemotree/mnemotree.sqlite")
         collection_name = os.getenv("MNEMOTREE_MCP_COLLECTION", "memories")
+
+        # Support legacy ChromaDB via env vars, otherwise default to SQLite (zero-infra).
         chroma_host = os.getenv("MNEMOTREE_MCP_CHROMA_HOST")
         chroma_port = os.getenv("MNEMOTREE_MCP_CHROMA_PORT")
-        chroma_ssl = _env_bool("MNEMOTREE_MCP_CHROMA_SSL", False)
+        store_backend = os.getenv("MNEMOTREE_MCP_STORE_BACKEND", "sqlite")
 
-        try:
-            from mnemotree.store import ChromaMemoryStore
-        except ModuleNotFoundError as exc:
-            raise ModuleNotFoundError(
-                "ChromaMemoryStore is required for the MCP server. "
-                "Install with `mnemotree[mcp_server]`."
-            ) from exc
+        store: BaseMemoryStore
+        if chroma_host and chroma_port or store_backend.lower() == "chroma":
+            try:
+                from mnemotree.store import ChromaMemoryStore
+            except ModuleNotFoundError as exc:
+                raise ModuleNotFoundError(
+                    "ChromaMemoryStore requires optional dependencies. "
+                    "Install with `pip install mnemotree[chroma]`."
+                ) from exc
 
-        if chroma_host and chroma_port:
-            store = ChromaMemoryStore(
-                host=chroma_host,
-                port=int(chroma_port),
-                ssl=chroma_ssl,
-                collection_name=collection_name,
-            )
+            chroma_ssl = _env_bool("MNEMOTREE_MCP_CHROMA_SSL", False)
+            if chroma_host and chroma_port:
+                store = ChromaMemoryStore(
+                    host=chroma_host,
+                    port=int(chroma_port),
+                    ssl=chroma_ssl,
+                    collection_name=collection_name,
+                )
+            else:
+                chroma_dir = os.getenv("MNEMOTREE_MCP_PERSIST_DIR", ".mnemotree/chromadb")
+                store = ChromaMemoryStore(
+                    persist_directory=chroma_dir,
+                    collection_name=collection_name,
+                )
         else:
-            store = ChromaMemoryStore(
-                persist_directory=persist_dir,
+            from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
+
+            store = SQLiteVecMemoryStore(
+                db_path=persist_dir,
                 collection_name=collection_name,
             )
 

@@ -992,7 +992,7 @@ class MemoryCore:
         if not isinstance(self.store, SupportsKnowledgeGraph):
             raise RuntimeError(
                 f"Store {type(self.store).__name__} does not support knowledge graph operations. "
-                "Use Neo4jMemoryStore or SQLiteGraphStore."
+                "Use Neo4jMemoryStore or SQLiteVecMemoryStore."
             )
 
         return await self.store.create_link(
@@ -1002,6 +1002,63 @@ class MemoryCore:
             context=context,
             bidirectional=bidirectional,
         )
+
+    async def get_links(
+        self,
+        memory_id: str,
+        *,
+        direction: Literal["outgoing", "incoming", "both"] = "both",
+        link_types: list[LinkType] | None = None,
+        min_strength: float = 0.0,
+    ) -> list[MemoryLink]:
+        """
+        Get all links for a memory.
+
+        Args:
+            memory_id: ID of the memory
+            direction: Which links to retrieve (outgoing/incoming/both)
+            link_types: Optional filter for specific link types
+            min_strength: Minimum link strength threshold
+
+        Returns:
+            List of MemoryLink objects
+
+        Raises:
+            RuntimeError: If store doesn't support knowledge graph operations
+        """
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            raise RuntimeError(
+                f"Store {type(self.store).__name__} does not support knowledge graph operations. "
+                "Use Neo4jMemoryStore or SQLiteVecMemoryStore."
+            )
+
+        return await self.store.get_links(
+            memory_id,
+            direction=direction,
+            link_types=link_types,
+            min_strength=min_strength,
+        )
+
+    async def delete_link(self, link_id: str) -> bool:
+        """
+        Delete a link by ID.
+
+        Args:
+            link_id: ID of the link to delete
+
+        Returns:
+            True if successful, False if link not found
+
+        Raises:
+            RuntimeError: If store doesn't support knowledge graph operations
+        """
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            raise RuntimeError(
+                f"Store {type(self.store).__name__} does not support knowledge graph operations. "
+                "Use Neo4jMemoryStore or SQLiteVecMemoryStore."
+            )
+
+        return await self.store.delete_link(link_id)
 
     async def get_backlinks(
         self,

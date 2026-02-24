@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, Literal  # noqa: F401 — Any used for adaptive_decay type
 
 from langchain_core.embeddings.embeddings import Embeddings
@@ -24,6 +25,8 @@ from .memory import (
 from .models import MemoryItem
 from .scoring import MemoryScoring
 
+_DEFAULT_DB_PATH = ".mnemotree/mnemotree.sqlite"
+
 
 class MemoryCoreBuilder:
     """Fluent builder for configuring MemoryCore without a long constructor signature."""
@@ -40,7 +43,36 @@ class MemoryCoreBuilder:
         self._normalization_config = NormalizationConfig()
 
     @classmethod
-    def lite(cls, store: MemoryCRUDStore) -> MemoryCoreBuilder:
+    def default(
+        cls,
+        db_path: str | Path = _DEFAULT_DB_PATH,
+        *,
+        collection_name: str = "memories",
+    ) -> MemoryCoreBuilder:
+        """Zero-config builder using SQLiteVecMemoryStore (no external infra needed).
+
+        Args:
+            db_path: Path to SQLite database file.
+            collection_name: Name of the memory collection.
+
+        Returns:
+            A builder pre-configured in lite mode with an SQLite store.
+        """
+        from ..store.sqlite_vec_store import SQLiteVecMemoryStore
+
+        store = SQLiteVecMemoryStore(db_path=db_path, collection_name=collection_name)
+        return cls(store).with_mode("lite")
+
+    @classmethod
+    def lite(cls, store: MemoryCRUDStore | None = None, **kwargs: Any) -> MemoryCoreBuilder:
+        """Create a lite-mode builder.
+
+        If *store* is ``None``, falls back to :meth:`default` using
+        ``SQLiteVecMemoryStore`` so callers can write
+        ``MemoryCoreBuilder.lite().build()`` with zero configuration.
+        """
+        if store is None:
+            return cls.default(**kwargs)
         return cls(store).with_mode("lite")
 
     @classmethod
