@@ -52,7 +52,7 @@ class SignalRanker:
     """Ranks memories based on composite signals (RRF, Entity, Keywords)."""
 
     def __init__(
-        self, rrf_weight: float = 0.15, entity_boost: float = 0.05, keyword_boost: float = 0.10
+        self, rrf_weight: float = 0.20, entity_boost: float = 0.10, keyword_boost: float = 0.10
     ):
         self.rrf_weight = rrf_weight
         self.entity_boost = entity_boost

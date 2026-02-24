@@ -475,7 +475,7 @@ class HybridFusionRetriever(BaseRetriever):
         bm25_memories: list[MemoryItem],
         rrf_k: int,
     ) -> tuple[list[MemoryItem], dict[str, float]]:
-        weights = {"vector": 0.6, "bm25": 0.3, "entity": 0.1}
+        weights = {"vector": 0.50, "bm25": 0.35, "entity": 0.15}
         fused, scores, _stage_scores = rrf_fuse(
             stage_candidates={
                 "vector": vector_memories,
