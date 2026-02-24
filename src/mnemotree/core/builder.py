@@ -160,7 +160,7 @@ class MemoryCoreBuilder:
         *,
         rrf_k: int = 60,
         enable_rrf_signal_rerank: bool = False,
-        reranker_backend: Literal["none", "flashrank"] = "none",
+        reranker_backend: Literal["none", "flashrank", "cross_encoder"] = "none",
         reranker_model: str = "ms-marco-TinyBERT-L-2-v2",
         rerank_candidates: int = 50,
     ) -> MemoryCoreBuilder:

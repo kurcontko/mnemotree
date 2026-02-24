@@ -502,3 +502,22 @@ def test_build_passes_all_configs(mock_store, mock_llm, mock_embeddings):
     assert abs(core.default_importance - 0.7) < 1e-9
     assert core.enable_bm25 is True
     assert core.retrieval_mode == "hybrid"
+
+
+# --- Cross-Encoder Reranker Tests ---
+
+
+def test_use_hybrid_fusion_cross_encoder(mock_store):
+    """Test use_hybrid_fusion() with cross_encoder backend."""
+    builder = MemoryCoreBuilder(mock_store).use_hybrid_fusion(
+        reranker_backend="cross_encoder",
+        reranker_model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+    )
+    assert builder._retrieval_config.reranker_backend == "cross_encoder"
+    assert builder._retrieval_config.reranker_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+
+def test_with_option_cross_encoder_backend(mock_store):
+    """Test with_option() for cross_encoder reranker backend."""
+    builder = MemoryCoreBuilder(mock_store).with_option("reranker_backend", "cross_encoder")
+    assert builder._retrieval_config.reranker_backend == "cross_encoder"
