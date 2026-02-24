@@ -16,6 +16,7 @@ from .memory import (
     MemoryMode,
     ModeDefaultsConfig,
     NerConfig,
+    NormalizationConfig,
     RetrievalConfig,
     RetrievalMode,
     ScoringConfig,
@@ -36,6 +37,7 @@ class MemoryCoreBuilder:
         self._scoring_config = ScoringConfig()
         self._retrieval_config = RetrievalConfig()
         self._ingestion_config = IngestionConfig()
+        self._normalization_config = NormalizationConfig()
 
     @classmethod
     def lite(cls, store: MemoryCRUDStore) -> MemoryCoreBuilder:
@@ -201,6 +203,21 @@ class MemoryCoreBuilder:
         self._retrieval_config = replace(self._retrieval_config, enable_prf=False)
         return self
 
+    def with_normalization(
+        self,
+        *,
+        enable_coref: bool = True,
+        enable_temporal: bool = True,
+        coref_backend: str = "heuristic",
+    ) -> MemoryCoreBuilder:
+        """Enable content normalization (coreference resolution + temporal anchoring)."""
+        self._normalization_config = NormalizationConfig(
+            enable_coref=enable_coref,
+            enable_temporal=enable_temporal,
+            coref_backend=coref_backend,
+        )
+        return self
+
     def with_defaults(
         self,
         *,
@@ -221,6 +238,10 @@ class MemoryCoreBuilder:
             "scoring_config": (ScoringConfig, lambda v: setattr(self, "_scoring_config", v)),
             "retrieval_config": (RetrievalConfig, lambda v: setattr(self, "_retrieval_config", v)),
             "ingestion_config": (IngestionConfig, lambda v: setattr(self, "_ingestion_config", v)),
+            "normalization_config": (
+                NormalizationConfig,
+                lambda v: setattr(self, "_normalization_config", v),
+            ),
         }
         option = typed_options.get(name)
         if option and isinstance(value, option[0]):
@@ -310,4 +331,5 @@ class MemoryCoreBuilder:
             scoring_config=self._scoring_config,
             retrieval_config=self._retrieval_config,
             ingestion_config=self._ingestion_config,
+            normalization_config=self._normalization_config,
         )

@@ -79,6 +79,11 @@ rerank_flashrank = [
     "flashrank>=0.2.0"
 ]
 
+# Content normalization
+normalization = [
+    "dateparser>=1.2.0"
+]
+
 # Keyword extraction
 keywords = [
     "yake>=0.4.8"
@@ -229,6 +234,7 @@ module = [
     "stanza.*",
     "transformers.*",
     "torch.*",
+    "dateparser.*",
 ]
 ignore_missing_imports = true
 

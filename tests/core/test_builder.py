@@ -10,6 +10,7 @@ from mnemotree.core.memory import (
     MemoryCore,
     ModeDefaultsConfig,
     NerConfig,
+    NormalizationConfig,
     RetrievalConfig,
     ScoringConfig,
 )
@@ -502,6 +503,50 @@ def test_build_passes_all_configs(mock_store, mock_llm, mock_embeddings):
     assert abs(core.default_importance - 0.7) < 1e-9
     assert core.enable_bm25 is True
     assert core.retrieval_mode == "hybrid"
+
+
+# --- Normalization Tests ---
+
+
+def test_with_normalization_defaults(mock_store):
+    """Test with_normalization() sets defaults correctly."""
+    builder = MemoryCoreBuilder(mock_store).with_normalization()
+    assert builder._normalization_config.enable_coref is True
+    assert builder._normalization_config.enable_temporal is True
+    assert builder._normalization_config.coref_backend == "heuristic"
+
+
+def test_with_normalization_custom(mock_store):
+    """Test with_normalization() with custom parameters."""
+    builder = MemoryCoreBuilder(mock_store).with_normalization(
+        enable_coref=True,
+        enable_temporal=False,
+        coref_backend="fastcoref",
+    )
+    assert builder._normalization_config.enable_coref is True
+    assert builder._normalization_config.enable_temporal is False
+    assert builder._normalization_config.coref_backend == "fastcoref"
+
+
+def test_with_option_normalization_config(mock_store):
+    """Test with_option() for normalization_config."""
+    config = NormalizationConfig(enable_coref=True, enable_temporal=True)
+    builder = MemoryCoreBuilder(mock_store).with_option("normalization_config", config)
+    assert builder._normalization_config is config
+
+
+def test_build_with_normalization(mock_store, mock_embeddings):
+    """Test that build() creates MemoryCore with normalization."""
+    core = (
+        MemoryCoreBuilder(mock_store)
+        .with_embeddings(mock_embeddings)
+        .disable_keywords()
+        .disable_ner()
+        .with_normalization(enable_coref=True, enable_temporal=True)
+        .build()
+    )
+    assert isinstance(core, MemoryCore)
+    assert core.normalizer is not None
 
 
 # --- Cross-Encoder Reranker Tests ---
