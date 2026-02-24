@@ -470,22 +470,23 @@ async def test_get_memory_core_remote_store_and_ner(
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup):
+async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup, tmp_path):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called without backend config")
 
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
 
+    db_path = str(tmp_path / "mnemotree.sqlite")
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_PORT", raising=False)
-    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/mnemotree.sqlite")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", db_path)
     monkeypatch.setenv("MNEMOTREE_MCP_COLLECTION", "memories_local")
 
     core = await server._get_memory_core()
 
     # Default path now uses SQLiteVecMemoryStore
     assert core.store.kwargs == {
-        "db_path": "/tmp/mnemotree.sqlite",
+        "db_path": db_path,
         "collection_name": "memories_local",
     }
     mode_defaults = core.kwargs["mode_defaults"]
@@ -498,14 +499,14 @@ async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup):
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_env_setup):
+async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_env_setup, tmp_path):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called")
 
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
-    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", str(tmp_path / "test.sqlite"))
     monkeypatch.setenv("MNEMOTREE_MCP_ENABLE_BM25", "1")
 
     core = await server._get_memory_core()
@@ -517,14 +518,16 @@ async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_en
 
 
 @pytest.mark.asyncio
-async def test_get_memory_core_retrieval_config_bm25_disabled(monkeypatch, memory_core_env_setup):
+async def test_get_memory_core_retrieval_config_bm25_disabled(
+    monkeypatch, memory_core_env_setup, tmp_path
+):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called")
 
     monkeypatch.setattr(server, "create_ner", _fake_create_ner)
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
-    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/test")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", str(tmp_path / "test.sqlite"))
     monkeypatch.setenv("MNEMOTREE_MCP_ENABLE_BM25", "0")
 
     core = await server._get_memory_core()
