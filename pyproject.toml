@@ -234,6 +234,7 @@ module = [
     "stanza.*",
     "transformers.*",
     "torch.*",
+    "dateparser.*",
 ]
 ignore_missing_imports = true
 
