@@ -23,6 +23,7 @@ from ..store.base import BaseMemoryStore
 from ..store.protocols import (
     MemoryCRUDStore,
     SupportsConnections,
+    SupportsKnowledgeGraph,
     SupportsMetadataUpdate,
     SupportsStructuredQuery,
     SupportsVectorSearch,
@@ -32,7 +33,7 @@ from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
-from .models import MemoryItem, MemoryType, coerce_datetime
+from .models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
 from .retrieval import Retriever
 from .retriever_factory import RetrieverFactory
@@ -935,6 +936,229 @@ class MemoryCore:
             Success status
         """
         return await self.persistence.delete(memory_id, cascade=cascade)
+
+    # Knowledge Graph Operations
+
+    async def link(
+        self,
+        source_id: str,
+        target_id: str,
+        link_type: LinkType = LinkType.REFERENCES,
+        *,
+        context: str | None = None,
+        bidirectional: bool = False,
+    ) -> MemoryLink:
+        """
+        Create a typed link between two memories.
+
+        Args:
+            source_id: ID of the source memory
+            target_id: ID of the target memory
+            link_type: Type of semantic relationship (default: REFERENCES)
+            context: Optional explanation of why this link exists
+            bidirectional: If True, create reverse link as well
+
+        Returns:
+            The created MemoryLink
+
+        Raises:
+            RuntimeError: If store doesn't support knowledge graph operations
+
+        Example:
+            ```python
+            # Link two related memories
+            link = await core.link(
+                memory1.memory_id,
+                memory2.memory_id,
+                LinkType.ELABORATES,
+                context="Provides more detail on the concept",
+            )
+            ```
+        """
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            raise RuntimeError(
+                f"Store {type(self.store).__name__} does not support knowledge graph operations. "
+                "Use Neo4jMemoryStore or SQLiteGraphStore."
+            )
+
+        return await self.store.create_link(
+            source_id=source_id,
+            target_id=target_id,
+            link_type=link_type,
+            context=context,
+            bidirectional=bidirectional,
+        )
+
+    async def get_backlinks(
+        self,
+        memory_id: str,
+        *,
+        link_types: list[LinkType] | None = None,
+    ) -> list[MemoryItem]:
+        """
+        Get all memories that link TO this memory (backlinks).
+
+        Args:
+            memory_id: ID of the memory to find backlinks for
+            link_types: Optional filter for specific link types
+
+        Returns:
+            List of memories that link to this memory
+
+        Raises:
+            RuntimeError: If store doesn't support knowledge graph operations
+
+        Example:
+            ```python
+            # Find what references this concept
+            backlinks = await core.get_backlinks(concept_id)
+
+            # Find only memories that support this claim
+            supporters = await core.get_backlinks(
+                claim_id,
+                link_types=[LinkType.SUPPORTS],
+            )
+            ```
+        """
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            raise RuntimeError(
+                f"Store {type(self.store).__name__} does not support knowledge graph operations."
+            )
+
+        return await self.store.get_backlinks(memory_id, link_types=link_types)
+
+    async def explore(
+        self,
+        memory_id: str,
+        depth: int = 2,
+    ) -> dict[str, Any]:
+        """
+        Explore the knowledge graph around a memory.
+
+        Args:
+            memory_id: Starting memory ID
+            depth: How many hops to explore (default 2, max 5)
+
+        Returns:
+            Graph structure with nodes and edges
+
+        Raises:
+            RuntimeError: If store doesn't support knowledge graph operations
+
+        Example:
+            ```python
+            # Explore local neighborhood
+            graph = await core.explore(memory_id, depth=2)
+            # Returns: {"nodes": [...], "edges": [...], "start": memory_id}
+            ```
+        """
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            raise RuntimeError(
+                f"Store {type(self.store).__name__} does not support knowledge graph operations."
+            )
+
+        # Traverse graph
+        traversal = await self.store.traverse_graph(memory_id, max_depth=depth)
+
+        # Build graph structure
+        nodes = []
+        edges = []
+        seen_node_ids = {memory_id}
+        seen_edge_ids = set()
+
+        for memory, node_depth, path_links in traversal:
+            # Add node if not seen
+            if memory.memory_id not in seen_node_ids:
+                nodes.append(
+                    {
+                        "id": memory.memory_id,
+                        "content": memory.content,
+                        "type": memory.memory_type.value,
+                        "importance": memory.importance,
+                        "depth": node_depth,
+                    }
+                )
+                seen_node_ids.add(memory.memory_id)
+
+            # Add edges from path
+            for link in path_links:
+                if link.link_id not in seen_edge_ids:
+                    edges.append(
+                        {
+                            "id": link.link_id,
+                            "source": link.source_id,
+                            "target": link.target_id,
+                            "type": link.link_type.value,
+                            "strength": link.strength,
+                            "context": link.context,
+                        }
+                    )
+                    seen_edge_ids.add(link.link_id)
+
+        return {
+            "start": memory_id,
+            "depth": depth,
+            "nodes": nodes,
+            "edges": edges,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+        }
+
+    async def find_connection(
+        self,
+        source_id: str,
+        target_id: str,
+    ) -> list[dict[str, Any]] | None:
+        """
+        Find how two memories are connected.
+
+        Args:
+            source_id: Starting memory ID
+            target_id: Ending memory ID
+
+        Returns:
+            Path as list of dicts with memory and link info, or None if no path
+
+        Raises:
+            RuntimeError: If store doesn't support knowledge graph operations
+
+        Example:
+            ```python
+            # Find connection between two concepts
+            path = await core.find_connection(concept_a_id, concept_b_id)
+            if path:
+                for step in path:
+                    print(f"{step['memory']['content']} -> {step['link']['type']}")
+            ```
+        """
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            raise RuntimeError(
+                f"Store {type(self.store).__name__} does not support knowledge graph operations."
+            )
+
+        result = await self.store.find_path(source_id, target_id)
+        if not result:
+            return None
+
+        # Format path for user
+        path = []
+        for memory, link in result:
+            path.append(
+                {
+                    "memory": {
+                        "id": memory.memory_id,
+                        "content": memory.content,
+                        "type": memory.memory_type.value,
+                    },
+                    "link": {
+                        "type": link.link_type.value,
+                        "strength": link.strength,
+                        "context": link.context,
+                    },
+                }
+            )
+
+        return path
 
     async def summarize(
         self, memories: list[MemoryItem], format: str = "text"

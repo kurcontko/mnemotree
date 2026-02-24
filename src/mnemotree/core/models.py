@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, overload
+from typing import Any, Literal, overload
 from uuid import uuid4
 
 from langchain.schema import Document
@@ -66,6 +66,22 @@ class EmotionCategory(str, Enum):
     NEUTRAL = "neutral"
     SATISFACTION = "satisfaction"
     EXCITEMENT = "excitement"
+
+
+class LinkType(str, Enum):
+    """Semantic relationship types inspired by Zettelkasten."""
+
+    SUPPORTS = "supports"  # Evidence for
+    CONTRADICTS = "contradicts"  # Evidence against
+    ELABORATES = "elaborates"  # Expands concept
+    REFERENCES = "references"  # Generic citation
+    SIMILAR_TO = "similar_to"  # Semantic similarity
+    EXEMPLIFIES = "exemplifies"  # Concrete example
+    GENERALIZES = "generalizes"  # Abstract pattern
+    CAUSES = "causes"  # Causal relationship
+    FOLLOWS = "follows"  # Sequence
+    PART_OF = "part_of"  # Component
+    DERIVES_FROM = "derives_from"  # Intellectual lineage
 
 
 @overload
@@ -500,3 +516,57 @@ class MemoryItem(BaseModel):
         metadata = {k: v for k, v in metadata.items() if v is not None}
 
         return Document(page_content=self.content, metadata=metadata)
+
+
+class MemoryLink(BaseModel):
+    """A directed link between memories with context.
+
+    Represents a semantic relationship between two memories, inspired by Zettelkasten methodology.
+    Links have types, strength (which can decay), context explaining why the link exists, and
+    metadata about how the link was created.
+
+    Attributes:
+        link_id (str): Unique identifier for the link
+        source_id (str): ID of the source memory
+        target_id (str): ID of the target memory
+        link_type (LinkType): Semantic type of the relationship
+        strength (float): Link strength (0-1), can decay over time via FSRS
+        context (Optional[str]): Explanation of why this link exists
+        created_at (datetime): When the link was created
+        last_accessed (datetime): Last time the link was traversed
+        access_count (int): Number of times the link was accessed
+        created_by (Literal): How the link was created (user, auto_similarity, auto_entity, llm)
+        similarity_score (Optional[float]): Similarity score if created automatically
+        metadata (Dict[str, Any]): Additional flexible attributes
+    """
+
+    link_id: str = Field(default_factory=lambda: str(uuid4()))
+    source_id: str
+    target_id: str
+    link_type: LinkType
+    strength: float = Field(default=1.0, ge=0.0, le=1.0)
+    context: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    access_count: int = 0
+    created_by: Literal["user", "auto_similarity", "auto_entity", "llm"] = "user"
+    similarity_score: float | None = Field(None, ge=0.0, le=1.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def update_access(self):
+        """Update access tracking when link is traversed."""
+        self.access_count += 1
+        self.last_accessed = datetime.now(timezone.utc)
+        # Strengthen link slightly on access (similar to memory reinforcement)
+        self.strength = min(1.0, self.strength + 0.05)
+
+    def decay_strength(self, current_time: datetime, decay_rate: float = 0.01):
+        """Apply time-based decay to link strength.
+
+        Args:
+            current_time: Current datetime for calculating elapsed time
+            decay_rate: Rate of decay (default 0.01)
+        """
+        elapsed_seconds = (current_time - self.last_accessed).total_seconds()
+        decay_factor = 1.0 / (1.0 + decay_rate * elapsed_seconds)
+        self.strength *= decay_factor
