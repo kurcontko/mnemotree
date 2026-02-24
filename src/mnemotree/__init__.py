@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .core.builder import MemoryCoreBuilder
 from .core.memory import MemoryCore, MemoryMode, RecallFilters, RecallOptions, RememberOptions
+from .core.models import LinkType, MemoryLink
 from .errors import (
     ConfigurationError,
     DependencyError,
@@ -20,6 +21,9 @@ __all__ = [
     "RememberOptions",
     "RecallFilters",
     "RecallOptions",
+    # Knowledge graph types
+    "LinkType",
+    "MemoryLink",
     # Error types
     "MnemotreeError",
     "StoreError",

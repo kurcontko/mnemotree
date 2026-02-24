@@ -6,17 +6,18 @@ import re
 import sqlite3
 import time
 from asyncio import Lock
+from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     import sqlite_vec
 except ImportError:  # pragma: no cover - optional dependency
     sqlite_vec = None
 
-from ..core.models import MemoryItem
+from ..core.models import LinkType, MemoryItem, MemoryLink
 from ..core.query import MemoryQuery
-from ..utils.serialization import json_loads_dict
+from ..utils.serialization import json_dumps_safe, json_loads_dict
 from ._filters import build_sqlite_filter_clauses, normalize_filter_value
 from ._queries import build_entity_set
 from ._records import sqlite_memory_from_row, sqlite_record_from_memory
@@ -24,6 +25,7 @@ from ._schema import create_sqlite_schema, ensure_sqlite_vector_table
 from .base import BaseMemoryStore
 from .logging import elapsed_ms, store_log_context
 from .query_builders import UnsupportedQueryError
+from .serialization import serialize_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         self._vector_table = f"{collection_name}_vectors"
         self._meta_table = f"{collection_name}_meta"
         self._entity_table = f"{collection_name}_entity_index"
+        self._link_table = f"{collection_name}_links"
         self._entity_index_version = 1
         self._conn: sqlite3.Connection | None = None
         self._embedding_dim = embedding_dim
@@ -124,6 +127,44 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             f"""
             CREATE INDEX IF NOT EXISTS "{self._entity_table}_name_idx"
             ON "{self._entity_table}" (normalized_name)
+            """
+        )
+        # Knowledge graph link table
+        conn.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS "{self._link_table}" (
+                link_id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                link_type TEXT NOT NULL,
+                strength REAL NOT NULL DEFAULT 1.0,
+                context TEXT,
+                created_at TEXT NOT NULL,
+                last_accessed TEXT NOT NULL,
+                access_count INTEGER DEFAULT 0,
+                created_by TEXT DEFAULT 'user',
+                similarity_score REAL,
+                metadata TEXT,
+                UNIQUE(source_id, target_id, link_type)
+            )
+            """
+        )
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS "{self._link_table}_source_idx"
+            ON "{self._link_table}" (source_id)
+            """
+        )
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS "{self._link_table}_target_idx"
+            ON "{self._link_table}" (target_id)
+            """
+        )
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS "{self._link_table}_type_idx"
+            ON "{self._link_table}" (link_type)
             """
         )
         conn.commit()
@@ -549,6 +590,581 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 ),
             )
             raise
+
+    # -- Knowledge Graph Operations --
+
+    def _link_from_row(self, row: sqlite3.Row) -> MemoryLink:
+        metadata_str = row["metadata"]
+        return MemoryLink(
+            link_id=row["link_id"],
+            source_id=row["source_id"],
+            target_id=row["target_id"],
+            link_type=LinkType(row["link_type"]),
+            strength=row["strength"],
+            context=row["context"],
+            created_at=row["created_at"],
+            last_accessed=row["last_accessed"],
+            access_count=row["access_count"],
+            created_by=row["created_by"],
+            similarity_score=row["similarity_score"],
+            metadata=json.loads(metadata_str) if metadata_str else {},
+        )
+
+    async def create_link(
+        self,
+        source_id: str,
+        target_id: str,
+        link_type: LinkType,
+        *,
+        strength: float = 1.0,
+        context: str | None = None,
+        bidirectional: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> MemoryLink:
+        await self.initialize()
+        start = time.perf_counter()
+
+        link = MemoryLink(
+            source_id=source_id,
+            target_id=target_id,
+            link_type=link_type,
+            strength=strength,
+            context=context,
+            metadata=metadata or {},
+        )
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                now = serialize_datetime(link.created_at)
+                meta_json = json_dumps_safe(link.metadata)
+
+                conn.execute(
+                    f'INSERT OR REPLACE INTO "{self._link_table}" '
+                    "(link_id, source_id, target_id, link_type, strength, context, "
+                    "created_at, last_accessed, access_count, created_by, "
+                    "similarity_score, metadata) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        link.link_id,
+                        source_id,
+                        target_id,
+                        link_type.value,
+                        strength,
+                        context,
+                        now,
+                        now,
+                        0,
+                        link.created_by,
+                        link.similarity_score,
+                        meta_json,
+                    ),
+                )
+
+                if bidirectional:
+                    reverse = MemoryLink(
+                        source_id=target_id,
+                        target_id=source_id,
+                        link_type=link_type,
+                        strength=strength,
+                        context=context,
+                        metadata=metadata or {},
+                    )
+                    conn.execute(
+                        f'INSERT OR REPLACE INTO "{self._link_table}" '
+                        "(link_id, source_id, target_id, link_type, strength, context, "
+                        "created_at, last_accessed, access_count, created_by, "
+                        "similarity_score, metadata) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            reverse.link_id,
+                            target_id,
+                            source_id,
+                            link_type.value,
+                            strength,
+                            context,
+                            serialize_datetime(reverse.created_at),
+                            serialize_datetime(reverse.last_accessed),
+                            0,
+                            reverse.created_by,
+                            reverse.similarity_score,
+                            meta_json,
+                        ),
+                    )
+
+                conn.commit()
+                logger.info(
+                    "Created link %s from %s to %s",
+                    link.link_id,
+                    source_id,
+                    target_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return link
+            except sqlite3.Error:
+                conn.rollback()
+                logger.exception(
+                    "Failed to create link from %s to %s",
+                    source_id,
+                    target_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
+
+    async def get_links(
+        self,
+        memory_id: str,
+        *,
+        direction: Literal["outgoing", "incoming", "both"] = "both",
+        link_types: list[LinkType] | None = None,
+        min_strength: float = 0.0,
+    ) -> list[MemoryLink]:
+        await self.initialize()
+        start = time.perf_counter()
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                where_clauses: list[str] = []
+                params: list[Any] = []
+
+                if direction == "outgoing":
+                    where_clauses.append("source_id = ?")
+                    params.append(memory_id)
+                elif direction == "incoming":
+                    where_clauses.append("target_id = ?")
+                    params.append(memory_id)
+                else:
+                    where_clauses.append("(source_id = ? OR target_id = ?)")
+                    params.extend([memory_id, memory_id])
+
+                where_clauses.append("strength >= ?")
+                params.append(min_strength)
+
+                if link_types:
+                    placeholders = ", ".join("?" for _ in link_types)
+                    where_clauses.append(f"link_type IN ({placeholders})")
+                    params.extend(lt.value for lt in link_types)
+
+                where_sql = " AND ".join(where_clauses)
+                rows = conn.execute(
+                    f'SELECT * FROM "{self._link_table}" WHERE {where_sql}',
+                    params,
+                ).fetchall()
+
+                links = [self._link_from_row(row) for row in rows]
+                logger.info(
+                    "Retrieved %d links for memory %s",
+                    len(links),
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return links
+            except sqlite3.Error:
+                logger.exception(
+                    "Failed to get links for memory %s",
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
+
+    async def get_backlinks(
+        self,
+        memory_id: str,
+        *,
+        link_types: list[LinkType] | None = None,
+    ) -> list[MemoryItem]:
+        await self.initialize()
+        start = time.perf_counter()
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                where_clauses = ["l.target_id = ?"]
+                params: list[Any] = [memory_id]
+
+                if link_types:
+                    placeholders = ", ".join("?" for _ in link_types)
+                    where_clauses.append(f"l.link_type IN ({placeholders})")
+                    params.extend(lt.value for lt in link_types)
+
+                where_sql = " AND ".join(where_clauses)
+                sql = (
+                    f'SELECT m.* FROM "{self.collection_name}" m '
+                    f'JOIN "{self._link_table}" l ON l.source_id = m.memory_id '
+                    f"WHERE {where_sql}"
+                )
+                rows = conn.execute(sql, params).fetchall()
+                memories = [sqlite_memory_from_row(row) for row in rows]
+
+                logger.info(
+                    "Retrieved %d backlinks for memory %s",
+                    len(memories),
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return memories
+            except sqlite3.Error:
+                logger.exception(
+                    "Failed to get backlinks for memory %s",
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
+
+    async def traverse_graph(
+        self,
+        start_id: str,
+        *,
+        max_depth: int = 3,
+        link_types: list[LinkType] | None = None,
+        strategy: Literal["bfs", "dfs"] = "bfs",
+    ) -> list[tuple[MemoryItem, int, list[MemoryLink]]]:
+        await self.initialize()
+        start_time = time.perf_counter()
+        max_depth = min(max_depth, 5)
+
+        type_values = {lt.value for lt in link_types} if link_types else None
+
+        result: list[tuple[MemoryItem, int, list[MemoryLink]]] = []
+        visited: set[str] = {start_id}
+
+        # (current_memory_id, current_depth, path_links)
+        frontier: deque[tuple[str, int, list[MemoryLink]]] = deque()
+        frontier.append((start_id, 0, []))
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                while frontier:
+                    if strategy == "bfs":
+                        current_id, depth, path_links = frontier.popleft()
+                    else:
+                        current_id, depth, path_links = frontier.pop()
+
+                    if depth >= max_depth:
+                        continue
+
+                    # Get outgoing links from current node
+                    rows = conn.execute(
+                        f'SELECT * FROM "{self._link_table}" WHERE source_id = ?',
+                        (current_id,),
+                    ).fetchall()
+
+                    for row in rows:
+                        link = self._link_from_row(row)
+                        if type_values and link.link_type.value not in type_values:
+                            continue
+                        target_id = link.target_id
+                        if target_id in visited:
+                            continue
+                        visited.add(target_id)
+
+                        # Fetch the target memory
+                        mem_row = conn.execute(
+                            f'SELECT * FROM "{self.collection_name}" WHERE memory_id = ?',
+                            (target_id,),
+                        ).fetchone()
+                        if not mem_row:
+                            continue
+                        memory = sqlite_memory_from_row(mem_row)
+                        new_path = path_links + [link]
+                        result.append((memory, depth + 1, new_path))
+                        frontier.append((target_id, depth + 1, new_path))
+
+                logger.info(
+                    "Traversed graph from %s, found %d nodes",
+                    start_id,
+                    len(result),
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start_time),
+                    ),
+                )
+                return result
+            except sqlite3.Error:
+                logger.exception(
+                    "Failed to traverse graph from %s",
+                    start_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start_time),
+                    ),
+                )
+                raise
+
+    async def find_path(
+        self,
+        source_id: str,
+        target_id: str,
+        *,
+        max_depth: int = 5,
+    ) -> list[tuple[MemoryItem, MemoryLink]] | None:
+        await self.initialize()
+        start_time = time.perf_counter()
+        max_depth = min(max_depth, 10)
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                # BFS to find shortest path
+                visited: set[str] = {source_id}
+                # Each entry: (current_id, path_of_(memory_id, link) pairs)
+                queue: deque[tuple[str, list[tuple[str, MemoryLink]]]] = deque()
+                queue.append((source_id, []))
+
+                while queue:
+                    current_id, path = queue.popleft()
+                    if len(path) >= max_depth:
+                        continue
+
+                    rows = conn.execute(
+                        f'SELECT * FROM "{self._link_table}" WHERE source_id = ?',
+                        (current_id,),
+                    ).fetchall()
+
+                    for row in rows:
+                        link = self._link_from_row(row)
+                        next_id = link.target_id
+                        if next_id in visited:
+                            continue
+                        visited.add(next_id)
+
+                        new_path = path + [(next_id, link)]
+
+                        if next_id == target_id:
+                            # Build result: fetch memories for each step
+                            result: list[tuple[MemoryItem, MemoryLink]] = []
+                            for mem_id, step_link in new_path:
+                                mem_row = conn.execute(
+                                    f'SELECT * FROM "{self.collection_name}" WHERE memory_id = ?',
+                                    (mem_id,),
+                                ).fetchone()
+                                if mem_row:
+                                    result.append((sqlite_memory_from_row(mem_row), step_link))
+                            logger.info(
+                                "Found path from %s to %s with %d hops",
+                                source_id,
+                                target_id,
+                                len(result),
+                                extra=store_log_context(
+                                    self.store_type,
+                                    duration_ms=elapsed_ms(start_time),
+                                ),
+                            )
+                            return result
+
+                        queue.append((next_id, new_path))
+
+                return None
+            except sqlite3.Error:
+                logger.exception(
+                    "Failed to find path from %s to %s",
+                    source_id,
+                    target_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start_time),
+                    ),
+                )
+                raise
+
+    async def suggest_links(
+        self,
+        memory_id: str,
+        *,
+        limit: int = 10,
+        min_similarity: float = 0.7,
+        use_llm: bool = False,
+    ) -> list[tuple[MemoryItem, LinkType, float, str | None]]:
+        await self.initialize()
+        start = time.perf_counter()
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                # Get the source memory's embedding
+                mem_row = conn.execute(
+                    f'SELECT id FROM "{self.collection_name}" WHERE memory_id = ?',
+                    (memory_id,),
+                ).fetchone()
+                if not mem_row or self._embedding_dim is None:
+                    return []
+
+                source_rowid = mem_row["id"]
+
+                # Get embedding for source memory
+                vec_row = conn.execute(
+                    f'SELECT embedding FROM "{self._vector_table}" WHERE rowid = ?',
+                    (source_rowid,),
+                ).fetchone()
+                if not vec_row:
+                    return []
+
+                source_embedding = vec_row["embedding"]
+
+                # Get already-linked memory IDs to exclude
+                linked_rows = conn.execute(
+                    f'SELECT target_id FROM "{self._link_table}" WHERE source_id = ? '
+                    f'UNION SELECT source_id FROM "{self._link_table}" WHERE target_id = ?',
+                    (memory_id, memory_id),
+                ).fetchall()
+                excluded_ids = {memory_id} | {
+                    row["target_id"] if "target_id" in row else row["source_id"]
+                    for row in linked_rows
+                }
+
+                # Find similar memories using vector search
+                # sqlite-vec distance() returns L2 distance; lower = more similar
+                # We fetch extra candidates and filter out linked ones
+                fetch_limit = limit + len(excluded_ids) + 5
+                similar_rows = conn.execute(
+                    f"SELECT m.*, distance(v.embedding, ?) AS dist "
+                    f'FROM "{self._vector_table}" v '
+                    f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
+                    "ORDER BY dist "
+                    "LIMIT ?",
+                    (source_embedding, fetch_limit),
+                ).fetchall()
+
+                suggestions: list[tuple[MemoryItem, LinkType, float, str | None]] = []
+                for row in similar_rows:
+                    mid = row["memory_id"]
+                    if mid in excluded_ids:
+                        continue
+                    # Convert L2 distance to a 0-1 similarity score
+                    # Using 1/(1+dist) as a simple conversion
+                    dist = row["dist"]
+                    similarity = 1.0 / (1.0 + dist)
+                    if similarity < min_similarity:
+                        continue
+                    memory = sqlite_memory_from_row(row)
+                    suggestions.append((memory, LinkType.SIMILAR_TO, similarity, None))
+                    if len(suggestions) >= limit:
+                        break
+
+                logger.info(
+                    "Suggested %d links for memory %s",
+                    len(suggestions),
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                return suggestions
+            except sqlite3.Error:
+                logger.exception(
+                    "Failed to suggest links for memory %s",
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
+
+    async def update_link_strength(
+        self,
+        link_id: str,
+        strength: float,
+    ) -> bool:
+        await self.initialize()
+        start = time.perf_counter()
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                cursor = conn.execute(
+                    f'UPDATE "{self._link_table}" SET strength = ? WHERE link_id = ?',
+                    (strength, link_id),
+                )
+                conn.commit()
+                success = cursor.rowcount > 0
+                if success:
+                    logger.info(
+                        "Updated link strength for %s to %f",
+                        link_id,
+                        strength,
+                        extra=store_log_context(
+                            self.store_type,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                return success
+            except sqlite3.Error:
+                conn.rollback()
+                logger.exception(
+                    "Failed to update link strength for %s",
+                    link_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
+
+    async def delete_link(
+        self,
+        link_id: str,
+    ) -> bool:
+        await self.initialize()
+        start = time.perf_counter()
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                cursor = conn.execute(
+                    f'DELETE FROM "{self._link_table}" WHERE link_id = ?',
+                    (link_id,),
+                )
+                conn.commit()
+                success = cursor.rowcount > 0
+                if success:
+                    logger.info(
+                        "Deleted link %s",
+                        link_id,
+                        extra=store_log_context(
+                            self.store_type,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                return success
+            except sqlite3.Error:
+                conn.rollback()
+                logger.exception(
+                    "Failed to delete link %s",
+                    link_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
 
     async def close(self) -> None:
         if self._conn is not None:
