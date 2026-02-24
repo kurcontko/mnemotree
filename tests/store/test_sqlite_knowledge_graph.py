@@ -69,7 +69,7 @@ async def test_create_link(populated_store):
     assert link.target_id == "m2"
     assert link.link_type == LinkType.REFERENCES
     assert link.context == "m1 references m2"
-    assert link.strength == 1.0
+    assert link.strength == pytest.approx(1.0)
     assert link.link_id  # non-empty
 
 
@@ -131,7 +131,7 @@ async def test_get_links_strength_filter(populated_store):
 
     strong_links = await store.get_links("m1", min_strength=0.5)
     assert len(strong_links) == 1
-    assert strong_links[0].strength == 0.8
+    assert strong_links[0].strength == pytest.approx(0.8)
 
 
 @pytest.mark.asyncio
