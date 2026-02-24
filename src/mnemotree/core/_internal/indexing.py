@@ -216,7 +216,7 @@ class BaseQueryExpander:
         return [
             term
             for term in tokens
-            if len(term) >= 4 and term not in PRF_STOPWORDS and not term.isdigit()
+            if len(term) >= 2 and term not in PRF_STOPWORDS and not term.isdigit()
         ]
 
     def _has_index_terms(self, content_terms: list[str]) -> bool:
@@ -273,7 +273,7 @@ class BaseQueryExpander:
             tf <= 0
             or term in query_term_set
             or term in PRF_STOPWORDS
-            or len(term) < 4
+            or len(term) < 2
             or term.isdigit()
         )
 
