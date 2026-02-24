@@ -88,10 +88,16 @@ def dummy_memory_core_class():
 @pytest.fixture
 def memory_core_env_setup(monkeypatch, dummy_store_class, dummy_memory_core_class):
     """Common setup for memory core environment tests."""
+    # Patch ChromaDB store for backward-compatibility tests
     fake_store_module = types.ModuleType("mnemotree.store")
     fake_store_module.ChromaMemoryStore = dummy_store_class
-
     monkeypatch.setitem(sys.modules, "mnemotree.store", fake_store_module)
+
+    # Patch SQLite store for default-path tests
+    fake_sqlite_module = types.ModuleType("mnemotree.store.sqlite_vec_store")
+    fake_sqlite_module.SQLiteVecMemoryStore = dummy_store_class
+    monkeypatch.setitem(sys.modules, "mnemotree.store.sqlite_vec_store", fake_sqlite_module)
+
     monkeypatch.setattr(server, "MemoryCore", dummy_memory_core_class)
     monkeypatch.setattr(server, "_memory_core", None)
 
@@ -472,14 +478,15 @@ async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup):
 
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
     monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_PORT", raising=False)
-    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/mnemotree")
-    monkeypatch.setenv("MNEMOTREE_MCP_COLLECTION", "memories-local")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", "/tmp/mnemotree.sqlite")
+    monkeypatch.setenv("MNEMOTREE_MCP_COLLECTION", "memories_local")
 
     core = await server._get_memory_core()
 
+    # Default path now uses SQLiteVecMemoryStore
     assert core.store.kwargs == {
-        "persist_directory": "/tmp/mnemotree",
-        "collection_name": "memories-local",
+        "db_path": "/tmp/mnemotree.sqlite",
+        "collection_name": "memories_local",
     }
     mode_defaults = core.kwargs["mode_defaults"]
     ner_config = core.kwargs["ner_config"]
@@ -569,8 +576,10 @@ async def test_get_memory_core_import_error(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", _blocked_import)
     monkeypatch.setattr(server, "_memory_core", None)
+    # Explicitly request chroma backend to trigger the ChromaDB import path
+    monkeypatch.setenv("MNEMOTREE_MCP_STORE_BACKEND", "chroma")
 
-    with pytest.raises(ModuleNotFoundError, match="ChromaMemoryStore is required"):
+    with pytest.raises(ModuleNotFoundError, match="ChromaMemoryStore requires optional"):
         await server._get_memory_core()
 
 
