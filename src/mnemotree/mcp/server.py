@@ -14,6 +14,7 @@ from mnemotree.core.memory import (
 )
 from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
 from mnemotree.ner import create_ner
+from mnemotree.store.base import BaseMemoryStore
 from mnemotree.store.protocols import SupportsMemoryListing
 
 _memory_lock = asyncio.Lock()
@@ -218,6 +219,7 @@ async def _get_memory_core() -> MemoryCore:
         chroma_port = os.getenv("MNEMOTREE_MCP_CHROMA_PORT")
         store_backend = os.getenv("MNEMOTREE_MCP_STORE_BACKEND", "sqlite")
 
+        store: BaseMemoryStore
         if chroma_host and chroma_port or store_backend.lower() == "chroma":
             try:
                 from mnemotree.store import ChromaMemoryStore
