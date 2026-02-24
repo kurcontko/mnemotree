@@ -547,8 +547,8 @@ def test_build_with_normalization(mock_store, mock_embeddings):
     )
     assert isinstance(core, MemoryCore)
     assert core.normalizer is not None
-    
-    
+
+
 # --- Cross-Encoder Reranker Tests ---
 
 
