@@ -219,6 +219,7 @@ class MemoryItem(BaseModel):
     # Emotional Analysis - # TODO: Consider using a separate EmotionalContext class, currently flattened
     emotional_valence: float | None = Field(None, ge=-1.0, le=1.0)  # -1 to 1
     emotional_arousal: float | None = Field(None, ge=0.0, le=1.0)  # 0 to 1
+    # emotions: Optional[Union[List[EmotionCategory], List[str]]] = Field(default_factory=list)
     emotions: list[str] = Field(default_factory=list)
 
     # Connections - # TODO: Consider using a separate Connections class, currently flattened
