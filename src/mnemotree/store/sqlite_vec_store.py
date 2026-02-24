@@ -1027,26 +1027,24 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
 
                 # Get already-linked memory IDs to exclude
                 linked_rows = conn.execute(
-                    f'SELECT target_id FROM "{self._link_table}" WHERE source_id = ? '
-                    f'UNION SELECT source_id FROM "{self._link_table}" WHERE target_id = ?',
+                    f'SELECT target_id AS linked_id FROM "{self._link_table}" WHERE source_id = ? '
+                    f'UNION SELECT source_id AS linked_id FROM "{self._link_table}" WHERE target_id = ?',
                     (memory_id, memory_id),
                 ).fetchall()
-                excluded_ids = {memory_id} | {
-                    row["target_id"] if "target_id" in row else row["source_id"]
-                    for row in linked_rows
-                }
+                excluded_ids = {memory_id} | {row[0] for row in linked_rows}
 
                 # Find similar memories using vector search
                 # sqlite-vec distance() returns L2 distance; lower = more similar
                 # We fetch extra candidates and filter out linked ones
                 fetch_limit = limit + len(excluded_ids) + 5
+                vector_blob = source_embedding
                 similar_rows = conn.execute(
-                    f"SELECT m.*, distance(v.embedding, ?) AS dist "
+                    f"SELECT m.*, v.distance AS dist "
                     f'FROM "{self._vector_table}" v '
                     f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
-                    "ORDER BY dist "
-                    "LIMIT ?",
-                    (source_embedding, fetch_limit),
+                    "WHERE v.embedding MATCH ? AND k = ? "
+                    "ORDER BY v.distance",
+                    (vector_blob, fetch_limit),
                 ).fetchall()
 
                 suggestions: list[tuple[MemoryItem, LinkType, float, str | None]] = []
