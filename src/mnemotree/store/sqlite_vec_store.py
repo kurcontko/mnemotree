@@ -1164,6 +1164,144 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 )
                 raise
 
+    async def get_neighborhood_links(
+        self,
+        memory_ids: list[str],
+        max_depth: int = 3,
+        link_types: list[LinkType] | None = None,
+    ) -> list[MemoryLink]:
+        """Return all links reachable within max_depth hops from seed ids.
+
+        Uses an iterative BFS in Python over the link table to avoid recursive
+        CTE compatibility issues across SQLite versions.
+        """
+        await self.initialize()
+        start = time.perf_counter()
+        max_depth = min(max_depth, 5)
+
+        type_values = {lt.value for lt in link_types} if link_types else None
+        collected: dict[str, MemoryLink] = {}  # link_id → MemoryLink
+        frontier: set[str] = set(memory_ids)
+        visited_nodes: set[str] = set(memory_ids)
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                for _depth in range(max_depth):
+                    if not frontier:
+                        break
+
+                    placeholders = ", ".join("?" for _ in frontier)
+                    rows = conn.execute(
+                        f'SELECT * FROM "{self._link_table}" WHERE source_id IN ({placeholders})',
+                        list(frontier),
+                    ).fetchall()
+
+                    next_frontier: set[str] = set()
+                    for row in rows:
+                        link = self._link_from_row(row)
+                        if type_values and link.link_type.value not in type_values:
+                            continue
+                        if link.link_id not in collected:
+                            collected[link.link_id] = link
+                        if link.target_id not in visited_nodes:
+                            visited_nodes.add(link.target_id)
+                            next_frontier.add(link.target_id)
+
+                    frontier = next_frontier
+
+                links = list(collected.values())
+                logger.info(
+                    "get_neighborhood_links seeds=%d depth=%d links=%d",
+                    len(memory_ids),
+                    max_depth,
+                    len(links),
+                    extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start)),
+                )
+                return links
+            except sqlite3.Error:
+                logger.exception(
+                    "Failed to get neighborhood links",
+                    extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start)),
+                )
+                raise
+
+    async def traverse_typed_path(
+        self,
+        start_id: str,
+        path_pattern: list[LinkType],
+        max_results: int = 20,
+    ) -> list[tuple[MemoryItem, list[MemoryLink]]]:
+        """Traverse a typed-path sequence from start_id.
+
+        Each element of path_pattern constrains the link type for that hop.
+        """
+        await self.initialize()
+        start_time = time.perf_counter()
+
+        if not path_pattern:
+            return []
+
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                # Iterative hop traversal: at each hop filter by the required link type
+                # current_frontier: list of (current_node_id, path_links)
+                current_frontier: list[tuple[str, list[MemoryLink]]] = [(start_id, [])]
+
+                for _hop_idx, link_type in enumerate(path_pattern):
+                    next_frontier: list[tuple[str, list[MemoryLink]]] = []
+                    type_val = link_type.value
+
+                    for node_id, path_so_far in current_frontier:
+                        rows = conn.execute(
+                            f'SELECT * FROM "{self._link_table}" '
+                            "WHERE source_id = ? AND link_type = ?",
+                            (node_id, type_val),
+                        ).fetchall()
+
+                        for row in rows:
+                            link = self._link_from_row(row)
+                            next_frontier.append((link.target_id, path_so_far + [link]))
+                            if len(next_frontier) >= max_results * 10:
+                                break
+
+                    current_frontier = next_frontier
+                    if not current_frontier:
+                        break
+
+                # Fetch end-node memories
+                results: list[tuple[MemoryItem, list[MemoryLink]]] = []
+                seen_end: set[str] = set()
+                for end_id, path_links in current_frontier:
+                    if end_id in seen_end:
+                        continue
+                    seen_end.add(end_id)
+                    mem_row = conn.execute(
+                        f'SELECT * FROM "{self.collection_name}" WHERE memory_id = ?',
+                        (end_id,),
+                    ).fetchone()
+                    if mem_row:
+                        results.append((sqlite_memory_from_row(mem_row), path_links))
+                    if len(results) >= max_results:
+                        break
+
+                logger.info(
+                    "traverse_typed_path start=%s pattern=%s results=%d",
+                    start_id,
+                    [lt.value for lt in path_pattern],
+                    len(results),
+                    extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start_time)),
+                )
+                return results
+            except sqlite3.Error:
+                logger.exception(
+                    "Failed to traverse typed path from %s",
+                    start_id,
+                    extra=store_log_context(self.store_type, duration_ms=elapsed_ms(start_time)),
+                )
+                raise
+
     async def close(self) -> None:
         if self._conn is not None:
             self._conn.close()

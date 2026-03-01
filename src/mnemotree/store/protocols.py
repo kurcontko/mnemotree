@@ -231,3 +231,48 @@ class SupportsKnowledgeGraph(Protocol):
             True if successful, False if link not found
         """
         ...
+
+    async def get_neighborhood_links(
+        self,
+        memory_ids: list[str],
+        max_depth: int = 3,
+        link_types: list[LinkType] | None = None,
+    ) -> list[MemoryLink]:
+        """Return all links reachable within max_depth hops from seed ids.
+
+        Used by PPRGraphRetriever to build the adjacency matrix for Personalized
+        PageRank without loading the full graph.
+
+        Args:
+            memory_ids: Seed memory IDs to expand from.
+            max_depth: Maximum hop depth (capped internally).
+            link_types: Optional whitelist of link types to traverse.
+
+        Returns:
+            Flat list of MemoryLink objects (may include duplicates across seeds).
+        """
+        ...
+
+    async def traverse_typed_path(
+        self,
+        start_id: str,
+        path_pattern: list[LinkType],
+        max_results: int = 20,
+    ) -> list[tuple[MemoryItem, list[MemoryLink]]]:
+        """Traverse a specific typed sequence of link types from a start memory.
+
+        Implements Semantic GraphRAG-style typed-path queries, where each hop
+        is constrained to a particular link type.
+
+        Args:
+            start_id: ID of the starting memory.
+            path_pattern: Ordered list of LinkType values to traverse.
+                e.g. [LinkType.CAUSES, LinkType.PART_OF] means two hops:
+                first only CAUSES links, then only PART_OF links.
+            max_results: Maximum number of end-node results to return.
+
+        Returns:
+            List of (end_memory, path_links) tuples where path_links is the
+            sequence of MemoryLink objects traversed to reach end_memory.
+        """
+        ...
