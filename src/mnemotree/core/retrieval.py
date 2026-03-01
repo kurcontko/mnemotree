@@ -6,7 +6,7 @@ import time
 from collections.abc import Hashable, Mapping, Sequence
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
-from langchain_core.embeddings.embeddings import Embeddings
+from .._protocols import AsyncEmbeddingModel as Embeddings
 
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER

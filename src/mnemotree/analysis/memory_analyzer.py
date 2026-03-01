@@ -3,8 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
+from .._protocols import AsyncEmbeddingModel as Embeddings, LLMBackend as BaseLanguageModel
 
 from ..core.models import MemoryType
 from ..utils.serialization import json_dumps_safe
@@ -20,17 +19,17 @@ from .models import (
 class MemoryAnalyzer:
     """Orchestrates different types of memory analysis."""
 
-    def __init__(self, llm: BaseLanguageModel, embeddings: Embeddings):
-        self.llm = llm
+    def __init__(self, model: str | Any = "openai:gpt-4o-mini", embeddings: Embeddings | None = None):
+        self.model = model
         self.embeddings = embeddings
         self._init_analyzers()
 
     def _init_analyzers(self) -> None:
         """Initialize individual analyzers."""
-        self.memory_classifier = MemoryClassifierAnalyzer(self.llm)
-        self.emotion_analyzer = EmotionAnalyzer(self.llm)
-        self.concept_analyzer = ConceptAnalyzer(self.llm)
-        self.pattern_analyzer = PatternAnalyzer(self.llm)
+        self.memory_classifier = MemoryClassifierAnalyzer(self.model)
+        self.emotion_analyzer = EmotionAnalyzer(self.model)
+        self.concept_analyzer = ConceptAnalyzer(self.model)
+        self.pattern_analyzer = PatternAnalyzer(self.model)
 
     async def analyze(
         self, content: str, context: dict[str, Any] | None = None

@@ -6,9 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal, cast
 from uuid import uuid4
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from .._protocols import AsyncEmbeddingModel as Embeddings, LLMBackend as BaseLanguageModel
 
 from ..analysis.clustering import ClusteringResult, MemoryClusterer
 from ..analysis.keywords import KeywordExtractor, SpacyKeywordExtractor
@@ -1731,17 +1729,22 @@ class MemoryCore:
         should_enable_llm_defaults = self.default_analyze or self.default_summarize
 
         if self.mode == "pro" and llm is None and should_enable_llm_defaults:
-            openai_base_url = os.getenv("OPENAI_BASE_URL")
-            openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-            openai_client_kwargs: dict[str, Any] = (
-                {"base_url": openai_base_url} if openai_base_url else {}
-            )
-            llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
+            try:
+                from langchain_openai import ChatOpenAI
+
+                openai_base_url = os.getenv("OPENAI_BASE_URL")
+                openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+                openai_client_kwargs: dict[str, Any] = (
+                    {"base_url": openai_base_url} if openai_base_url else {}
+                )
+                llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
+            except ImportError:
+                pass
         if llm is None:
             return None, None
         return (
-            MemoryAnalyzer(llm=llm, embeddings=embeddings),
-            Summarizer(llm=llm),
+            MemoryAnalyzer(model=llm, embeddings=embeddings),
+            Summarizer(model=llm),
         )
 
     def _resolve_importance_and_type(

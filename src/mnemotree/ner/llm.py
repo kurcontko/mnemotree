@@ -1,86 +1,50 @@
 from __future__ import annotations
 
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.prompts import PromptTemplate
-from pydantic import ValidationError
+import logging
+from typing import Any
+
+from pydantic_ai import Agent
 
 from .base import BaseNER, NERResult
 
+logger = logging.getLogger(__name__)
 
-class LangchainLLMNER(BaseNER):
-    """LangChain LLM-based NER implementation."""
+_SYSTEM_PROMPT = """Extract named entities from the provided text.
+Return a JSON object with:
+- "entities": dict mapping entity text to its type (e.g., "New York": "Location")
+- "mentions": dict mapping entity text to list of context snippets
+- "confidence": dict mapping entity text to a confidence float 0-1
 
-    def __init__(self, llm: BaseLanguageModel):
-        """
-        Initialize LangChainNER.
+Use flat dicts. Entity types: Person, Organization, Location, Date, Event, Product, Other."""
 
-        Args:
-            llm: LangChain language model to use
-        """
-        self.llm = llm
-        self.parser = JsonOutputParser(pydantic_object=NERResult)
-        self.prompt_template = """Extract named entities from the following text.
-Return a JSON object with this exact structure:
-{{
-  "entities": {{"entity_text": "entity_type", ...}},
-  "mentions": {{"entity_text": ["context snippet", ...], ...}},
-  "confidence": {{"entity_text": 0.95, ...}}
-}}
 
-Important:
-- The "entities" field maps entity text to its type (e.g., "New York": "Location")
-- The "confidence" field maps entity text to a single float score (e.g., "New York": 0.95)
-- Use flat dictionaries, not nested by entity type
-- Confidence scores should be between 0 and 1
+class PydanticAILLMNER(BaseNER):
+    """PydanticAI LLM-based NER (replaces LangchainLLMNER)."""
 
-Text: {text}
-
-{format_instructions}
-"""
+    def __init__(self, model: str | Any = "openai:gpt-4o-mini"):
+        self._agent = Agent(model, output_type=NERResult, instructions=_SYSTEM_PROMPT)
 
     async def extract_entities(self, text: str) -> NERResult:
         """Extract entities using LLM."""
-        # Prepare prompt
-        prompt = PromptTemplate(
-            template=self.prompt_template,
-            input_variables=["text"],
-            partial_variables={"format_instructions": self.parser.get_format_instructions()},
-        )
-        chain = prompt | self.llm | self.parser
-
         try:
-            parsed = await chain.ainvoke({"text": text})
-            result = (
-                parsed
-                if isinstance(parsed, dict)
-                else getattr(parsed, "model_dump", lambda: parsed)()
-            )
-            ner_result = NERResult.model_validate(result)
-            entities = ner_result.entities
-            confidence = ner_result.confidence or {}
+            result = await self._agent.run(f"Text: {text}")
+            ner = result.output
+            confidence = ner.confidence or {}
 
-            # Extract mentions (contexts) for each entity
             mentions: dict[str, list[str]] = {}
-            for entity in entities:
-                # Simple string matching for mentions
-                # Could be improved with more sophisticated matching
+            for entity in ner.entities:
+                ctxs: list[str] = []
                 start = 0
-                entity_mentions = []
-                while True:
-                    pos = text.find(entity, start)
-                    if pos == -1:
-                        break
-                    context = self._get_context(text, pos, pos + len(entity))
-                    entity_mentions.append(context)
+                while (pos := text.find(entity, start)) != -1:
+                    ctxs.append(self._get_context(text, pos, pos + len(entity)))
                     start = pos + 1
-                mentions[entity] = entity_mentions
+                mentions[entity] = ctxs
 
-            return NERResult(entities=entities, mentions=mentions, confidence=confidence)
-        except (ValidationError, TypeError, ValueError) as e:
-            # Fallback to empty result on parsing error
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning("Error parsing LLM response", exc_info=e)
+            return NERResult(entities=ner.entities, mentions=mentions, confidence=confidence)
+        except Exception as e:
+            logger.warning("Error in PydanticAI NER", exc_info=e)
             return NERResult(entities={}, mentions={})
+
+
+# Backward-compat alias
+LangchainLLMNER = PydanticAILLMNER

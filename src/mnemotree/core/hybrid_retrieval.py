@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from langchain_core.embeddings.embeddings import Embeddings
+from .._protocols import AsyncEmbeddingModel as Embeddings
 
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER

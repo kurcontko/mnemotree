@@ -5,8 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal  # noqa: F401 — Any used for adaptive_decay type
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
+from .._protocols import AsyncEmbeddingModel as Embeddings, LLMBackend as BaseLanguageModel
 
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER

@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from langchain_core.language_models.base import BaseLanguageModel
+from .._protocols import LLMBackend as BaseLanguageModel
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.models import MemoryItem
