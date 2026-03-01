@@ -49,7 +49,12 @@ class AutogenMemoryTool:
         return [memory.model_dump() for memory in selected]
 
     @register_function(name="store_memory", description="Store a new memory")
-    async def store_memory(self, content: str, importance: float, tags: list[str]) -> str:
+    async def store_memory(
+        self,
+        content: str,
+        importance: float = 0.5,
+        tags: list[str] | None = None,
+    ) -> str:
         """
         Store a new memory.
 
@@ -64,7 +69,7 @@ class AutogenMemoryTool:
         memory = await self.memory_core.remember(
             content,
             importance=importance,
-            tags=tags,
+            tags=tags or [],
         )
         return memory.memory_id
 

@@ -9,6 +9,7 @@ Implements intelligent filtering to avoid storing noise:
 5. Relevance scoring - contextual importance
 """
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -373,7 +374,11 @@ class ContextAwareWriteGate:
 
         # Use custom novelty assessor if provided
         if self.novelty_assessor:
-            novelty_score = await self.novelty_assessor(memory, existing_memories)
+            result = self.novelty_assessor(memory, existing_memories)
+            if inspect.isawaitable(result):
+                novelty_score = await result
+            else:
+                novelty_score = result
         else:
             novelty_score = self._default_novelty_assessment(memory, existing_memories)
 
