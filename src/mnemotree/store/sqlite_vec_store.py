@@ -959,6 +959,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                             (target_id,),
                         ).fetchone()
                         if not mem_row:
+                            logger.debug("Linked memory %s not found, skipping", target_id)
                             continue
                         memory = sqlite_memory_from_row(mem_row)
                         new_path = path_links + [link]
@@ -1035,6 +1036,8 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                                 ).fetchone()
                                 if mem_row:
                                     result.append((sqlite_memory_from_row(mem_row), step_link))
+                                else:
+                                    logger.debug("Path memory %s not found, skipping", mem_id)
                             logger.info(
                                 "Found path from %s to %s with %d hops",
                                 source_id,
@@ -1354,6 +1357,8 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                     ).fetchone()
                     if mem_row:
                         results.append((sqlite_memory_from_row(mem_row), path_links))
+                    else:
+                        logger.debug("Typed-path end node %s not found, skipping", end_id)
                     if len(results) >= max_results:
                         break
 
