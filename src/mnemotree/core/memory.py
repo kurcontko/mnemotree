@@ -205,6 +205,8 @@ class MemoryCore:
         retrieval_config: RetrievalConfig | None = None,
         ingestion_config: IngestionConfig | None = None,
         normalization_config: NormalizationConfig | None = None,
+        default_user_id: str | None = None,
+        default_conversation_id: str | None = None,
     ):
         """
         Initializes the MemoryCore.
@@ -222,6 +224,8 @@ class MemoryCore:
             normalization_config: Content normalization configuration.
         """
         self.store = store
+        self.default_user_id = default_user_id
+        self.default_conversation_id = default_conversation_id
 
         mode_defaults = mode_defaults or ModeDefaultsConfig()
         ner_config = ner_config or NerConfig()
@@ -706,6 +710,12 @@ class MemoryCore:
         if skip_store is None:
             skip_store = False
 
+        # Namespace isolation: auto-inject defaults
+        if user_id is None and self.default_user_id is not None:
+            user_id = self.default_user_id
+        if conversation_id is None and self.default_conversation_id is not None:
+            conversation_id = self.default_conversation_id
+
         if timestamp is not None:
             parsed = coerce_datetime(timestamp, default=None)
             if parsed is None:
@@ -1057,6 +1067,21 @@ class MemoryCore:
             candidate_limit=candidate_limit,
             options=options,
         )
+
+        # Namespace isolation: auto-inject default user_id/conversation_id filters
+        if self.default_user_id is not None or self.default_conversation_id is not None:
+            ns_user = self.default_user_id if self.default_user_id else None
+            ns_conv = self.default_conversation_id if self.default_conversation_id else None
+            if filters is None:
+                filters = RecallFilters(user_id=ns_user, conversation_id=ns_conv)
+            else:
+                updates: dict[str, Any] = {}
+                if filters.user_id is None and ns_user is not None:
+                    updates["user_id"] = ns_user
+                if filters.conversation_id is None and ns_conv is not None:
+                    updates["conversation_id"] = ns_conv
+                if updates:
+                    filters = dataclasses.replace(filters, **updates)
 
         # SimpleMem: infer MemoryType from query intent and pre-filter results
         if self._intent_classifier is not None and isinstance(query, str):
