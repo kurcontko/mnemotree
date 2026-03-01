@@ -55,7 +55,7 @@ def personalized_pagerank(
 
     # Normalise seed distribution
     total_seed = sum(seed_scores.values())
-    if total_seed <= 0.0:
+    if not (total_seed > 0.0):  # catches 0, negative, NaN, and inf
         return {}
     r0: dict[str, float] = {k: v / total_seed for k, v in seed_scores.items()}
 

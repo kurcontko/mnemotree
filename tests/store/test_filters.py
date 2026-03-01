@@ -140,7 +140,7 @@ class TestBuildSqliteFilterClauses:
         """CONTAINS on content field uses LIKE."""
         filters = [MemoryFilter(field="content", operator=FilterOperator.CONTAINS, value="hello")]
         clauses, params = build_sqlite_filter_clauses(filters)
-        assert clauses == ["(content LIKE ?)"]
+        assert clauses == ["(content LIKE ? ESCAPE '\\')"]
         assert params == ["%hello%"]
 
     def test_contains_on_content_multiple_values(self):
@@ -153,7 +153,7 @@ class TestBuildSqliteFilterClauses:
             )
         ]
         clauses, params = build_sqlite_filter_clauses(filters)
-        assert clauses == ["(content LIKE ? OR content LIKE ?)"]
+        assert clauses == ["(content LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')"]
         assert params == ["%alpha%", "%beta%"]
 
     def test_not_contains_on_content(self):
@@ -162,7 +162,7 @@ class TestBuildSqliteFilterClauses:
             MemoryFilter(field="content", operator=FilterOperator.NOT_CONTAINS, value="secret")
         ]
         clauses, params = build_sqlite_filter_clauses(filters)
-        assert clauses == ["NOT (content LIKE ?)"]
+        assert clauses == ["NOT (content LIKE ? ESCAPE '\\')"]
         assert params == ["%secret%"]
 
     # --- CONTAINS operators on list fields ---
@@ -171,7 +171,7 @@ class TestBuildSqliteFilterClauses:
         """CONTAINS on tags field uses comma-wrapped LIKE."""
         filters = [MemoryFilter(field="tags", operator=FilterOperator.CONTAINS, value="important")]
         clauses, params = build_sqlite_filter_clauses(filters)
-        assert clauses == ["((',' || tags || ',') LIKE ?)"]
+        assert clauses == ["((',' || tags || ',') LIKE ? ESCAPE '\\')"]
         assert params == ["%,important,%"]
 
     def test_contains_on_linked_concepts(self):
@@ -185,7 +185,8 @@ class TestBuildSqliteFilterClauses:
         ]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert clauses == [
-            "((',' || linked_concepts || ',') LIKE ? OR (',' || linked_concepts || ',') LIKE ?)"
+            "((',' || linked_concepts || ',') LIKE ? ESCAPE '\\'"
+            " OR (',' || linked_concepts || ',') LIKE ? ESCAPE '\\')"
         ]
         assert params == ["%,concept-a,%", "%,concept-b,%"]
 
@@ -199,7 +200,7 @@ class TestBuildSqliteFilterClauses:
             )
         ]
         clauses, params = build_sqlite_filter_clauses(filters)
-        assert clauses == ["NOT ((',' || conflicts_with || ',') LIKE ?)"]
+        assert clauses == ["NOT ((',' || conflicts_with || ',') LIKE ? ESCAPE '\\')"]
         assert params == ["%,mem-9,%"]
 
     def test_not_contains_on_emotions(self):
@@ -208,7 +209,7 @@ class TestBuildSqliteFilterClauses:
             MemoryFilter(field="emotions", operator=FilterOperator.NOT_CONTAINS, value="anger")
         ]
         clauses, params = build_sqlite_filter_clauses(filters)
-        assert clauses == ["NOT ((',' || emotions || ',') LIKE ?)"]
+        assert clauses == ["NOT ((',' || emotions || ',') LIKE ? ESCAPE '\\')"]
         assert params == ["%,anger,%"]
 
     # --- Multiple filters ---
