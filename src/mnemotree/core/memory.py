@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import logging
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -41,6 +42,8 @@ from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
 from .retrieval import Retriever
 from .retriever_factory import RetrieverFactory
 from .scoring import MemoryScoring, cosine_similarity
+
+logger = logging.getLogger(__name__)
 
 MemoryMode = Literal["lite", "pro"]
 RetrievalMode = Literal["basic", "hybrid"]
@@ -2245,7 +2248,11 @@ class MemoryCore:
         if keyword_extractor is not None:
             return keyword_extractor
         if enable_keywords:
-            return SpacyKeywordExtractor()
+            try:
+                return SpacyKeywordExtractor()
+            except OSError:
+                logger.debug("spaCy model not available, disabling keyword extraction")
+                return None
         return None
 
     def _init_embeddings_and_analysis(
@@ -2266,7 +2273,14 @@ class MemoryCore:
 
     def _init_ner(self, *, ner: BaseNER | None, enable_ner: bool) -> None:
         if enable_ner:
-            self.ner: BaseNER | None = ner if ner is not None else SpacyNER()
+            if ner is not None:
+                self.ner: BaseNER | None = ner
+            else:
+                try:
+                    self.ner = SpacyNER()
+                except OSError:
+                    logger.debug("spaCy model not available, disabling NER")
+                    self.ner = None
         else:
             self.ner = None
 
