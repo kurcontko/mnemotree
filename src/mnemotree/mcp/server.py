@@ -826,7 +826,11 @@ async def resolve_conflict(
     elif resolution == "keep_newer":
         t1 = coerce_datetime(m1.timestamp, default=None)
         t2 = coerce_datetime(m2.timestamp, default=None)
-        if t1 is not None and t2 is not None and t1 >= t2:
+        if t1 is None or t2 is None:
+            raise ValueError(
+                "Cannot resolve 'keep_newer': one or both memories have unparseable timestamps."
+            )
+        if t1 >= t2:
             await memory_core.forget(conflicting_id, cascade=True)
             result["action"] = f"Deleted older memory {conflicting_id}."
             result["deleted"] = conflicting_id
@@ -893,6 +897,8 @@ async def consolidate(
     Returns:
         Dictionary with consolidation statistics.
     """
+    if min_cluster_size < 1:
+        raise ValueError("min_cluster_size must be >= 1")
     memory_core = await _get_memory_core()
     from mnemotree.experimental.consolidation import ConsolidationConfig
 
