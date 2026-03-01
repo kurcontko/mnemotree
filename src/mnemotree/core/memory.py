@@ -10,10 +10,6 @@ from uuid import uuid4
 if TYPE_CHECKING:
     from .intent import IntentClassifier
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
 from ..analysis.clustering import ClusteringResult, MemoryClusterer
 from ..analysis.keywords import KeywordExtractor, SpacyKeywordExtractor
 from ..analysis.memory_analyzer import MemoryAnalyzer
@@ -195,8 +191,8 @@ class MemoryCore:
     def __init__(
         self,
         store: MemoryCRUDStore,
-        llm: BaseLanguageModel | None = None,
-        embeddings: Embeddings | None = None,
+        llm: Any | None = None,
+        embeddings: Any | None = None,
         *,
         retriever: Retriever | None = None,
         mode_defaults: ModeDefaultsConfig | None = None,
@@ -2207,8 +2203,8 @@ class MemoryCore:
     def _init_embeddings_and_analysis(
         self,
         *,
-        llm: BaseLanguageModel | None,
-        embeddings: Embeddings | None,
+        llm: Any | None,
+        embeddings: Any | None,
     ) -> None:
         self.llm = llm
         if embeddings is None:
@@ -2394,13 +2390,15 @@ class MemoryCore:
             )
         return RetrieverFactory.create_basic(**common_retrieval_args)
 
-    def _resolve_embeddings(self, mode: MemoryMode) -> Embeddings:
+    def _resolve_embeddings(self, mode: MemoryMode) -> Any:
         if mode == "lite":
             lite_model = os.getenv(
                 "MNEMOTREE_LITE_EMBEDDING_MODEL",
                 "sentence-transformers/all-MiniLM-L6-v2",
             )
             return LocalSentenceTransformerEmbeddings(model_name=lite_model)
+
+        from langchain_openai import OpenAIEmbeddings
 
         openai_base_url = os.getenv("OPENAI_BASE_URL")
         openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
@@ -2411,12 +2409,14 @@ class MemoryCore:
 
     def _resolve_analyzer_and_summarizer(
         self,
-        llm: BaseLanguageModel | None,
-        embeddings: Embeddings,
+        llm: Any,
+        embeddings: Any,
     ) -> tuple[MemoryAnalyzer | None, Summarizer | None]:
         should_enable_llm_defaults = self.default_analyze or self.default_summarize
 
         if self.mode == "pro" and llm is None and should_enable_llm_defaults:
+            from langchain_openai import ChatOpenAI
+
             openai_base_url = os.getenv("OPENAI_BASE_URL")
             openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
             openai_client_kwargs: dict[str, Any] = (

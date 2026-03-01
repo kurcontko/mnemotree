@@ -7,12 +7,9 @@ the vector search space before embedding lookup.
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol
+from typing import Any, Protocol
 
 from .models import MemoryType
-
-if TYPE_CHECKING:
-    from langchain_core.language_models.base import BaseLanguageModel
 
 __all__ = [
     "RetrievalIntent",
@@ -84,7 +81,7 @@ Intent (one word):""".strip()
 class LLMIntentClassifier:
     """Few-shot LLM-based classifier. Requires an LLM (pro mode)."""
 
-    def __init__(self, llm: BaseLanguageModel) -> None:
+    def __init__(self, llm: Any) -> None:
         self.llm = llm
 
     async def classify(self, query: str) -> RetrievalIntent:

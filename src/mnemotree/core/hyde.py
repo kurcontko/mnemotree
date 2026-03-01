@@ -6,8 +6,7 @@ and embed that. This bridges the lexical gap between queries and stored memories
 
 from __future__ import annotations
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
+from typing import Any
 
 __all__ = ["HyDEEmbedder"]
 
@@ -21,7 +20,7 @@ Ideal memory:""".strip()
 class HyDEEmbedder:
     """Wraps an embedder to use hypothetical document embeddings instead of raw query."""
 
-    def __init__(self, llm: BaseLanguageModel, embedder: Embeddings) -> None:
+    def __init__(self, llm: Any, embedder: Any) -> None:
         self.llm = llm
         self.embedder = embedder
 

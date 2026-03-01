@@ -5,9 +5,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal  # noqa: F401 — Any used for adaptive_decay type
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
-
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER
 from ..store.protocols import MemoryCRUDStore
@@ -23,6 +20,7 @@ from .memory import (
     ScoringConfig,
 )
 from .models import MemoryItem
+from .protocols import EmbeddingModel, LLMBackend
 from .scoring import MemoryScoring
 
 _DEFAULT_DB_PATH = ".mnemotree/mnemotree.sqlite"
@@ -33,8 +31,8 @@ class MemoryCoreBuilder:
 
     def __init__(self, store: MemoryCRUDStore) -> None:
         self._store = store
-        self._llm: BaseLanguageModel | None = None
-        self._embeddings: Embeddings | None = None
+        self._llm: LLMBackend | None = None
+        self._embeddings: EmbeddingModel | None = None
         self._mode_defaults = ModeDefaultsConfig()
         self._ner_config = NerConfig()
         self._scoring_config = ScoringConfig()
@@ -83,11 +81,11 @@ class MemoryCoreBuilder:
         self._mode_defaults = replace(self._mode_defaults, mode=mode)
         return self
 
-    def with_llm(self, llm: BaseLanguageModel | None) -> MemoryCoreBuilder:
+    def with_llm(self, llm: LLMBackend | None) -> MemoryCoreBuilder:
         self._llm = llm
         return self
 
-    def with_embeddings(self, embeddings: Embeddings | None) -> MemoryCoreBuilder:
+    def with_embeddings(self, embeddings: EmbeddingModel | None) -> MemoryCoreBuilder:
         self._embeddings = embeddings
         return self
 

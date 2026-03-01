@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-
-from langchain_core.language_models.base import BaseLanguageModel
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ _COMPOUND_MARKERS = [
 class FactDecomposer:
     """Splits compound content into atomic independent facts using an LLM."""
 
-    def __init__(self, llm: BaseLanguageModel, max_facts: int = 10) -> None:
+    def __init__(self, llm: Any, max_facts: int = 10) -> None:
         self.llm = llm
         self.max_facts = max_facts
 

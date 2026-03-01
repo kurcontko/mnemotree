@@ -14,7 +14,6 @@ from typing import Any
 from uuid import uuid4
 
 import numpy as np
-from langchain_core.language_models.base import BaseLanguageModel
 from sklearn.cluster import DBSCAN, AgglomerativeClustering
 
 from ..analysis.clustering import MemoryClusterer
@@ -79,7 +78,7 @@ class MemoryConsolidator:
 
     def __init__(
         self,
-        llm: BaseLanguageModel,
+        llm: Any,
         clusterer: MemoryClusterer | None = None,
         config: ConsolidationConfig | None = None,
     ):

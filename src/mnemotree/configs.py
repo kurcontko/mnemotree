@@ -6,10 +6,7 @@ This module provides pre-configured setups optimized for specific scenarios.
 
 import os
 from dataclasses import dataclass
-
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from typing import Any
 
 from mnemotree.core import MemoryCore
 from mnemotree.core.adaptive import (
@@ -37,8 +34,8 @@ class MemorySystemConfig:
     """Complete configuration for a memory system."""
 
     # Core
-    llm: BaseLanguageModel | None = None
-    embeddings: Embeddings | None = None
+    llm: Any | None = None
+    embeddings: Any | None = None
 
     # Retrieval
     use_hybrid_retrieval: bool = True
@@ -67,6 +64,8 @@ class MemorySystemConfig:
 
         # Initialize LLM and embeddings if not provided.
         # Prefer explicit constructor args; otherwise fall back to env-configured defaults.
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
         llm = self.llm or ChatOpenAI(
             model=os.getenv("MNEMOTREE_LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4",
             temperature=float(os.getenv("MNEMOTREE_LLM_TEMPERATURE", "0.7")),

@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
-from langchain_core.embeddings.embeddings import Embeddings
-
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER
 from ..rerankers import BaseReranker
@@ -25,6 +23,7 @@ from ._internal.indexing import IndexManager
 from ._internal.scoring import MemoryScorer, SignalRanker, cosine_similarity
 from .models import LinkType, MemoryItem
 from .ppr import PPRConfig, build_adjacency_from_links, personalized_pagerank
+from .protocols import EmbeddingModel
 from .query import MemoryQuery, MemoryQueryBuilder
 from .scoring import MemoryScoring
 
@@ -126,7 +125,7 @@ class BaseRetriever:
         scoring_system: MemoryScoring,
         ner: BaseNER | None,
         keyword_extractor: KeywordExtractor | None,
-        embedder: Embeddings,
+        embedder: EmbeddingModel | None,
         index_manager: IndexManager | None = None,
         hyde_embedder: Any = None,
     ) -> None:
@@ -380,7 +379,7 @@ class HybridRetriever(BaseRetriever):
         rerank_candidates: int = 50,
         # Allow standalone mode (retrieve() only) without store/embedder.
         store: MemoryCRUDStore | None = None,
-        embedder: Embeddings | None = None,
+        embedder: EmbeddingModel | None = None,
         ner: BaseNER | None = None,
         keyword_extractor: KeywordExtractor | None = None,
         scoring_system: MemoryScoring | None = None,

@@ -2,10 +2,12 @@
 import json
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 from uuid import uuid4
 
-from langchain.schema import Document
+if TYPE_CHECKING:
+    from langchain.schema import Document
+
 from pydantic import BaseModel, Field, field_validator
 
 

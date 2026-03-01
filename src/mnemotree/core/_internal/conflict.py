@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import logging
-
-from langchain_core.language_models.base import BaseLanguageModel
+from typing import Any
 
 from ..models import MemoryItem
 
@@ -29,7 +28,7 @@ _NEGATION_WORDS = frozenset(
 class ConflictDetector:
     """Detects semantic conflicts between memories using heuristics and optional LLM verification."""
 
-    def __init__(self, llm: BaseLanguageModel | None = None) -> None:
+    def __init__(self, llm: Any | None = None) -> None:
         self.llm = llm
 
     async def detect(

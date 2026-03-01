@@ -8,7 +8,7 @@ Reference: EMNLP 2025 — Multi-Step RAG, +10–30% on compound queries.
 
 from __future__ import annotations
 
-from langchain_core.language_models.base import BaseLanguageModel
+from typing import Any
 
 from .models import MemoryItem
 from .retrieval import rrf_fuse
@@ -25,7 +25,7 @@ Question: {query}""".strip()
 class QueryDecomposer:
     """Decomposes a compound query into independent sub-queries via LLM."""
 
-    def __init__(self, llm: BaseLanguageModel, max_sub_queries: int = 4) -> None:
+    def __init__(self, llm: Any, max_sub_queries: int = 4) -> None:
         self.llm = llm
         self.max_sub_queries = max_sub_queries
 

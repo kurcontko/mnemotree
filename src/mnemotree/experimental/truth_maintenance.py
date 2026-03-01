@@ -15,7 +15,6 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from langchain_core.language_models.base import BaseLanguageModel
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.models import MemoryItem
@@ -134,7 +133,7 @@ class ClaimsRegistry:
 
     def __init__(
         self,
-        llm: BaseLanguageModel | None = None,
+        llm: Any | None = None,
         staleness_threshold_days: int = 90,
         confidence_threshold: float = 0.3,
     ):

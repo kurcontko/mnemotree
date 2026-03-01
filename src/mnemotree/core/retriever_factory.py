@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.embeddings.embeddings import Embeddings
-
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER
 from ..rerankers import BaseReranker
 from ..store.protocols import MemoryCRUDStore
 from ._internal.indexing import IndexManager
+from .protocols import EmbeddingModel
 from .retrieval import FusionStrategy, HybridRetriever, Retriever, VectorEntityRetriever
 from .scoring import MemoryScoring
 
@@ -23,7 +22,7 @@ class RetrieverFactory:
         scoring_system: MemoryScoring,
         ner: BaseNER | None,
         keyword_extractor: KeywordExtractor | None,
-        embedder: Embeddings,
+        embedder: EmbeddingModel,
         index_manager: IndexManager | None = None,
         hyde_embedder: Any = None,
     ) -> Retriever:
@@ -44,7 +43,7 @@ class RetrieverFactory:
         scoring_system: MemoryScoring,
         ner: BaseNER | None,
         keyword_extractor: KeywordExtractor | None,
-        embedder: Embeddings,
+        embedder: EmbeddingModel,
         index_manager: IndexManager | None = None,
         fusion_strategy: FusionStrategy = FusionStrategy.RRF,
         reranker: BaseReranker | None = None,
