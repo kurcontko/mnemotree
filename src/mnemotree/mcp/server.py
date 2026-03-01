@@ -684,11 +684,19 @@ async def suggest_links(
         if isinstance(suggestion, dict):
             entry = suggestion
         elif isinstance(suggestion, tuple) and len(suggestion) >= 2:
-            target_memory, score = suggestion[0], suggestion[1]
+            # suggest_links returns (MemoryItem, LinkType, score, reason|None)
+            target_memory = suggestion[0]
+            link_type = suggestion[1] if len(suggestion) > 1 else None
+            score = suggestion[2] if len(suggestion) > 2 else 0.0
+            reason = suggestion[3] if len(suggestion) > 3 else None
             entry = {
                 "target_id": target_memory.memory_id if isinstance(target_memory, MemoryItem) else str(target_memory),
                 "score": float(score),
             }
+            if link_type is not None:
+                entry["link_type"] = link_type.value if hasattr(link_type, "value") else str(link_type)
+            if reason:
+                entry["reason"] = reason
             if isinstance(target_memory, MemoryItem):
                 entry["snippet"] = _memory_snippet(target_memory)
                 entry["memory_type"] = target_memory.memory_type.value

@@ -1282,3 +1282,65 @@ async def test_consolidate_tool(monkeypatch):
     assert result["semantic_memories_created"] == 2
     assert result["dry_run"] is True
     memory_core.consolidate.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_observe_tool(monkeypatch):
+    memory_core = MagicMock()
+    memory_core.observe = AsyncMock(return_value=["obs-1", "obs-2"])
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.observe(
+        content="I work at Acme Corp and love Python",
+        user_id="u1",
+        conversation_id="c1",
+    )
+
+    assert result["observations_stored"] == 2
+    assert result["memory_ids"] == ["obs-1", "obs-2"]
+    memory_core.observe.assert_called_once_with(
+        "I work at Acme Corp and love Python",
+        user_id="u1",
+        conversation_id="c1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_observe_tool_no_observations(monkeypatch):
+    memory_core = MagicMock()
+    memory_core.observe = AsyncMock(return_value=[])
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.observe(content="hi")
+    assert result["observations_stored"] == 0
+    assert result["memory_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_suggest_links_tool(monkeypatch):
+    from mnemotree.core.models import LinkType
+    from mnemotree.store.protocols import SupportsKnowledgeGraph
+
+    target = MemoryItem(
+        memory_id="target-1",
+        content="Related memory content",
+        memory_type=MemoryType.SEMANTIC,
+        importance=0.7,
+        timestamp=str(DEFAULT_TIMESTAMP),
+        embedding=[0.1, 0.2],
+    )
+    # suggest_links returns list[tuple[MemoryItem, LinkType, float, str|None]]
+    mock_store = MagicMock(spec=SupportsKnowledgeGraph)
+    mock_store.suggest_links = AsyncMock(
+        return_value=[(target, LinkType.SIMILAR_TO, 0.85, None)]
+    )
+
+    memory_core = MagicMock()
+    memory_core.store = mock_store
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.suggest_links(memory_id="mem-1", limit=3)
+    assert len(result) == 1
+    assert result[0]["target_id"] == "target-1"
+    assert result[0]["score"] == 0.85
+    assert result[0]["memory_type"] == "semantic"
