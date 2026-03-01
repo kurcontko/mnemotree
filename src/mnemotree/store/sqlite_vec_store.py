@@ -24,6 +24,7 @@ from ._records import sqlite_memory_from_row, sqlite_record_from_memory
 from ._schema import (
     create_sqlite_schema,
     ensure_sqlite_vector_table,
+    migrate_sqlite_add_stability,
     migrate_sqlite_phase1_fields,
 )
 from .base import BaseMemoryStore
@@ -118,6 +119,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             collection_name=self.collection_name,
             meta_table=self._meta_table,
         )
+        migrate_sqlite_add_stability(conn, self.collection_name)
         migrate_sqlite_phase1_fields(conn, self.collection_name)
         conn.execute(
             f"""
