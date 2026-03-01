@@ -39,7 +39,7 @@ jobs:
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
-          gemini_model: 'gemini-2.5-pro'
+          gemini_model: 'gemini-2.5-flash'
           prompt: '/gemini-review'
           settings: |-
             {
