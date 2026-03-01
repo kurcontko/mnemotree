@@ -1183,6 +1183,35 @@ async def test_resolve_conflict_keep_newer(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_resolve_conflict_keep_newer_unparseable_timestamps(monkeypatch):
+    """keep_newer raises ValueError when timestamps cannot be parsed."""
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP)
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP)
+    # Corrupt timestamps so coerce_datetime returns None
+    m1.timestamp = "not-a-date"  # type: ignore[assignment]
+    m2.timestamp = "also-not-a-date"  # type: ignore[assignment]
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+
+    memory_core = MagicMock(store=store)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="unparseable timestamps"):
+        await server.resolve_conflict("m1", "m2", resolution="keep_newer")
+
+
+@pytest.mark.asyncio
+async def test_consolidate_rejects_invalid_min_cluster_size(monkeypatch):
+    """consolidate raises ValueError for min_cluster_size < 1."""
+    memory_core = MagicMock()
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="min_cluster_size must be >= 1"):
+        await server.consolidate(min_cluster_size=0)
+
+
+@pytest.mark.asyncio
 async def test_resolve_conflict_supersede(monkeypatch):
     from mnemotree.core.models import LinkType, MemoryLink
 
