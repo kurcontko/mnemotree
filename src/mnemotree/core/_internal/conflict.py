@@ -51,7 +51,7 @@ class ConflictDetector:
         return results
 
     def _heuristic_conflict(self, a: MemoryItem, b: MemoryItem) -> bool:
-        shared = set(a.entities) & set(b.entities)
+        shared = set(a.entities or {}) & set(b.entities or {})
         if not shared:
             return False
         combined = (a.content + " " + b.content).lower().split()

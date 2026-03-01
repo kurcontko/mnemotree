@@ -30,6 +30,8 @@ class DedupChecker:
         limit: int = 3,
     ) -> tuple[MemoryItem, float] | None:
         """Return the best-matching existing memory and its cosine similarity if above threshold."""
+        if not embedding:
+            return None
         candidates = await self.retrieval.recall(
             query=content,
             limit=limit,

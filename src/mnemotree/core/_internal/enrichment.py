@@ -116,7 +116,7 @@ class StandardEnrichmentPipeline:
         )
 
         # Process results
-        embedding = results_by_key["embedding"]
+        embedding = results_by_key["embedding"] or []
         ner_result = results_by_key.get("ner")
         entities, entity_mentions = self._resolve_entities(ner_result, text=content)
 

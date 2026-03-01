@@ -29,6 +29,9 @@ class HyDEEmbedder:
         return await self.embedder.aembed_query(hypothetical or query)
 
     async def _generate(self, query: str) -> str:
-        response = await self.llm.ainvoke(_HYDE_PROMPT.format(query=query))
-        content = response.content if hasattr(response, "content") else str(response)
-        return content.strip()
+        try:
+            response = await self.llm.ainvoke(_HYDE_PROMPT.format(query=query))
+            content = (response.content if hasattr(response, "content") else str(response)) or ""
+            return content.strip()
+        except Exception:
+            return ""
