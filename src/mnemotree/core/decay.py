@@ -33,6 +33,12 @@ class ForgettingCurve:
     decay_power: float = 0.5
     target_retention: float = 0.9
 
+    def __post_init__(self) -> None:
+        if self.decay_power <= 0:
+            raise ValueError("decay_power must be positive")
+        if not (0 < self.target_retention < 1):
+            raise ValueError("target_retention must be between 0 and 1 (exclusive)")
+
     @property
     def factor(self) -> float:
         """Derive factor so R(S) = target_retention."""
@@ -206,7 +212,7 @@ class StabilityUpdater:
             Updated stability in seconds, capped at max_stability_seconds.
         """
         if current_stability <= 0:
-            return current_stability
+            return 0.0
 
         exponent = self.sensitivity * (1.0 - retrievability)
         # Clamp exponent to avoid overflow

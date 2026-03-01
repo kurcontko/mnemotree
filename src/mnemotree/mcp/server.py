@@ -490,7 +490,13 @@ async def update_memory(
     content_updated = False
 
     if "content" in patch:
-        memory.content = str(patch["content"])
+        raw = patch["content"]
+        if raw is None:
+            raise ValueError("content cannot be null.")
+        content_str = str(raw).strip()
+        if not content_str:
+            raise ValueError("content cannot be empty.")
+        memory.content = content_str
         content_updated = True
     if "summary" in patch:
         memory.summary = patch["summary"]

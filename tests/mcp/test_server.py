@@ -1368,3 +1368,28 @@ async def test_suggest_links_tool(monkeypatch):
     assert result[0]["target_id"] == "target-1"
     assert result[0]["score"] == 0.85
     assert result[0]["memory_type"] == "semantic"
+
+
+# ---------------------------------------------------------------------------
+# update_memory content validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_memory_content_null_raises(mock_memory_core_with_store):
+    """Patching content with None should raise, not store 'None' string."""
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    mock_memory_core_with_store(memory=memory)
+
+    with pytest.raises(ValueError, match="content cannot be null"):
+        await server.update_memory(memory_id="mem-1", patch={"content": None})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_content_empty_raises(mock_memory_core_with_store):
+    """Patching content with empty string should raise."""
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    mock_memory_core_with_store(memory=memory)
+
+    with pytest.raises(ValueError, match="content cannot be empty"):
+        await server.update_memory(memory_id="mem-1", patch={"content": "  "})

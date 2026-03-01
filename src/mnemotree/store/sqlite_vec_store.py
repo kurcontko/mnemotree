@@ -315,7 +315,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
 
     async def store_memory(self, memory: MemoryItem) -> None:
         await self.initialize()
-        if memory.embedding is None:
+        if not memory.embedding:
             raise ValueError("SQLiteVecMemoryStore requires embeddings to store memories.")
 
         start = time.perf_counter()

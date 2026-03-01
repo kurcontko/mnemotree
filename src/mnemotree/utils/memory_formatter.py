@@ -55,7 +55,8 @@ class MemoryItemStrategy(FormattingStrategy):
         return memory.content
 
     def get_metadata(self, memory: MemoryItem) -> tuple[str, str, list[str]]:
-        return (memory.timestamp.isoformat(), memory.memory_type.value, memory.tags)
+        ts = memory.timestamp.isoformat() if hasattr(memory.timestamp, "isoformat") else str(memory.timestamp or "")
+        return (ts, memory.memory_type.value, memory.tags or [])
 
 
 class MemoryFormatter:
