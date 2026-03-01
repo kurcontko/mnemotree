@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import sqlite3
 import time
@@ -1188,6 +1189,8 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                     # Convert L2 distance to a 0-1 similarity score
                     # Using 1/(1+dist) as a simple conversion
                     dist = row["dist"]
+                    if not isinstance(dist, (int, float)) or not math.isfinite(dist):
+                        continue
                     similarity = 1.0 / (1.0 + dist)
                     if similarity < min_similarity:
                         continue
