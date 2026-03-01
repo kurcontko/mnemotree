@@ -88,11 +88,9 @@ class StandardEnrichmentPipeline:
             tasks["ner"] = asyncio.create_task(self.ner.extract_entities(content))
         if self.keyword_extractor:
             tasks["keywords"] = asyncio.create_task(self.keyword_extractor.extract(content))
-        if summarize:
-            assert self.summarizer is not None
+        if summarize and self.summarizer is not None:
             tasks["summary"] = asyncio.create_task(self.summarizer.summarize(content))
-        if analyze:
-            assert self.analyzer is not None
+        if analyze and self.analyzer is not None:
             tasks["analysis"] = asyncio.create_task(self.analyzer.analyze(content, context))
 
         # Execute — use return_exceptions so a single task failure

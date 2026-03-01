@@ -692,7 +692,8 @@ class HybridRetriever(BaseRetriever):
         Uses the MAGMA four-graph pattern: each graph dimension is traversed
         independently, then results are merged with depth-based scoring.
         """
-        assert isinstance(self.store, SupportsKnowledgeGraph)
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            return []
         seed_ids = [m.memory_id for m in seed_memories[:5]]  # Limit seeds
 
         # Traverse three explicit graph dimensions in parallel
