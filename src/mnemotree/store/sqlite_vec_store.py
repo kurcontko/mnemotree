@@ -480,6 +480,8 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 offset = query.offset or 0
 
                 if query.vector is not None:
+                    if self._embedding_dim is None:
+                        return []  # No vector table yet
                     vector_blob = sqlite_vec.serialize_float32(query.vector)
                     # Use KNN MATCH syntax (sqlite-vec requires this)
                     # Fetch extra candidates to allow for post-filter + offset
@@ -522,6 +524,8 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         filters: dict[str, Any] | None = None,
     ) -> list[MemoryItem]:
         await self.initialize()
+        if self._embedding_dim is None:
+            return []  # No vector table yet — no memories to search
         start = time.perf_counter()
         async with self._lock:
             conn = self._require_conn()
