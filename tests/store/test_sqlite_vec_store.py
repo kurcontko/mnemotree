@@ -222,6 +222,49 @@ async def test_sqlite_vec_query_memories_with_vector(tmp_path, memory_item):
 
 
 @pytest.mark.asyncio
+async def test_sqlite_vec_get_similar_with_filters(tmp_path, memory_item):
+    """Test get_similar_memories with metadata filters + KNN MATCH."""
+    dim = 4
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=dim)
+    await store.initialize()
+
+    try:
+        from mnemotree.core.models import MemoryType
+
+        mem1 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-1",
+                "content": "Semantic memory",
+                "memory_type": MemoryType.SEMANTIC,
+                "embedding": [1.0, 0.0, 0.0, 0.0],
+            }
+        )
+        mem2 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-2",
+                "content": "Episodic memory",
+                "memory_type": MemoryType.EPISODIC,
+                "embedding": [0.9, 0.1, 0.0, 0.0],
+            }
+        )
+        await store.store_memory(mem1)
+        await store.store_memory(mem2)
+
+        # Filter to only semantic — should return only mem1
+        results = await store.get_similar_memories(
+            query="test",
+            query_embedding=[1.0, 0.0, 0.0, 0.0],
+            top_k=5,
+            filters={"memory_type": "semantic"},
+        )
+        assert len(results) == 1
+        assert results[0].memory_id == "mem-1"
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
 async def test_sqlite_vec_query_by_entities(tmp_path, memory_item):
     """Test querying memories by entities with entity index."""
     db_path = tmp_path / "memories.sqlite"
