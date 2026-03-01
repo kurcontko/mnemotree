@@ -64,19 +64,24 @@ class MemorySystemConfig:
 
         # Initialize LLM and embeddings if not provided.
         # Prefer explicit constructor args; otherwise fall back to env-configured defaults.
-        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        # PydanticAI model strings are used when [analysis] extra is installed.
+        if self.llm is not None:
+            llm = self.llm
+        else:
+            llm = (
+                os.getenv("MNEMOTREE_LLM_MODEL")
+                or os.getenv("OPENAI_MODEL")
+                or "openai:gpt-4o"
+            )
 
-        llm = self.llm or ChatOpenAI(
-            model=os.getenv("MNEMOTREE_LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4",
-            temperature=float(os.getenv("MNEMOTREE_LLM_TEMPERATURE") or "0.7"),
-        )
-
-        embedding_model = os.getenv("MNEMOTREE_EMBEDDING_MODEL") or os.getenv(
-            "OPENAI_EMBEDDING_MODEL"
-        )
-        embeddings = self.embeddings or (
-            OpenAIEmbeddings(model=embedding_model) if embedding_model else OpenAIEmbeddings()
-        )
+        if self.embeddings is not None:
+            embeddings = self.embeddings
+        else:
+            embeddings = (
+                os.getenv("MNEMOTREE_EMBEDDING_MODEL")
+                or os.getenv("OPENAI_EMBEDDING_MODEL")
+                or "openai:text-embedding-3-small"
+            )
 
         retrieval_config = RetrievalConfig(
             retrieval_mode="hybrid" if self.use_hybrid_retrieval else "basic",

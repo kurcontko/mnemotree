@@ -5,9 +5,6 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal, overload
 from uuid import uuid4
 
-if TYPE_CHECKING:
-    from langchain.schema import Document
-
 from pydantic import BaseModel, Field, field_validator
 
 

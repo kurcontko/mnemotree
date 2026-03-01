@@ -9,10 +9,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
-try:
-    from langchain_core.embeddings.embeddings import Embeddings as _EmbeddingsBase
-except ImportError:
-    _EmbeddingsBase = object  # type: ignore[assignment,misc]
+from .._protocols import AsyncEmbeddingModel
 
 
 @dataclass
@@ -23,7 +20,7 @@ class CacheEntry:
     expires_at: float
 
 
-class CachedEmbeddings(_EmbeddingsBase):
+class CachedEmbeddings:
     """Wrapper that caches embeddings with TTL-based LRU eviction.
 
     This reduces latency for repeated content by avoiding redundant
@@ -46,7 +43,7 @@ class CachedEmbeddings(_EmbeddingsBase):
 
     def __init__(
         self,
-        embedder: Any,
+        embedder: AsyncEmbeddingModel,
         *,
         max_size: int = 1000,
         ttl_seconds: float = 3600.0,

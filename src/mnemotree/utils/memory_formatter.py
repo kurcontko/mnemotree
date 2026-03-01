@@ -3,11 +3,12 @@ from __future__ import annotations
 import textwrap
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Protocol
-
-from langchain.schema import Document
+from typing import TYPE_CHECKING, Any, Protocol
 
 from ..core.models import MemoryItem
+
+if TYPE_CHECKING:
+    from langchain.schema import Document
 
 
 class MemoryLike(Protocol):
@@ -30,19 +31,19 @@ class FormattingStrategy(ABC):
     """Abstract base class for different memory formatting strategies"""
 
     @abstractmethod
-    def get_content(self, item: Document | MemoryItem) -> str:
+    def get_content(self, item: Any) -> str:
         """Get the main content from the memory item"""
 
     @abstractmethod
-    def get_metadata(self, item: Document | MemoryItem) -> tuple[str, str, list[str]]:
+    def get_metadata(self, item: Any) -> tuple[str, str, list[str]]:
         """Get metadata (timestamp, memory_type, tags) from the memory item"""
 
 
 class LangchainDocumentStrategy(FormattingStrategy):
-    def get_content(self, doc: Document) -> str:
+    def get_content(self, doc: Any) -> str:
         return doc.page_content
 
-    def get_metadata(self, doc: Document) -> tuple[str, str, list[str]]:
+    def get_metadata(self, doc: Any) -> tuple[str, str, list[str]]:
         return (
             doc.metadata.get("timestamp", "N/A"),
             doc.metadata.get("memory_type", "general"),
@@ -59,11 +60,21 @@ class MemoryItemStrategy(FormattingStrategy):
         return (ts, memory.memory_type.value, memory.tags or [])
 
 
+def _is_langchain_document(item: object) -> bool:
+    """Check if item is a LangChain Document without importing langchain at module level."""
+    return (
+        type(item).__name__ == "Document"
+        and hasattr(item, "page_content")
+        and hasattr(item, "metadata")
+    )
+
+
 class MemoryFormatter:
     def __init__(self, indent_size: int = 2, wrap_width: int = 80):
         self.indent_size = indent_size
         self.wrap_width = wrap_width
-        self.strategies = {Document: LangchainDocumentStrategy(), MemoryItem: MemoryItemStrategy()}
+        self._memory_item_strategy = MemoryItemStrategy()
+        self._langchain_strategy = LangchainDocumentStrategy()
 
     def _wrap_text(self, text: str, initial_indent: str, subsequent_indent: str) -> str:
         """Wrap text with proper indentation"""
@@ -76,14 +87,15 @@ class MemoryFormatter:
             break_on_hyphens=False,
         )
 
-    def _get_strategy(self, item: Document | MemoryItem) -> FormattingStrategy:
+    def _get_strategy(self, item: Any) -> FormattingStrategy:
         """Get the appropriate formatting strategy for the item type"""
-        strategy = self.strategies.get(type(item))
-        if not strategy:
-            raise ValueError(f"Unsupported memory type: {type(item)}")
-        return strategy
+        if isinstance(item, MemoryItem):
+            return self._memory_item_strategy
+        if _is_langchain_document(item):
+            return self._langchain_strategy
+        raise ValueError(f"Unsupported memory type: {type(item)}")
 
-    def format_single_memory(self, item: Document | MemoryItem, index: int) -> str:
+    def format_single_memory(self, item: Any, index: int) -> str:
         """Format a single memory entry with numbering"""
         strategy = self._get_strategy(item)
 
@@ -109,7 +121,7 @@ class MemoryFormatter:
 
         return f"{header}\n{wrapped_content}\n{tags_line}"
 
-    def format_memories(self, items: list[Document | MemoryItem]) -> str:
+    def format_memories(self, items: list[Any]) -> str:
         """Format multiple memory entries"""
         if not items:
             return "No memories available."

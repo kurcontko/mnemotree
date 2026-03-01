@@ -91,7 +91,7 @@ class MemoryConsolidator:
             config: Consolidation configuration
         """
         self.llm = llm
-        self.clusterer = clusterer or MemoryClusterer(summarizer=Summarizer(llm=llm))
+        self.clusterer = clusterer or MemoryClusterer(summarizer=Summarizer(model=llm))
         self.config = config or ConsolidationConfig()
 
     async def consolidate(

@@ -4,13 +4,9 @@ import asyncio
 
 import numpy as np
 
-try:
-    from langchain_core.embeddings.embeddings import Embeddings as _EmbeddingsBase
-except ImportError:
-    _EmbeddingsBase = object  # type: ignore[assignment,misc]
 
 
-class LocalSentenceTransformerEmbeddings(_EmbeddingsBase):
+class LocalSentenceTransformerEmbeddings:
     def __init__(
         self,
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",

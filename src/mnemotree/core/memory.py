@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import uuid4
 
+from .._protocols import AsyncEmbeddingModel as Embeddings, LLMBackend as BaseLanguageModel
+
 if TYPE_CHECKING:
     from .intent import IntentClassifier
 
@@ -2485,19 +2487,22 @@ class MemoryCore:
         should_enable_llm_defaults = self.default_analyze or self.default_summarize
 
         if self.mode == "pro" and llm is None and should_enable_llm_defaults:
-            from langchain_openai import ChatOpenAI
+            try:
+                from langchain_openai import ChatOpenAI
 
-            openai_base_url = os.getenv("OPENAI_BASE_URL")
-            openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-            openai_client_kwargs: dict[str, Any] = (
-                {"base_url": openai_base_url} if openai_base_url else {}
-            )
-            llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
+                openai_base_url = os.getenv("OPENAI_BASE_URL")
+                openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+                openai_client_kwargs: dict[str, Any] = (
+                    {"base_url": openai_base_url} if openai_base_url else {}
+                )
+                llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
+            except ImportError:
+                pass
         if llm is None:
             return None, None
         return (
-            MemoryAnalyzer(llm=llm, embeddings=embeddings),
-            Summarizer(llm=llm),
+            MemoryAnalyzer(model=llm, embeddings=embeddings),
+            Summarizer(model=llm),
         )
 
     def _resolve_importance_and_type(
