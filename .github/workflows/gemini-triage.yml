@@ -1,0 +1,78 @@
+name: '🏷️ Gemini Triage'
+
+on:
+  workflow_call:
+    inputs:
+      additional_context:
+        type: 'string'
+        description: 'Any additional context from the request'
+        required: false
+
+concurrency:
+  group: '${{ github.workflow }}-triage-${{ github.event.issue.number }}'
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  triage:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 5
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+      issues: 'write'
+      pull-requests: 'write'
+
+    steps:
+      - name: 'Checkout repository'
+        uses: 'actions/checkout@v4'
+
+      - name: 'Run Gemini issue triage'
+        uses: 'google-github-actions/run-gemini-cli@v0'
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          ISSUE_NUMBER: '${{ github.event.issue.number }}'
+          REPOSITORY: '${{ github.repository }}'
+          ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
+        with:
+          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+          gemini_model: 'gemini-2.5-flash'
+          prompt: |
+            You are a GitHub issue triage assistant for the Mnemotree project.
+            Repository: $REPOSITORY
+            Issue number: $ISSUE_NUMBER
+
+            Use the GitHub MCP tools to:
+            1. Read the issue with `issues.get`
+            2. Apply 1-3 appropriate labels from: bug, enhancement, backend:sqlite,
+               backend:chroma, backend:neo4j, backend:milvus, mcp, api, decay, docs,
+               good first issue, needs-reproduction
+            3. Post a single brief triage comment summarising: issue type, affected
+               component, suggested priority, and next steps.
+
+            Additional context: $ADDITIONAL_CONTEXT
+          settings: |-
+            {
+              "model": { "maxSessionTurns": 10 },
+              "telemetry": { "enabled": false },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": [
+                    "run", "-i", "--rm",
+                    "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server:v0.27.0"
+                  ],
+                  "includeTools": [
+                    "issues",
+                    "add_label"
+                  ],
+                  "env": {
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+                  }
+                }
+              }
+            }
