@@ -632,7 +632,7 @@ class MemoryCore:
                 intent = await self._intent_classifier.classify(content)
                 memory.contextual_intent = intent.value
             except Exception:
-                pass  # Intent is best-effort; don't block storage
+                logger.debug("Intent classification failed", exc_info=True)
 
         memory = await self._apply_pre_remember_hooks(memory)
         await self._persist_memory(memory, references, skip_store)
@@ -1416,7 +1416,7 @@ class MemoryCore:
                 )
             )
         if update_tasks:
-            await asyncio.gather(*update_tasks)
+            await asyncio.gather(*update_tasks, return_exceptions=True)
 
     async def reflect(
         self, query_builder: MemoryQueryBuilder | None = None, min_importance: float = 0.7
@@ -2117,7 +2117,7 @@ class MemoryCore:
                     )
 
         if update_tasks:
-            await asyncio.gather(*update_tasks)
+            await asyncio.gather(*update_tasks, return_exceptions=True)
 
         return stats
 

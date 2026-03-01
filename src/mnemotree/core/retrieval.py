@@ -745,7 +745,7 @@ class HybridRetriever(BaseRetriever):
                             sim = max(0.0, cosine_similarity(mem.embedding, query_embedding))
                         scored[mem.memory_id] = (mem, sim)
             except Exception:
-                pass
+                logger.debug("Entity graph query failed", exc_info=True)
 
         candidates = list(scored.values())
         candidates.sort(key=lambda x: x[1], reverse=True)
@@ -1060,7 +1060,7 @@ class SCMRAGRetriever(BaseRetriever):
                 ner_result = await self.ner.extract_entities(query)
                 query_entities = ner_result.entities or {}
             except Exception:
-                pass
+                logger.debug("NER extraction failed", exc_info=True)
 
         # Correction rounds
         for _ in range(self.max_correction_rounds):
