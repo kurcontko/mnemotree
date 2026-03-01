@@ -26,7 +26,7 @@ class HyDEEmbedder:
 
     async def aembed_query(self, query: str) -> list[float]:
         hypothetical = await self._generate(query)
-        return await self.embedder.aembed_query(hypothetical)
+        return await self.embedder.aembed_query(hypothetical or query)
 
     async def _generate(self, query: str) -> str:
         response = await self.llm.ainvoke(_HYDE_PROMPT.format(query=query))

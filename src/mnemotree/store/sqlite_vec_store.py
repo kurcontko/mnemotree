@@ -460,6 +460,31 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 )
                 raise
 
+    async def list_memories(
+        self,
+        *,
+        include_embeddings: bool = False,
+    ) -> list[MemoryItem]:
+        """List all memories in the store.
+
+        Args:
+            include_embeddings: Whether to include embedding vectors in results.
+
+        Returns:
+            List of all MemoryItem objects.
+        """
+        await self.initialize()
+        async with self._lock:
+            conn = self._require_conn()
+            rows = conn.execute(f'SELECT * FROM "{self.collection_name}"').fetchall()
+            memories = []
+            for row in rows:
+                memory = sqlite_memory_from_row(row)
+                if not include_embeddings:
+                    memory.embedding = None
+                memories.append(memory)
+            return memories
+
     async def query_memories(self, query: MemoryQuery) -> list[MemoryItem]:
         await self.initialize()
         if query.relationships:

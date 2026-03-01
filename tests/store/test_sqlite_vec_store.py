@@ -490,3 +490,40 @@ async def test_cascade_delete_removes_links(tmp_path, memory_item):
 
     finally:
         await store.close()
+
+
+@pytest.mark.asyncio
+async def test_list_memories(tmp_path, memory_item):
+    """list_memories should return all stored memories."""
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=len(memory_item.embedding))
+    await store.initialize()
+
+    try:
+        from mnemotree.core.models import MemoryItem, MemoryType
+
+        m2 = MemoryItem(
+            memory_id="mem-2",
+            content="second memory",
+            memory_type=MemoryType.EPISODIC,
+            importance=0.7,
+            embedding=memory_item.embedding,
+        )
+        await store.store_memory(memory_item)
+        await store.store_memory(m2)
+
+        # List without embeddings
+        memories = await store.list_memories(include_embeddings=False)
+        assert len(memories) == 2
+        ids = {m.memory_id for m in memories}
+        assert memory_item.memory_id in ids
+        assert "mem-2" in ids
+        assert all(m.embedding is None for m in memories)
+
+        # List with embeddings
+        memories_with_emb = await store.list_memories(include_embeddings=True)
+        assert len(memories_with_emb) == 2
+        assert any(m.embedding is not None for m in memories_with_emb)
+
+    finally:
+        await store.close()
