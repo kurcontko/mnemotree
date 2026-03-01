@@ -55,8 +55,11 @@ class MemoryClusterer:
             return ClusteringResult([], [], {}, {})
 
         if method.startswith("vector_"):
-            # Extract embeddings
-            embeddings = np.array([m.embedding for m in memories])
+            # Extract embeddings — filter out memories without embeddings
+            valid = [(i, m) for i, m in enumerate(memories) if m.embedding]
+            if not valid:
+                return ClusteringResult([], [], {}, {})
+            embeddings = np.array([m.embedding for _, m in valid])
 
             if method == "vector_dbscan":
                 clusters = await self._dbscan_clustering(
@@ -137,6 +140,8 @@ class MemoryClusterer:
         for i, mem1 in enumerate(memories):
             graph.add_node(i)
             for j, mem2 in enumerate(memories[i + 1 :], i + 1):
+                if not mem1.embedding or not mem2.embedding:
+                    continue
                 similarity = np.dot(mem1.embedding, mem2.embedding)
                 if similarity >= similarity_threshold:
                     graph.add_edge(i, j)

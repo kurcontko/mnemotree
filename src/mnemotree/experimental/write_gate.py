@@ -532,7 +532,9 @@ class ContextAwareWriteGate:
         if "important_topics" in context:
             # Check if memory mentions important topics
             topics = context["important_topics"]
-            if any(topic.lower() in memory.content.lower() for topic in topics):
+            if isinstance(topics, list) and any(
+                isinstance(t, str) and t.lower() in memory.content.lower() for t in topics
+            ):
                 relevance_score += 0.2
                 reasons.append("Mentions important topics")
 

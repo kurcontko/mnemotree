@@ -303,9 +303,9 @@ Summary:"""
             }
         )
 
-        if hasattr(result, "content"):
+        if hasattr(result, "content") and result.content:
             return result.content.strip()
-        return str(result).strip()
+        return str(result).strip() or "Summary unavailable"
 
     def _extract_common_tags(self, cluster: list[MemoryItem]) -> list[str]:
         """Extract tags that appear in multiple cluster memories."""

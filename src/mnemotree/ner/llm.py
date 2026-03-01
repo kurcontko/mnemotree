@@ -63,6 +63,8 @@ Text: {text}
             # Extract mentions (contexts) for each entity
             mentions: dict[str, list[str]] = {}
             for entity in entities:
+                if not entity.strip():
+                    continue
                 # Simple string matching for mentions
                 # Could be improved with more sophisticated matching
                 start = 0
