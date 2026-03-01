@@ -108,7 +108,7 @@ class MnemotreeVectorMemory:
 
         messages = []
         for mem in memories:
-            role_str = mem.metadata.get("role", "user")
+            role_str = (mem.metadata or {}).get("role", "user")
             role = MessageRole.USER if role_str == "user" else MessageRole.ASSISTANT
 
             messages.append(

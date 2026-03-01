@@ -87,7 +87,7 @@ class MnemotreeChatMessageHistory(BaseChatMessageHistory):
         messages = []
         for mem in memories:
             # Parse message type from metadata
-            msg_type = mem.metadata.get("message_type", "human")
+            msg_type = (mem.metadata or {}).get("message_type", "human")
             if msg_type == "ai":
                 messages.append(AIMessage(content=mem.content))
             else:
@@ -105,7 +105,7 @@ class MnemotreeChatMessageHistory(BaseChatMessageHistory):
 
         messages = []
         for mem in memories:
-            msg_type = mem.metadata.get("message_type", "human")
+            msg_type = (mem.metadata or {}).get("message_type", "human")
             if msg_type == "ai":
                 messages.append(AIMessage(content=mem.content))
             else:
@@ -260,7 +260,7 @@ class LangChainMemoryAdapter(BaseMemory):
         if self.return_messages:
             messages = []
             for mem in relevant:
-                msg_type = mem.metadata.get("message_type", "human")
+                msg_type = (mem.metadata or {}).get("message_type", "human")
                 if msg_type == "ai":
                     messages.append(AIMessage(content=mem.content))
                 else:
