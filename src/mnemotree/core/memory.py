@@ -456,7 +456,8 @@ class MemoryCore:
             raise ValueError("remember_async does not support skip_store.")
         await self._ensure_ingestion_queue()
         queue = self._ingestion_queue
-        assert queue is not None
+        if queue is None:
+            raise RuntimeError("Failed to initialize ingestion queue")
         memory_id = memory_id or str(uuid4())
         timestamp = timestamp or datetime.now(timezone.utc)
         await queue.enqueue(

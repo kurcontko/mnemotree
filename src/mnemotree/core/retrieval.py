@@ -519,7 +519,11 @@ class HybridRetriever(BaseRetriever):
             memories = self.memory_scorer.rank(memories, query_embedding)
 
         if self.enable_rrf_signal_rerank and query_embedding:
-            query_keywords = await keyword_task if keyword_task else []
+            try:
+                query_keywords = await keyword_task if keyword_task else []
+            except Exception:
+                logger.debug("Keyword extraction failed, proceeding without keywords", exc_info=True)
+                query_keywords = []
             memories = self.signal_ranker.rank(
                 memories,
                 query_embedding,
@@ -764,7 +768,11 @@ class HybridRetriever(BaseRetriever):
         if rerank_limit <= 0:
             return memories
         rerank_slice = memories[:rerank_limit]
-        reranked_tuples = await self.reranker.rerank(query, rerank_slice)
+        try:
+            reranked_tuples = await self.reranker.rerank(query, rerank_slice)
+        except Exception:
+            logger.debug("Reranking failed, returning original order", exc_info=True)
+            return memories
         reranked = [memory for memory, _score in reranked_tuples]
         return reranked + memories[rerank_limit:]
 
