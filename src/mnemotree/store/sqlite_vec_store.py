@@ -481,15 +481,19 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
 
                 if query.vector is not None:
                     vector_blob = sqlite_vec.serialize_float32(query.vector)
+                    # Use KNN MATCH syntax (sqlite-vec requires this)
+                    # Fetch extra candidates to allow for post-filter + offset
+                    fetch_k = limit + offset + 50
                     sql = (
-                        f"SELECT m.*, distance(v.embedding, ?) AS distance "
+                        f"SELECT m.*, v.distance "
                         f'FROM "{self._vector_table}" v '
                         f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
-                        f"{where_sql} "
-                        "ORDER BY distance "
+                        f"WHERE v.embedding MATCH ? AND k = ? "
+                        f"{('AND ' + ' AND '.join(where_clauses)) if where_clauses else ''} "
+                        "ORDER BY v.distance "
                         "LIMIT ? OFFSET ?"
                     )
-                    rows = conn.execute(sql, [vector_blob, *params, limit, offset]).fetchall()
+                    rows = conn.execute(sql, [vector_blob, fetch_k, *params, limit, offset]).fetchall()
                 else:
                     sql = (
                         f'SELECT * FROM "{self.collection_name}" '
@@ -530,18 +534,20 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                             raise UnsupportedQueryError(f"Unsupported filter field: {key!r}")
                         where_clauses.append(f"{key} = ?")
                         params.append(normalize_filter_value(value))
-                where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
                 vector_blob = sqlite_vec.serialize_float32(query_embedding)
+                # Use KNN MATCH syntax (sqlite-vec requires this)
+                fetch_k = top_k + 50  # extra candidates for post-filtering
                 sql = (
-                    f"SELECT m.*, distance(v.embedding, ?) AS distance "
+                    f"SELECT m.*, v.distance "
                     f'FROM "{self._vector_table}" v '
                     f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
-                    f"{where_sql} "
-                    "ORDER BY distance "
+                    f"WHERE v.embedding MATCH ? AND k = ? "
+                    f"{('AND ' + ' AND '.join(where_clauses)) if where_clauses else ''} "
+                    "ORDER BY v.distance "
                     "LIMIT ?"
                 )
-                rows = conn.execute(sql, [vector_blob, *params, top_k]).fetchall()
+                rows = conn.execute(sql, [vector_blob, fetch_k, *params, top_k]).fetchall()
                 return [sqlite_memory_from_row(row) for row in rows]
             except (sqlite3.Error, json.JSONDecodeError, TypeError, ValueError):
                 logger.exception(
