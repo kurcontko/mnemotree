@@ -532,7 +532,7 @@ class MemoryCore:
                 memory=MemoryItem(
                     content=content,
                     memory_type=memory_type or MemoryType.SEMANTIC,
-                    importance=importance or 0.5,
+                    importance=importance if importance is not None else 0.5,
                     tags=tags or [],
                     embedding=enrichment.embedding,
                 ),
