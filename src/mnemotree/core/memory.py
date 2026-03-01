@@ -1490,6 +1490,54 @@ class MemoryCore:
             for mid, ann in annotations.items()
         }
 
+    async def observe(
+        self,
+        content: str,
+        *,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[str]:
+        """Extract observations from a conversation turn and store them.
+
+        Follows the Mastra OM pattern: the Observer writes facts without
+        doing any per-turn retrieval, achieving write-only latency.
+
+        Args:
+            content: The conversation turn text.
+            user_id: Optional user ID for stored memories.
+            conversation_id: Optional conversation ID.
+            context: Optional context dict passed to the observer.
+
+        Returns:
+            List of memory IDs for stored observations.
+        """
+        from .observer import MemoryObserver
+
+        observer = MemoryObserver(llm=self.llm)
+        observations = await observer.observe(
+            content, context=context, user_id=user_id
+        )
+
+        memory_ids: list[str] = []
+        uid = user_id or self.default_user_id
+        cid = conversation_id or self.default_conversation_id
+        for obs in observations:
+            memory = await self.remember(
+                obs.content,
+                memory_type=obs.memory_type,
+                importance=obs.importance,
+                tags=obs.tags,
+                user_id=uid,
+                conversation_id=cid,
+                source=obs.source,
+            )
+            # Set observation_date on the stored memory
+            if obs.observation_date and hasattr(memory, "observation_date"):
+                memory.observation_date = obs.observation_date
+            memory_ids.append(memory.memory_id)
+        return memory_ids
+
     async def connect(
         self,
         memory_id: str,

@@ -923,6 +923,37 @@ async def judge_conflicts(
     }
 
 
+async def observe(
+    content: str,
+    user_id: str | None = None,
+    conversation_id: str | None = None,
+) -> dict[str, Any]:
+    """Extract and store observations from a conversation turn (Mastra OM pattern).
+
+    The observer extracts memorable facts from the content and stores them
+    as episodic memories. No per-turn retrieval is performed — write-only
+    for minimal latency.
+
+    Args:
+        content: The conversation turn text to observe.
+        user_id: Optional user ID for stored memories.
+        conversation_id: Optional conversation ID.
+
+    Returns:
+        Dictionary with observation results including stored memory IDs.
+    """
+    memory_core = await _get_memory_core()
+    memory_ids = await memory_core.observe(
+        content,
+        user_id=user_id,
+        conversation_id=conversation_id,
+    )
+    return {
+        "observations_stored": len(memory_ids),
+        "memory_ids": memory_ids,
+    }
+
+
 def link_types() -> list[str]:
     """Return all supported link type values.
 
@@ -955,6 +986,8 @@ def _register_tools(mcp: Any) -> None:
     mcp.tool(judge_conflicts)
     # Consolidation tools
     mcp.tool(consolidate)
+    # Observer tools
+    mcp.tool(observe)
 
 
 def _load_fastmcp() -> Any:
