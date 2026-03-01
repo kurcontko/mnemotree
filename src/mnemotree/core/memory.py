@@ -1535,9 +1535,13 @@ class MemoryCore:
                 conversation_id=cid,
                 source=obs.source,
             )
-            # Set observation_date on the stored memory
+            # Persist observation_date (set after remember, needs re-save)
             if obs.observation_date and hasattr(memory, "observation_date"):
                 memory.observation_date = obs.observation_date
+                try:
+                    await self.store.store_memory(memory)
+                except Exception:
+                    logger.debug("Failed to persist observation_date", exc_info=True)
             memory_ids.append(memory.memory_id)
         return memory_ids
 

@@ -52,6 +52,14 @@ def build_neo4j_memory_payload(
         "entities": json_dumps_safe(valid_entities),
         "entity_mentions": json_dumps_safe(memory.entity_mentions),
         "stability_seconds": memory.stability_seconds,
+        "event_time": serialize_datetime(memory.event_time),
+        "valid_from": serialize_datetime(memory.valid_from),
+        "valid_until": serialize_datetime(memory.valid_until),
+        "observation_date": serialize_datetime(memory.observation_date),
+        "referenced_date": serialize_datetime(memory.referenced_date),
+        "temporal_offset": memory.temporal_offset,
+        "contextual_intent": memory.contextual_intent,
+        "is_hot": memory.is_hot,
     }
     return payload, valid_entities
 
@@ -96,6 +104,15 @@ def chroma_metadata_from_memory(memory: MemoryItem) -> dict[str, str]:
         "conflicts_with": ",".join(memory.conflicts_with) if memory.conflicts_with else "",
         "previous_event_id": memory.previous_event_id if memory.previous_event_id else "",
         "next_event_id": memory.next_event_id if memory.next_event_id else "",
+        "stability_seconds": str(memory.stability_seconds) if memory.stability_seconds is not None else "",
+        "event_time": serialize_datetime(memory.event_time) or "",
+        "valid_from": serialize_datetime(memory.valid_from) or "",
+        "valid_until": serialize_datetime(memory.valid_until) or "",
+        "observation_date": serialize_datetime(memory.observation_date) or "",
+        "referenced_date": serialize_datetime(memory.referenced_date) or "",
+        "temporal_offset": memory.temporal_offset or "",
+        "contextual_intent": memory.contextual_intent or "",
+        "is_hot": str(int(memory.is_hot)),
     }
 
 
@@ -140,6 +157,23 @@ def chroma_memory_from_record(
         "previous_event_id": metadata.get("previous_event_id") or None,
         "next_event_id": metadata.get("next_event_id") or None,
     }
+    # Phase 1 fields — may be absent in older ChromaDB collections
+    _stability = metadata.get("stability_seconds")
+    if _stability:
+        memory_data["stability_seconds"] = float(_stability)
+    for field in ("event_time", "valid_from", "valid_until", "observation_date", "referenced_date"):
+        val = metadata.get(field)
+        if val:
+            memory_data[field] = val
+    _offset = metadata.get("temporal_offset")
+    if _offset:
+        memory_data["temporal_offset"] = _offset
+    _intent = metadata.get("contextual_intent")
+    if _intent:
+        memory_data["contextual_intent"] = _intent
+    _hot = metadata.get("is_hot")
+    if _hot:
+        memory_data["is_hot"] = bool(int(_hot))
     return MemoryItem(**memory_data)
 
 

@@ -189,3 +189,72 @@ class TestSchemasMigration:
         assert "contextual_intent" in columns
         assert "is_hot" in columns
         conn.close()
+
+
+class TestChromaSerializationNewFields:
+    def test_roundtrip_new_fields(self) -> None:
+        from mnemotree.store._records import (
+            chroma_memory_from_record,
+            chroma_metadata_from_memory,
+        )
+
+        m = MemoryItem(
+            memory_id="chroma-test",
+            content="test chroma roundtrip",
+            memory_type=MemoryType.EPISODIC,
+            importance=0.7,
+            event_time=datetime(2024, 6, 15, 10, 30, tzinfo=timezone.utc),
+            valid_from=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            valid_until=datetime(2024, 12, 31, tzinfo=timezone.utc),
+            observation_date=datetime(2024, 3, 15, tzinfo=timezone.utc),
+            referenced_date=datetime(2023, 7, 4, tzinfo=timezone.utc),
+            temporal_offset="6 months ago",
+            contextual_intent="factual_update",
+            is_hot=True,
+            embedding=[0.1, 0.2, 0.3],
+        )
+        metadata = chroma_metadata_from_memory(m)
+
+        assert metadata["event_time"] != ""
+        assert metadata["contextual_intent"] == "factual_update"
+        assert metadata["is_hot"] == "1"
+        assert metadata["temporal_offset"] == "6 months ago"
+
+        restored = chroma_memory_from_record(
+            memory_id="chroma-test",
+            document="test chroma roundtrip",
+            embedding=[0.1, 0.2, 0.3],
+            metadata=metadata,
+        )
+        assert restored.contextual_intent == "factual_update"
+        assert restored.is_hot is True
+        assert restored.temporal_offset == "6 months ago"
+        assert restored.event_time is not None
+
+    def test_missing_fields_graceful(self) -> None:
+        from mnemotree.store._records import chroma_memory_from_record
+
+        # Simulate old ChromaDB collection without new fields
+        metadata = {
+            "memory_type": "semantic",
+            "timestamp": "2024-01-01T00:00:00+00:00",
+            "importance": "0.5",
+            "confidence": "1.0",
+            "tags": "",
+            "emotions": "",
+            "source": "",
+            "context": "",
+            "last_accessed": "2024-01-01T00:00:00+00:00",
+            "access_count": "0",
+            "access_history": "[]",
+            "entities": "{}",
+        }
+        restored = chroma_memory_from_record(
+            memory_id="old-mem",
+            document="old content",
+            embedding=None,
+            metadata=metadata,
+        )
+        assert restored.contextual_intent is None
+        assert restored.is_hot is False
+        assert restored.event_time is None
