@@ -69,7 +69,17 @@ class SupportsMemoryListing(Protocol):
         self,
         *,
         include_embeddings: bool = False,
+        include_invalidated: bool = False,
     ) -> list[MemoryItem]: ...
+
+
+@runtime_checkable
+class SupportsInvalidation(Protocol):
+    async def invalidate_memory(
+        self,
+        memory_id: str,
+        reason: str | None = None,
+    ) -> bool: ...
 
 
 @runtime_checkable

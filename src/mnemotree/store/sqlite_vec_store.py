@@ -8,6 +8,7 @@ import sqlite3
 import time
 from asyncio import Lock
 from collections import deque
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -349,6 +350,11 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                         values + [memory_row_id],
                     )
                 else:
+                    # Auto-set valid_from on initial insert (bi-temporal)
+                    if "valid_from" in columns:
+                        idx = columns.index("valid_from")
+                        if values[idx] is None:
+                            values[idx] = serialize_datetime(datetime.now(timezone.utc))
                     placeholders = ", ".join("?" for _ in columns)
                     cursor = conn.execute(
                         f'INSERT INTO "{self.collection_name}" ({", ".join(columns)}) '
@@ -473,23 +479,72 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 )
                 raise
 
+    async def invalidate_memory(
+        self,
+        memory_id: str,
+        reason: str | None = None,
+    ) -> bool:
+        """Set valid_until = now() to mark a memory as invalidated (bi-temporal)."""
+        await self.initialize()
+        start = time.perf_counter()
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                now = serialize_datetime(datetime.now(timezone.utc))
+                cursor = conn.execute(
+                    f'UPDATE "{self.collection_name}" '
+                    "SET valid_until = ? WHERE memory_id = ? AND valid_until IS NULL",
+                    (now, memory_id),
+                )
+                conn.commit()
+                success = cursor.rowcount > 0
+                if success:
+                    logger.info(
+                        "Invalidated memory %s (reason: %s)",
+                        memory_id,
+                        reason or "unspecified",
+                        extra=store_log_context(
+                            self.store_type,
+                            memory_id=memory_id,
+                            duration_ms=elapsed_ms(start),
+                        ),
+                    )
+                return success
+            except sqlite3.Error:
+                conn.rollback()
+                logger.exception(
+                    "Failed to invalidate memory %s",
+                    memory_id,
+                    extra=store_log_context(
+                        self.store_type,
+                        memory_id=memory_id,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
+
     async def list_memories(
         self,
         *,
         include_embeddings: bool = False,
+        include_invalidated: bool = False,
     ) -> list[MemoryItem]:
         """List all memories in the store.
 
         Args:
             include_embeddings: Whether to include embedding vectors in results.
+            include_invalidated: If False (default), exclude memories with valid_until set.
 
         Returns:
-            List of all MemoryItem objects.
+            List of MemoryItem objects.
         """
         await self.initialize()
         async with self._lock:
             conn = self._require_conn()
-            rows = conn.execute(f'SELECT * FROM "{self.collection_name}"').fetchall()
+            where_sql = "" if include_invalidated else "WHERE valid_until IS NULL"
+            rows = conn.execute(
+                f'SELECT * FROM "{self.collection_name}" {where_sql}'
+            ).fetchall()
             memories = []
             for row in rows:
                 memory = sqlite_memory_from_row(row)
@@ -577,6 +632,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         query_embedding: list[float],
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
+        include_invalidated: bool = False,
     ) -> list[MemoryItem]:
         await self.initialize()
         if self._embedding_dim is None:
@@ -590,24 +646,29 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         async with self._lock:
             conn = self._require_conn()
             try:
-                where_clauses = []
+                where_clauses: list[str] = []
                 params: list[Any] = []
+                if not include_invalidated:
+                    where_clauses.append("m.valid_until IS NULL")
                 if filters:
                     for key, value in filters.items():
                         if key not in {"memory_type", "source"}:
                             raise UnsupportedQueryError(f"Unsupported filter field: {key!r}")
-                        where_clauses.append(f"{key} = ?")
+                        where_clauses.append(f"m.{key} = ?")
                         params.append(normalize_filter_value(value))
 
                 vector_blob = sqlite_vec.serialize_float32(query_embedding)
                 # Use KNN MATCH syntax (sqlite-vec requires this)
                 fetch_k = top_k + 50  # extra candidates for post-filtering
+                extra_where = (
+                    "AND " + " AND ".join(where_clauses) if where_clauses else ""
+                )
                 sql = (
                     f"SELECT m.*, v.distance "
                     f'FROM "{self._vector_table}" v '
                     f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
                     f"WHERE v.embedding MATCH ? AND k = ? "
-                    f"{('AND ' + ' AND '.join(where_clauses)) if where_clauses else ''} "
+                    f"{extra_where} "
                     "ORDER BY v.distance "
                     "LIMIT ?"
                 )

@@ -25,12 +25,13 @@ from ..store.protocols import (
     MemoryCRUDStore,
     SupportsConnections,
     SupportsKnowledgeGraph,
+    SupportsMemoryListing,
     SupportsMetadataUpdate,
     SupportsStructuredQuery,
     SupportsVectorSearch,
 )
 from ..store.serialization import serialize_datetime
-from ._internal.conflict import ConflictDetector
+from ._internal.conflict import ConflictDetector as InlineConflictDetector
 from ._internal.deduplication import DedupChecker
 from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
 from ._internal.fact_decomposer import FactDecomposer
@@ -204,6 +205,7 @@ class MemoryCore:
         retrieval_config: RetrievalConfig | None = None,
         ingestion_config: IngestionConfig | None = None,
         normalization_config: NormalizationConfig | None = None,
+        conflict_config: Any | None = None,
         default_user_id: str | None = None,
         default_conversation_id: str | None = None,
     ):
@@ -221,10 +223,20 @@ class MemoryCore:
             retrieval_config: Retrieval and reranking configuration.
             ingestion_config: Async ingestion configuration.
             normalization_config: Content normalization configuration.
+            conflict_config: Optional ConflictConfig for automatic conflict detection.
         """
         self.store = store
         self.default_user_id = default_user_id
         self.default_conversation_id = default_conversation_id
+
+        # Conflict detection (bi-temporal invalidation)
+        from .conflict import ConflictConfig, ConflictDetector
+
+        _cc = conflict_config
+        if _cc is not None and isinstance(_cc, ConflictConfig) and _cc.enable:
+            self._conflict_detector: ConflictDetector | None = ConflictDetector(_cc)
+        else:
+            self._conflict_detector = None
 
         mode_defaults = mode_defaults or ModeDefaultsConfig()
         ner_config = ner_config or NerConfig()
@@ -637,6 +649,11 @@ class MemoryCore:
 
         memory = await self._apply_pre_remember_hooks(memory)
         await self._persist_memory(memory, references, skip_store)
+
+        # Conflict detection: run after persist so the new memory is in the store
+        if self._conflict_detector and not skip_store:
+            await self._conflict_detector.detect_and_resolve(memory, self.store)
+
         return memory
 
     def _resolve_remember_options(
@@ -785,12 +802,15 @@ class MemoryCore:
         conversation_id: str | None,
         user_id: str | None,
     ) -> dict[str, Any]:
+        from .decay import initial_stability
+
         data = {
             "memory_id": memory_id or str(uuid4()),
             "content": content,
             "summary": enrichment.summary,
             "memory_type": memory_type,
             "importance": importance,
+            "stability_seconds": initial_stability(memory_type, importance),
             "tags": list(tags),
             "context": context or {},
             "embedding": enrichment.embedding,
@@ -1406,9 +1426,24 @@ class MemoryCore:
     async def _update_access_metadata(self, memories: list[MemoryItem]) -> None:
         if not isinstance(self.store, SupportsMetadataUpdate):
             return
+        from .decay import MEMORY_TYPE_DEFAULTS, DecayConfig, ForgettingCurve
+
+        current_time = datetime.now(timezone.utc)
         update_tasks = []
         for memory in memories:
-            memory.update_access()
+            # Compute retrievability for spaced repetition boost
+            retrievability: float | None = None
+            if memory.stability_seconds is not None:
+                config = MEMORY_TYPE_DEFAULTS.get(memory.memory_type, DecayConfig())
+                curve = ForgettingCurve(
+                    decay_power=config.decay_power,
+                    target_retention=config.target_retention,
+                )
+                last = coerce_datetime(memory.last_accessed, default=current_time)
+                elapsed = max(0.0, (current_time - last).total_seconds())
+                retrievability = curve.retrievability(elapsed, memory.stability_seconds)
+
+            memory.update_access(retrievability=retrievability)
             update_tasks.append(
                 self.store.update_memory_metadata(
                     memory.memory_id,
@@ -1416,6 +1451,7 @@ class MemoryCore:
                         "last_accessed": memory.last_accessed,
                         "access_count": memory.access_count,
                         "access_history": memory.access_history,
+                        "stability_seconds": memory.stability_seconds,
                     },
                 )
             )
@@ -1593,6 +1629,86 @@ class MemoryCore:
             Success status
         """
         return await self.persistence.delete(memory_id, cascade=cascade)
+
+    async def evict(
+        self,
+        *,
+        max_memories: int | None = None,
+        min_importance: float | None = None,
+        alpha: float = 0.6,
+        importance_floor: float = 0.7,
+        dry_run: bool = False,
+    ) -> list[str]:
+        """Evict low-value memories using hybrid temporal + importance scoring.
+
+        Eviction score = (1-alpha)*(1-temporal_freshness) + alpha*(1-importance).
+        Higher score = evict first. Memories with importance >= importance_floor
+        are never evicted (safety floor).
+
+        Args:
+            max_memories: If set, evict until store has at most this many memories.
+            min_importance: If set, evict all active memories below this importance.
+            alpha: Weight for importance term (0.6 = importance-dominant).
+            importance_floor: Never evict memories at or above this importance.
+            dry_run: If True, return candidates without deleting.
+
+        Returns:
+            List of evicted (or would-be-evicted) memory IDs.
+        """
+        import math as _math
+
+        if not isinstance(self.store, SupportsMemoryListing):
+            raise RuntimeError(
+                "Store does not support list_memories() (SupportsMemoryListing)."
+            )
+
+        all_memories = await self.store.list_memories(
+            include_embeddings=False, include_invalidated=False
+        )
+        if not all_memories:
+            return []
+
+        current_time = datetime.now(timezone.utc)
+
+        def _eviction_score(m: MemoryItem) -> float:
+            last = coerce_datetime(m.last_accessed, default=current_time)
+            days = max(0.0, (current_time - last).total_seconds()) / 86400.0
+            temporal_freshness = 1.0 / (1.0 + _math.log1p(days))
+            return (1.0 - alpha) * (1.0 - temporal_freshness) + alpha * (1.0 - m.importance)
+
+        candidates = [
+            (m, _eviction_score(m))
+            for m in all_memories
+            if m.importance < importance_floor
+        ]
+        candidates.sort(key=lambda x: x[1], reverse=True)
+
+        evict_set: set[str] = set()
+
+        if min_importance is not None:
+            for m, _ in candidates:
+                if m.importance < min_importance:
+                    evict_set.add(m.memory_id)
+
+        if max_memories is not None:
+            current_count = len(all_memories)
+            remaining_after = current_count - len(evict_set)
+            need_more = max(0, remaining_after - max_memories)
+            for m, _ in candidates:
+                if need_more <= 0:
+                    break
+                if m.memory_id not in evict_set:
+                    evict_set.add(m.memory_id)
+                    need_more -= 1
+
+        evicted_ids = list(evict_set)
+
+        if not dry_run and evicted_ids:
+            await asyncio.gather(
+                *[self.persistence.delete(mid) for mid in evicted_ids]
+            )
+
+        return evicted_ids
 
     # Knowledge Graph Operations
 
@@ -2220,7 +2336,7 @@ class MemoryCore:
         self.write_gate_policy = write_gate_policy
         # Helper instances — set later by _init_ingestion_helpers() once retrieval/llm are ready
         self.dedup_checker: DedupChecker | None = None
-        self.conflict_detector: ConflictDetector | None = None
+        self.conflict_detector: InlineConflictDetector | None = None
         self.fact_decomposer: FactDecomposer | None = None
         self._write_gate: Any | None = None
 
@@ -2410,7 +2526,7 @@ class MemoryCore:
         if self.dedup_enabled:
             self.dedup_checker = DedupChecker(self.retrieval, self.dedup_threshold)
         if self.conflict_detection_enabled:
-            self.conflict_detector = ConflictDetector(llm)
+            self.conflict_detector = InlineConflictDetector(llm)
         if self.fact_decomposition_enabled and llm is not None:
             self.fact_decomposer = FactDecomposer(llm, self.fact_decomposition_max_facts)
         if self.write_gate_enabled:

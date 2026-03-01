@@ -147,6 +147,33 @@ _DEFAULT_CONFIG = DecayConfig()
 
 
 # ---------------------------------------------------------------------------
+# Importance-coupled initial stability
+# ---------------------------------------------------------------------------
+
+
+def initial_stability(memory_type: MemoryType, importance: float) -> float:
+    """Return a starting stability_seconds value scaled by memory importance.
+
+    High-importance memories (>= 0.7) get 2x the base stability.
+    Low-importance memories (< 0.3) get 0.5x the base stability.
+    Mid-range (0.3-0.7) gets the default.
+
+    Args:
+        memory_type: The MemoryType of the memory being stored.
+        importance: Importance score in [0, 1].
+
+    Returns:
+        Initial stability in seconds.
+    """
+    base = MEMORY_TYPE_DEFAULTS.get(memory_type, _DEFAULT_CONFIG).stability_seconds
+    if importance >= 0.7:
+        return base * 2.0
+    if importance < 0.3:
+        return base * 0.5
+    return base
+
+
+# ---------------------------------------------------------------------------
 # Core decay function
 # ---------------------------------------------------------------------------
 
