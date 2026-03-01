@@ -68,7 +68,7 @@ class MemorySystemConfig:
 
         llm = self.llm or ChatOpenAI(
             model=os.getenv("MNEMOTREE_LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4",
-            temperature=float(os.getenv("MNEMOTREE_LLM_TEMPERATURE", "0.7")),
+            temperature=float(os.getenv("MNEMOTREE_LLM_TEMPERATURE") or "0.7"),
         )
 
         embedding_model = os.getenv("MNEMOTREE_EMBEDDING_MODEL") or os.getenv(

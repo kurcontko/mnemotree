@@ -83,6 +83,9 @@ class DecayConfig:
         decay_power = kwargs.get("decay_power", 0.5)
         target_retention = kwargs.get("target_retention", 0.9)
 
+        if decay_power <= 0:
+            raise ValueError("decay_power must be positive")
+
         # R(t, S) = (1 + factor * t / S) ^ (-decay_power) = 0.5
         # factor = target_retention^(-1/decay_power) - 1
         factor = target_retention ** (-1.0 / decay_power) - 1.0

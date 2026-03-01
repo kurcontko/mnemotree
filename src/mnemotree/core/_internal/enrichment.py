@@ -95,12 +95,19 @@ class StandardEnrichmentPipeline:
             assert self.analyzer is not None
             tasks["analysis"] = asyncio.create_task(self.analyzer.analyze(content, context))
 
-        # Execute
+        # Execute — use return_exceptions so a single task failure
+        # (e.g. NER model not loaded) doesn't crash the entire pipeline
         task_items = list(tasks.items())
-        task_results = await asyncio.gather(*(task for _, task in task_items))
-        results_by_key = {
-            name: result for (name, _), result in zip(task_items, task_results, strict=True)
-        }
+        task_results = await asyncio.gather(
+            *(task for _, task in task_items), return_exceptions=True
+        )
+        results_by_key: dict[str, Any] = {}
+        for (name, _), result in zip(task_items, task_results, strict=True):
+            if isinstance(result, BaseException):
+                logger.debug("Enrichment task %s failed", name, exc_info=result)
+                results_by_key[name] = None
+            else:
+                results_by_key[name] = result
 
         logger.debug(
             "enrich done duration_ms=%.2f produced=%s",

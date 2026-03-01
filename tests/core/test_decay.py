@@ -129,3 +129,13 @@ class TestStabilityUpdater:
     def test_zero_stability_unchanged(self):
         updater = StabilityUpdater()
         assert updater.update(0, 0.5) == pytest.approx(0)
+
+
+class TestDecayConfigValidation:
+    def test_zero_decay_power_raises(self):
+        with pytest.raises(ValueError, match="decay_power must be positive"):
+            DecayConfig.from_half_life(86400, decay_power=0)
+
+    def test_negative_decay_power_raises(self):
+        with pytest.raises(ValueError, match="decay_power must be positive"):
+            DecayConfig.from_half_life(86400, decay_power=-0.5)
