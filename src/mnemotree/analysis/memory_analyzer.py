@@ -3,8 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from .._protocols import AsyncEmbeddingModel as Embeddings, LLMBackend as BaseLanguageModel
-
+from .._protocols import AsyncEmbeddingModel as Embeddings
 from ..core.models import MemoryType
 from ..utils.serialization import json_dumps_safe
 from .analyzers import ConceptAnalyzer, EmotionAnalyzer, MemoryClassifierAnalyzer, PatternAnalyzer

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from ..core.models import MemoryItem
 
 if TYPE_CHECKING:
-    from langchain.schema import Document
+    pass
 
 
 class MemoryLike(Protocol):

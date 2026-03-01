@@ -5,8 +5,6 @@ from enum import Enum
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
-from pydantic_ai import Agent
-
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -24,7 +22,7 @@ class BaseAnalyzer(ABC):
 
     def __init__(self, model: str | Any = "openai:gpt-4o-mini"):
         self.model = model
-        self._agent: Agent | None = None
+        self._agent: Any = None
 
     @abstractmethod
     def _get_system_prompt(self) -> str:
@@ -34,7 +32,9 @@ class BaseAnalyzer(ABC):
     def _get_output_type(self) -> type[BaseModel]:
         """Return the Pydantic output model."""
 
-    def _build_agent(self) -> Agent:
+    def _build_agent(self) -> Any:
+        from pydantic_ai import Agent
+
         return Agent(
             self.model,
             output_type=self._get_output_type(),
@@ -42,7 +42,7 @@ class BaseAnalyzer(ABC):
         )
 
     @property
-    def agent(self) -> Agent:
+    def agent(self) -> Any:
         if self._agent is None:
             self._agent = self._build_agent()
         return self._agent

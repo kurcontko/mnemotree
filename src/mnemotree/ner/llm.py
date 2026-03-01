@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic_ai import Agent
-
 from .base import BaseNER, NERResult
 
 logger = logging.getLogger(__name__)
@@ -22,11 +20,24 @@ class PydanticAILLMNER(BaseNER):
     """PydanticAI LLM-based NER (replaces LangchainLLMNER)."""
 
     def __init__(self, model: str | Any = "openai:gpt-4o-mini"):
-        self._agent = Agent(model, output_type=NERResult, instructions=_SYSTEM_PROMPT)
+        self._model = model
+        self._agent: Any = None
+
+    def _ensure_agent(self) -> None:
+        if self._agent is None:
+            try:
+                from pydantic_ai import Agent
+            except ImportError as exc:
+                raise RuntimeError(
+                    "pydantic-ai is required for LLM-based NER. "
+                    "Install mnemotree with the 'analysis' extra."
+                ) from exc
+            self._agent = Agent(self._model, output_type=NERResult, instructions=_SYSTEM_PROMPT)
 
     async def extract_entities(self, text: str) -> NERResult:
         """Extract entities using LLM."""
         try:
+            self._ensure_agent()
             result = await self._agent.run(f"Text: {text}")
             ner = result.output
             confidence = ner.confidence or {}

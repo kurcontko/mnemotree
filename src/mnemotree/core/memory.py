@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import uuid4
 
-from .._protocols import AsyncEmbeddingModel as Embeddings, LLMBackend as BaseLanguageModel
-
 if TYPE_CHECKING:
     from .intent import IntentClassifier
 

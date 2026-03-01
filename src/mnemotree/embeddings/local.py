@@ -5,7 +5,6 @@ import asyncio
 import numpy as np
 
 
-
 class LocalSentenceTransformerEmbeddings:
     def __init__(
         self,

@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import Any, Literal, overload
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -475,7 +475,7 @@ class MemoryItem(BaseModel):
 
         return "\n".join(parts)
 
-    def to_langchain_document(self) -> "Document":
+    def to_langchain_document(self) -> Any:
         """
         Convert the MemoryItem to a LangChain Document.
         Requires langchain to be installed.
