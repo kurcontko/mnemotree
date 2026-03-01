@@ -1,0 +1,76 @@
+name: '🤖 Gemini Invoke'
+
+on:
+  workflow_call:
+    inputs:
+      additional_context:
+        type: 'string'
+        description: 'The user request (everything after @gemini-cli)'
+        required: true
+    secrets:
+      GEMINI_API_KEY:
+        required: true
+
+concurrency:
+  group: '${{ github.workflow }}-invoke-${{ github.event.pull_request.number || github.event.issue.number }}'
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  invoke:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 10
+    permissions:
+      contents: 'read'
+      issues: 'write'
+      pull-requests: 'write'
+
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Run Gemini assistant'
+        uses: google-github-actions/run-gemini-cli@9dbec29a20fab3f35017a40ad0eb798a257d4d51 # v0
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
+          REPOSITORY: '${{ github.repository }}'
+          USER_REQUEST: '${{ inputs.additional_context }}'
+        with:
+          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+          gemini_model: 'gemini-3-flash-preview'
+          prompt: |
+            You are a helpful AI assistant for the Mnemotree GitHub repository.
+            Repository: $REPOSITORY  Issue/PR: $ISSUE_NUMBER
+
+            The user asked: $USER_REQUEST
+
+            Respond helpfully using the available GitHub MCP tools to read context
+            and post a reply comment. Keep your response concise and actionable.
+            Post your response as a GitHub comment using the issues MCP tool.
+          settings: |-
+            {
+              "model": { "maxSessionTurns": 15 },
+              "telemetry": { "enabled": false },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": [
+                    "run", "-i", "--rm",
+                    "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server:v0.27.0"
+                  ],
+                  "env": {
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+                  }
+                }
+              },
+              "tools": {
+                "core": ["run_shell_command(cat)", "run_shell_command(grep)"]
+              }
+            }

@@ -170,3 +170,7 @@ cython_debug/
 /draft
 
 .serena
+
+# Gemini CLI runtime artifacts
+.gemini/telemetry.log
+gha-creds-*.json
