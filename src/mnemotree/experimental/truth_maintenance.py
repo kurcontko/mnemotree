@@ -400,7 +400,7 @@ Severity:"""
             # Weighted combination
             scores = []
             for claim in claims:
-                recency_days = (datetime.now(timezone.utc) - claim.updated_at).days
+                recency_days = max(0, (datetime.now(timezone.utc) - claim.updated_at).days)
                 recency_score = 1.0 / (1.0 + recency_days / 30.0)
 
                 score = (

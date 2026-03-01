@@ -454,6 +454,12 @@ class ContextAwareWriteGate:
             )
 
         # Check for excessive punctuation/symbols
+        if not content:
+            return WriteResult(
+                decision=WriteDecision.REJECT,
+                reasons=[RejectionReason.TOO_SHORT.value],
+                score=0.0,
+            )
         symbol_ratio = sum(1 for c in content if not c.isalnum() and not c.isspace()) / len(content)
         if symbol_ratio > 0.3:
             return WriteResult(

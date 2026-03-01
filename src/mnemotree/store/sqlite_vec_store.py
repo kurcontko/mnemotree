@@ -1143,7 +1143,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                     f'SELECT embedding FROM "{self._vector_table}" WHERE rowid = ?',
                     (source_rowid,),
                 ).fetchone()
-                if not vec_row:
+                if not vec_row or not vec_row["embedding"]:
                     return []
 
                 source_embedding = vec_row["embedding"]

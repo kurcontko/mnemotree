@@ -203,7 +203,7 @@ class AdaptiveDecaySystem:
 
     def _recency_multiplier(self, memory: MemoryItem, current_time: datetime) -> float:
         last_accessed = coerce_datetime(memory.last_accessed, default=current_time)
-        days = (current_time - last_accessed).total_seconds() / 86400.0
+        days = max(0.0, (current_time - last_accessed).total_seconds() / 86400.0)
         if days < 1:
             return 2.0
         elif days < 7:

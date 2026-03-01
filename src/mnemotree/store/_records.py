@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import sqlite3
 from collections.abc import Iterable
 from typing import Any
@@ -11,6 +12,20 @@ import numpy as np
 from ..core.models import MemoryItem, MemoryType
 from ..utils.serialization import json_dumps_safe, json_loads_dict
 from .serialization import safe_load_context, serialize_datetime, serialize_datetime_list
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_json_list(raw: str | None) -> list:
+    """Parse JSON list, returning [] on None or malformed input."""
+    if not raw:
+        return []
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, list) else []
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Corrupted JSON list in stored data, returning []")
+        return []
 
 
 def build_neo4j_memory_payload(
@@ -136,7 +151,7 @@ def chroma_memory_from_record(
         "timestamp": metadata["timestamp"],
         "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
         "access_count": int(metadata.get("access_count") or 0),
-        "access_history": json.loads(metadata.get("access_history") or "[]"),
+        "access_history": _safe_json_list(metadata.get("access_history")),
         "importance": float(metadata["importance"]),
         "confidence": float(metadata["confidence"]),
         "tags": metadata["tags"].split(",") if metadata["tags"] else [],
@@ -247,7 +262,7 @@ def sqlite_memory_from_row(row: sqlite3.Row) -> MemoryItem:
         "timestamp": row["timestamp"],
         "last_accessed": row["last_accessed"] or row["timestamp"],
         "access_count": int(row["access_count"] or 0),
-        "access_history": json.loads(row["access_history"] or "[]"),
+        "access_history": _safe_json_list(row["access_history"]),
         "importance": float(row["importance"]),
         "decay_rate": row["decay_rate"] if row["decay_rate"] is not None else 0.01,
         "confidence": float(row["confidence"] or 1.0),
