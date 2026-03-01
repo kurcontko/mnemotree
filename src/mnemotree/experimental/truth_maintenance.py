@@ -176,7 +176,7 @@ class ClaimsRegistry:
                     statement=memory.content,
                     source_memory_ids=[memory.memory_id],
                     confidence=memory.confidence,
-                    credibility=memory.credibility or 1.0,
+                    credibility=memory.credibility if memory.credibility is not None else 1.0,
                 )
             ]
 
@@ -218,7 +218,7 @@ Claims:"""
                         statement=parts[3],
                         source_memory_ids=[memory.memory_id],
                         confidence=memory.confidence,
-                        credibility=memory.credibility or 1.0,
+                        credibility=memory.credibility if memory.credibility is not None else 1.0,
                     )
                 )
 
@@ -354,7 +354,7 @@ Severity:"""
         )
 
         if hasattr(result, "content"):
-            text = result.content.strip().upper()
+            text = (result.content or "").strip().upper()
         else:
             text = str(result).strip().upper()
 
