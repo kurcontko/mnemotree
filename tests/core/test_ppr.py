@@ -134,3 +134,27 @@ def test_build_adjacency_link_type_filter():
 def test_build_adjacency_empty_links():
     adj = build_adjacency_from_links([], PPRConfig())
     assert adj == {}
+
+
+def test_ppr_nan_seed_scores():
+    """NaN seed scores should return empty dict, not propagate NaN."""
+    result = personalized_pagerank({"A": float("nan")}, {}, PPRConfig())
+    assert result == {}
+
+
+def test_ppr_zero_total_seed():
+    """Zero total seed scores should return empty dict."""
+    result = personalized_pagerank({"A": 0.0, "B": 0.0}, {}, PPRConfig())
+    assert result == {}
+
+
+def test_ppr_negative_seed():
+    """Negative total seed scores should return empty dict."""
+    result = personalized_pagerank({"A": -1.0}, {}, PPRConfig())
+    assert result == {}
+
+
+def test_ppr_inf_seed():
+    """Infinite seed scores should return empty dict."""
+    result = personalized_pagerank({"A": float("inf")}, {}, PPRConfig())
+    assert result == {}

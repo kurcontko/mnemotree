@@ -6,6 +6,7 @@ knowledge-graph link structure to surface multi-hop relevant memories.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 
@@ -55,7 +56,7 @@ def personalized_pagerank(
 
     # Normalise seed distribution
     total_seed = sum(seed_scores.values())
-    if not (total_seed > 0.0):  # catches 0, negative, NaN, and inf
+    if not (total_seed > 0.0) or not math.isfinite(total_seed):
         return {}
     r0: dict[str, float] = {k: v / total_seed for k, v in seed_scores.items()}
 
