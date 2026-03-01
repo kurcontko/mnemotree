@@ -907,7 +907,8 @@ class MemoryCore:
 
         _log = _logging.getLogger(__name__)
         try:
-            assert self.conflict_detector is not None
+            if self.conflict_detector is None:
+                return
             # Recall candidates in similarity range [conflict_similarity_min, dedup_threshold)
             candidates = await self.retrieval.recall(
                 query=memory.content,

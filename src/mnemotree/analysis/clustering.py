@@ -75,6 +75,13 @@ class MemoryClusterer:
                 memories, similarity_threshold=similarity_threshold
             )
 
+        # Map cluster IDs back to original memory indices for vector methods
+        if method.startswith("vector_"):
+            # clusters.cluster_ids aligns with 'valid', not all 'memories'
+            cluster_source = [(valid[j][1], cid) for j, cid in enumerate(clusters.cluster_ids)]
+        else:
+            cluster_source = [(memories[j], cid) for j, cid in enumerate(clusters.cluster_ids)]
+
         # Get cluster metadata
         unique_clusters = set(clusters.cluster_ids)
         cluster_sizes = {c: clusters.cluster_ids.count(c) for c in unique_clusters}
@@ -82,9 +89,7 @@ class MemoryClusterer:
         # Generate summaries for each cluster
         cluster_summaries = {}
         for cluster_id in unique_clusters:
-            cluster_memories = [
-                m for i, m in enumerate(memories) if clusters.cluster_ids[i] == cluster_id
-            ]
+            cluster_memories = [m for m, cid in cluster_source if cid == cluster_id]
             memory_texts = [f"- {m.content}" for m in cluster_memories]
             summary = await self.summarizer.summarize("\n".join(memory_texts))
             cluster_summaries[cluster_id] = str(summary) if summary else ""
