@@ -1,9 +1,15 @@
 import asyncio
+import dataclasses
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
+
+if TYPE_CHECKING:
+    from .hyde import HyDEEmbedder
+    from .intent import IntentClassifier
+    from .query_decomposition import QueryDecomposer
 from uuid import uuid4
 
 from langchain_core.embeddings.embeddings import Embeddings
@@ -88,6 +94,14 @@ class RetrievalConfig:
     reranker_backend: Literal["none", "flashrank", "cross_encoder"] = "none"
     reranker_model: str = "ms-marco-TinyBERT-L-2-v2"
     rerank_candidates: int = 50
+    # SimpleMem: intent-aware type pre-filtering (arXiv:2601.02553)
+    enable_intent_filter: bool = False
+    intent_classifier_backend: Literal["keyword", "llm"] = "keyword"
+    # HyDE: hypothetical document embedding
+    enable_hyde: bool = False
+    # MS-RAG: multi-step query decomposition (EMNLP 2025)
+    enable_ms_rag: bool = False
+    ms_rag_max_sub_queries: int = 4
 
 
 @dataclass(frozen=True)
@@ -249,6 +263,11 @@ class MemoryCore:
             enable_rrf_signal_rerank=retrieval_config.enable_rrf_signal_rerank,
             rerank_candidates=retrieval_config.rerank_candidates,
             retriever=retriever,
+            enable_intent_filter=retrieval_config.enable_intent_filter,
+            intent_classifier_backend=retrieval_config.intent_classifier_backend,
+            enable_hyde=retrieval_config.enable_hyde,
+            enable_ms_rag=retrieval_config.enable_ms_rag,
+            ms_rag_max_sub_queries=retrieval_config.ms_rag_max_sub_queries,
         )
         self._init_normalizer(normalization_config)
 
@@ -734,6 +753,60 @@ class MemoryCore:
             options=options,
         )
 
+        # SimpleMem: infer MemoryType from query intent and pre-filter results
+        if self._intent_classifier is not None and isinstance(query, str):
+            from .intent import INTENT_TO_TYPES, RetrievalIntent
+
+            intent = await self._intent_classifier.classify(query)
+            if intent != RetrievalIntent.UNKNOWN and intent in INTENT_TO_TYPES:
+                intent_types = INTENT_TO_TYPES[intent]
+                if filters is None:
+                    filters = RecallFilters(memory_types=intent_types)
+                elif filters.memory_types is None:
+                    filters = dataclasses.replace(filters, memory_types=intent_types)
+                # If caller already set memory_types, their explicit filter takes precedence
+
+        # MS-RAG: decompose compound queries and fuse sub-results
+        if self._query_decomposer is not None and isinstance(query, str):
+            from .query_decomposition import QueryDecomposer, rrf_merge
+
+            sub_queries = await self._query_decomposer.decompose(query)
+            if len(sub_queries) > 1:
+                sub_results = await asyncio.gather(
+                    *[
+                        self._recall_single(
+                            q,
+                            limit=limit,
+                            scoring=scoring,
+                            update_access=update_access,
+                            filters=filters,
+                            candidate_limit=candidate_limit,
+                        )
+                        for q in sub_queries
+                    ]
+                )
+                return rrf_merge(list(sub_results), limit)
+
+        return await self._recall_single(
+            query,
+            limit=limit,
+            scoring=scoring,
+            update_access=update_access,
+            filters=filters,
+            candidate_limit=candidate_limit,
+        )
+
+    async def _recall_single(
+        self,
+        query: str | MemoryQuery | MemoryQueryBuilder,
+        *,
+        limit: int | None,
+        scoring: bool,
+        update_access: bool,
+        filters: RecallFilters | None,
+        candidate_limit: int | None,
+    ) -> list[MemoryItem]:
+        """Core single-query recall. Used directly and by MS-RAG sub-queries."""
         if filters:
             candidate_limit = self._resolve_candidate_limit(limit, candidate_limit)
             memories = await self.retrieval.recall(
@@ -1594,6 +1667,7 @@ class MemoryCore:
         llm: BaseLanguageModel | None,
         embeddings: Embeddings | None,
     ) -> None:
+        self.llm = llm
         if embeddings is None:
             embeddings = self._resolve_embeddings(self.mode)
         self.embedder = embeddings
@@ -1648,6 +1722,11 @@ class MemoryCore:
         enable_rrf_signal_rerank: bool,
         rerank_candidates: int,
         retriever: Retriever | None,
+        enable_intent_filter: bool = False,
+        intent_classifier_backend: Literal["keyword", "llm"] = "keyword",
+        enable_hyde: bool = False,
+        enable_ms_rag: bool = False,
+        ms_rag_max_sub_queries: int = 4,
     ) -> None:
         # _bm25_index/_bm25_cache are now managed by IndexManager
         # self._bm25_index and self._bm25_cache removed
@@ -1668,11 +1747,52 @@ class MemoryCore:
             analyzer=self.analyzer,
             summarizer=self.summarizer,
         )
+
+        # SimpleMem intent classifier
+        self._intent_classifier: IntentClassifier | None = None
+        if enable_intent_filter:
+            from .intent import KeywordIntentClassifier, LLMIntentClassifier
+
+            if intent_classifier_backend == "llm":
+                if self.llm is None:
+                    raise ValueError(
+                        "intent_classifier_backend='llm' requires an LLM. "
+                        "Pass llm= to MemoryCore or use intent_classifier_backend='keyword'."
+                    )
+                self._intent_classifier = LLMIntentClassifier(self.llm)
+            else:
+                self._intent_classifier = KeywordIntentClassifier()
+
+        # HyDE embedder
+        hyde_embedder = None
+        if enable_hyde:
+            if self.llm is None:
+                raise ValueError(
+                    "enable_hyde=True requires an LLM. Pass llm= to MemoryCore."
+                )
+            from .hyde import HyDEEmbedder
+
+            hyde_embedder = HyDEEmbedder(llm=self.llm, embedder=self.embedder)
+
         self.retrieval: Retriever = retriever or self._build_retriever(
             rrf_k=rrf_k,
             enable_rrf_signal_rerank=enable_rrf_signal_rerank,
             rerank_candidates=rerank_candidates,
+            hyde_embedder=hyde_embedder,
         )
+
+        # MS-RAG query decomposer
+        self._query_decomposer: QueryDecomposer | None = None
+        if enable_ms_rag:
+            if self.llm is None:
+                raise ValueError(
+                    "enable_ms_rag=True requires an LLM. Pass llm= to MemoryCore."
+                )
+            from .query_decomposition import QueryDecomposer
+
+            self._query_decomposer = QueryDecomposer(
+                llm=self.llm, max_sub_queries=ms_rag_max_sub_queries
+            )
 
     def _init_normalizer(self, config: NormalizationConfig) -> None:
         from ..normalization import create_normalization_pipeline
@@ -1689,6 +1809,7 @@ class MemoryCore:
         rrf_k: int,
         enable_rrf_signal_rerank: bool,
         rerank_candidates: int,
+        hyde_embedder: object | None = None,
     ) -> Retriever:
         common_retrieval_args = {
             "store": self.store,
@@ -1697,6 +1818,7 @@ class MemoryCore:
             "keyword_extractor": self.keyword_extractor,
             "embedder": self.embedder,
             "index_manager": self.index_manager,
+            "hyde_embedder": hyde_embedder,
         }
         if self.retrieval_mode == "hybrid":
             return RetrieverFactory.create_hybrid(

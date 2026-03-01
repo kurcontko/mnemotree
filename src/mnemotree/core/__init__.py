@@ -3,6 +3,7 @@ from __future__ import annotations
 from ..rerankers import CrossEncoderReranker, NoOpReranker
 from .builder import MemoryCoreBuilder
 from .hybrid_retrieval import FusionStrategy, HybridRetriever, RetrievalStage
+from .intent import INTENT_TO_TYPES, IntentClassifier, KeywordIntentClassifier, LLMIntentClassifier, RetrievalIntent
 from .memory import (
     IngestionConfig,
     MemoryCore,
@@ -48,4 +49,10 @@ __all__ = [
     "FusionStrategy",
     "RetrievalStage",
     "RetrieverFactory",
+    # SimpleMem intent classification
+    "RetrievalIntent",
+    "INTENT_TO_TYPES",
+    "IntentClassifier",
+    "KeywordIntentClassifier",
+    "LLMIntentClassifier",
 ]

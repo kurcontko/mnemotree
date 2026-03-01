@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_core.embeddings.embeddings import Embeddings
 
 from ..analysis.keywords import KeywordExtractor
@@ -24,6 +26,7 @@ class RetrieverFactory:
         keyword_extractor: KeywordExtractor | None,
         embedder: Embeddings,
         index_manager: IndexManager | None = None,
+        hyde_embedder: Any = None,
     ) -> Retriever:
         return VectorEntityRetriever(
             store=store,
@@ -32,6 +35,7 @@ class RetrieverFactory:
             keyword_extractor=keyword_extractor,
             embedder=embedder,
             index_manager=index_manager,
+            hyde_embedder=hyde_embedder,
         )
 
     @staticmethod
@@ -53,6 +57,7 @@ class RetrieverFactory:
         enable_rrf_signal_rerank: bool = False,
         rerank_candidates: int = 50,
         use_fusion_retriever: bool = True,
+        hyde_embedder: Any = None,
     ) -> Retriever:
         common_args = {
             "store": store,
@@ -61,6 +66,7 @@ class RetrieverFactory:
             "keyword_extractor": keyword_extractor,
             "embedder": embedder,
             "index_manager": index_manager,
+            "hyde_embedder": hyde_embedder,
         }
         if use_fusion_retriever:
             return HybridFusionRetriever(
@@ -86,4 +92,5 @@ class RetrieverFactory:
             rrf_k=rrf_k,
             enable_rrf_signal_rerank=enable_rrf_signal_rerank,
             rerank_candidates=rerank_candidates,
+            hyde_embedder=hyde_embedder,
         )

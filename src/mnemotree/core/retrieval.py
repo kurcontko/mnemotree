@@ -55,6 +55,7 @@ class BaseRetriever:
         keyword_extractor: KeywordExtractor | None,
         embedder: Embeddings,
         index_manager: IndexManager | None = None,
+        hyde_embedder: Any = None,
     ) -> None:
         self.store = store
         self.scoring_system = scoring_system
@@ -64,8 +65,11 @@ class BaseRetriever:
         self.keyword_extractor = keyword_extractor
         self.embedder = embedder
         self.index_manager = index_manager
+        self.hyde_embedder = hyde_embedder  # HyDEEmbedder | None
 
     async def _get_embedding(self, text: str) -> list[float]:
+        if self.hyde_embedder is not None:
+            return await self.hyde_embedder.aembed_query(text)
         if not self.embedder:
             raise RuntimeError("Embedder not configured.")
         return await self.embedder.aembed_query(text)

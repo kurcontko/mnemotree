@@ -101,6 +101,7 @@ class HybridRetriever:
         rrf_k: int = 60,
         enable_rrf_signal_rerank: bool = False,
         rerank_candidates: int = 50,
+        hyde_embedder: Any = None,
     ):
         """
         Initialize hybrid retriever.
@@ -134,6 +135,7 @@ class HybridRetriever:
                 keyword_extractor=keyword_extractor,
                 embedder=embedder,
                 index_manager=index_manager,
+                hyde_embedder=hyde_embedder,
             )
             if store is not None and embedder is not None
             else None
