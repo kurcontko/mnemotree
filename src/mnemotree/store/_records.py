@@ -160,7 +160,8 @@ def chroma_memory_from_record(
     # Phase 1 fields — may be absent in older ChromaDB collections
     _stability = metadata.get("stability_seconds")
     if _stability:
-        memory_data["stability_seconds"] = float(_stability)
+        with contextlib.suppress(ValueError, TypeError):
+            memory_data["stability_seconds"] = float(_stability)
     for field in ("event_time", "valid_from", "valid_until", "observation_date", "referenced_date"):
         val = metadata.get(field)
         if val:
@@ -173,7 +174,8 @@ def chroma_memory_from_record(
         memory_data["contextual_intent"] = _intent
     _hot = metadata.get("is_hot")
     if _hot:
-        memory_data["is_hot"] = bool(int(_hot))
+        with contextlib.suppress(ValueError, TypeError):
+            memory_data["is_hot"] = bool(int(_hot))
     return MemoryItem(**memory_data)
 
 

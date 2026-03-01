@@ -258,3 +258,32 @@ class TestChromaSerializationNewFields:
         assert restored.contextual_intent is None
         assert restored.is_hot is False
         assert restored.event_time is None
+
+    def test_corrupted_stability_seconds_graceful(self) -> None:
+        from mnemotree.store._records import chroma_memory_from_record
+
+        metadata = {
+            "memory_type": "semantic",
+            "timestamp": "2024-01-01T00:00:00+00:00",
+            "importance": "0.5",
+            "confidence": "1.0",
+            "tags": "",
+            "emotions": "",
+            "source": "",
+            "context": "",
+            "last_accessed": "2024-01-01T00:00:00+00:00",
+            "access_count": "0",
+            "access_history": "[]",
+            "entities": "{}",
+            "stability_seconds": "not_a_number",
+            "is_hot": "invalid",
+        }
+        restored = chroma_memory_from_record(
+            memory_id="corrupted",
+            document="corrupted data",
+            embedding=None,
+            metadata=metadata,
+        )
+        # Corrupted values should be silently ignored, using defaults
+        assert restored.stability_seconds is None
+        assert restored.is_hot is False

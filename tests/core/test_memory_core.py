@@ -317,3 +317,33 @@ def test_rrf_post_rerank_uses_similarity_and_rrf_scores():
         },
     )
     assert [m.memory_id for m in reranked] == ["m2", "m1"]
+
+
+@pytest.mark.asyncio
+async def test_consolidate_requires_llm(mock_store, mock_embeddings):
+    """consolidate() must raise RuntimeError when no LLM is configured."""
+    core = MemoryCore(
+        store=mock_store,
+        llm=None,
+        embeddings=mock_embeddings,
+    )
+    with pytest.raises(RuntimeError, match="requires an LLM"):
+        await core.consolidate()
+
+
+@pytest.mark.asyncio
+async def test_consolidate_empty_memories(memory_core, mock_store):
+    """consolidate() returns zero-count result when no episodic memories exist."""
+    # recall("*") returns only semantic memories → no episodic to consolidate
+    semantic = MemoryItem(
+        content="semantic fact",
+        memory_type=MemoryType.SEMANTIC,
+        importance=0.5,
+    )
+    memory_core.retrieval.recall = AsyncMock(return_value=[semantic])
+
+    result = await memory_core.consolidate()
+
+    assert result.total_memories_processed == 0
+    assert result.clusters_formed == 0
+    assert result.semantic_memories_created == 0

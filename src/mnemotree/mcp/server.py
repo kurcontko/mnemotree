@@ -832,8 +832,8 @@ async def resolve_conflict(
                 context="Conflict resolution: superseded",
             )
             result["link"] = _serialize_link(link)
-        except RuntimeError:
-            pass
+        except RuntimeError as exc:
+            result["link_error"] = str(exc)
         result["action"] = f"Memory {winner_id} now supersedes {loser_id}."
         result["winner"] = winner_id
         result["loser"] = loser_id
