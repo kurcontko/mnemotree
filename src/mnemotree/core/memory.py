@@ -83,12 +83,12 @@ class ScoringConfig:
 
 @dataclass(frozen=True)
 class RetrievalConfig:
-    retrieval_mode: RetrievalMode = "basic"
-    enable_bm25: bool = False
+    retrieval_mode: RetrievalMode = "hybrid"
+    enable_bm25: bool = True
     bm25_k1: float = 1.2
     bm25_b: float = 0.75
     rrf_k: int = 60
-    enable_prf: bool = False
+    enable_prf: bool = True
     prf_docs: int = 5
     prf_terms: int = 8
     enable_rrf_signal_rerank: bool = False
@@ -96,7 +96,7 @@ class RetrievalConfig:
     reranker_model: str = "ms-marco-TinyBERT-L-2-v2"
     rerank_candidates: int = 50
     # SimpleMem: intent-aware type pre-filtering (arXiv:2601.02553)
-    enable_intent_filter: bool = False
+    enable_intent_filter: bool = True
     intent_classifier_backend: Literal["keyword", "llm"] = "keyword"
     # HyDE: hypothetical document embedding
     enable_hyde: bool = False
@@ -622,6 +622,15 @@ class MemoryCore:
         )
 
         memory = MemoryItem(**memory_data)
+
+        # --- STITCH: infer contextual_intent at ingest time (+35.6% retrieval) ---
+        if self._intent_classifier is not None and memory.contextual_intent is None:
+            try:
+                intent = await self._intent_classifier.classify(content)
+                memory.contextual_intent = intent.value
+            except Exception:
+                pass  # Intent is best-effort; don't block storage
+
         memory = await self._apply_pre_remember_hooks(memory)
         await self._persist_memory(memory, references, skip_store)
         return memory

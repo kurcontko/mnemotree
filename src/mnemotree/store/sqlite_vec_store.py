@@ -172,6 +172,14 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             ON "{self._link_table}" (link_type)
             """
         )
+        # FTS5 virtual table for full-text search on entities/tags (SwiftMem sub-linear)
+        self._fts_table = f"{self.collection_name}_fts"
+        conn.execute(
+            f"""
+            CREATE VIRTUAL TABLE IF NOT EXISTS "{self._fts_table}"
+            USING fts5(memory_id, entities, tags, content, tokenize='porter unicode61')
+            """
+        )
         conn.commit()
 
     def _get_meta_int(self, key: str) -> int | None:
@@ -244,6 +252,53 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             [(memory_id, entity) for entity in entity_set],
         )
 
+    def _update_fts_index(
+        self,
+        conn: sqlite3.Connection,
+        memory: MemoryItem,
+    ) -> None:
+        """Update the FTS5 full-text search index for a memory."""
+        fts_table = f"{self.collection_name}_fts"
+        conn.execute(
+            f'DELETE FROM "{fts_table}" WHERE memory_id = ?',
+            (memory.memory_id,),
+        )
+        entities_text = " ".join(memory.entities.keys()) if memory.entities else ""
+        tags_text = " ".join(memory.tags) if memory.tags else ""
+        conn.execute(
+            f'INSERT INTO "{fts_table}" (memory_id, entities, tags, content) VALUES (?, ?, ?, ?)',
+            (memory.memory_id, entities_text, tags_text, memory.content),
+        )
+
+    async def search_fts(
+        self,
+        query: str,
+        *,
+        limit: int = 50,
+        columns: str = "entities tags content",
+    ) -> list[str]:
+        """Full-text search on entities/tags/content. Returns matching memory_ids.
+
+        Use this as a pre-filter before vector search to reduce scan from N to N/k.
+        """
+        await self.initialize()
+        conn = self._require_conn()
+        fts_table = f"{self.collection_name}_fts"
+        try:
+            # Use column filter syntax: {column}: query
+            match_expr = query
+            if columns != "entities tags content":
+                match_expr = f"{{{columns}}}: {query}"
+            rows = conn.execute(
+                f'SELECT memory_id FROM "{fts_table}" WHERE "{fts_table}" MATCH ? '
+                f"ORDER BY rank LIMIT ?",
+                (match_expr, limit),
+            ).fetchall()
+            return [row["memory_id"] for row in rows]
+        except sqlite3.OperationalError:
+            logger.debug("FTS search failed for query=%s", query, exc_info=True)
+            return []
+
     async def store_memory(self, memory: MemoryItem) -> None:
         await self.initialize()
         if memory.embedding is None:
@@ -297,6 +352,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                     (memory_row_id, sqlite_vec.serialize_float32(memory.embedding)),
                 )
                 self._update_entity_index(conn, memory.memory_id, memory.entities)
+                self._update_fts_index(conn, memory)
                 conn.commit()
 
                 logger.info(
