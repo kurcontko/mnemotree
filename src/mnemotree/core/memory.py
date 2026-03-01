@@ -1460,6 +1460,40 @@ class MemoryCore:
         analysis = await self.analyzer.analyze_patterns("\n".join(memory_texts))
         return analysis
 
+    def judge_conflicts(
+        self,
+        memories: list[MemoryItem],
+        *,
+        similarity_threshold: float = 0.92,
+    ) -> dict[str, Any]:
+        """Detect conflicts among a set of recalled memories (AMA Judge pattern).
+
+        Uses fast cosine-threshold detection to find contradictions and
+        near-duplicates among the provided memories. No LLM calls required.
+
+        Args:
+            memories: List of memories to check pairwise.
+            similarity_threshold: Cosine similarity threshold for conflict detection.
+
+        Returns:
+            Dict mapping memory_id to conflict annotation info. Only memories
+            with detected conflicts are included.
+        """
+        from ._internal.conflict_judge import ConflictJudge, ConflictJudgeConfig
+
+        judge = ConflictJudge(
+            config=ConflictJudgeConfig(similarity_threshold=similarity_threshold)
+        )
+        annotations = judge.detect_conflicts(memories)
+        return {
+            mid: {
+                "memory_id": ann.memory_id,
+                "conflicting_ids": ann.conflicting_ids,
+                "reasons": ann.reasons,
+            }
+            for mid, ann in annotations.items()
+        }
+
     async def connect(
         self,
         memory_id: str,

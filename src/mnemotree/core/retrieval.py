@@ -30,6 +30,34 @@ from .scoring import MemoryScoring
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# MAGMA four-graph dimension classification
+# ---------------------------------------------------------------------------
+
+SEMANTIC_LINK_TYPES: frozenset[LinkType] = frozenset({
+    LinkType.SUPPORTS,
+    LinkType.CONTRADICTS,
+    LinkType.ELABORATES,
+    LinkType.REFERENCES,
+    LinkType.SIMILAR_TO,
+    LinkType.EXEMPLIFIES,
+    LinkType.GENERALIZES,
+    LinkType.DERIVES_FROM,
+    LinkType.PART_OF,
+    LinkType.UPDATES,
+    LinkType.SUPERSEDES,
+})
+
+TEMPORAL_LINK_TYPES: frozenset[LinkType] = frozenset({
+    LinkType.FOLLOWS,
+    LinkType.SEQUENCE,
+})
+
+CAUSAL_LINK_TYPES: frozenset[LinkType] = frozenset({
+    LinkType.CAUSES,
+    LinkType.DERIVES_FROM,
+})
+
 __all__ = [
     "Retriever",
     "BaseRetriever",
@@ -462,14 +490,28 @@ class HybridRetriever(BaseRetriever):
             keyword_task,
         ) = await self._collect_candidates(query, candidate_k)
 
-        # Fuse using configured strategy
-        results = self._fuse_candidates({
+        # Collect graph candidates if weight > 0 and store supports it
+        stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]] = {
             RetrievalStage.VECTOR: self._score_candidates(vector_memories, query_embedding),
             RetrievalStage.ENTITY: self._score_candidates(entity_memories, query_embedding),
             RetrievalStage.BM25: [
                 (m, 1.0 / (i + 1)) for i, m in enumerate(bm25_memories)
             ],
-        })
+        }
+
+        if (
+            self.weights.get(RetrievalStage.GRAPH, 0.0) > 0
+            and isinstance(self.store, SupportsKnowledgeGraph)
+            and vector_memories
+        ):
+            graph_candidates = await self._collect_graph_candidates(
+                vector_memories, candidate_k, query_embedding
+            )
+            if graph_candidates:
+                stage_candidates[RetrievalStage.GRAPH] = graph_candidates
+
+        # Fuse using configured strategy
+        results = self._fuse_candidates(stage_candidates)
 
         memories = [r.memory for r in results]
         rrf_scores = {r.memory.memory_id: r.final_score for r in results}
@@ -629,6 +671,87 @@ class HybridRetriever(BaseRetriever):
             entity_memory_ids,
             keyword_task,
         )
+
+    # ------------------------------------------------------------------
+    # Internal: MAGMA four-graph candidate collection
+    # ------------------------------------------------------------------
+
+    async def _collect_graph_candidates(
+        self,
+        seed_memories: list[MemoryItem],
+        candidate_k: int,
+        query_embedding: list[float] | None,
+    ) -> list[tuple[MemoryItem, float]]:
+        """Traverse semantic, temporal, causal, and entity graphs from seed memories.
+
+        Uses the MAGMA four-graph pattern: each graph dimension is traversed
+        independently, then results are merged with depth-based scoring.
+        """
+        assert isinstance(self.store, SupportsKnowledgeGraph)
+        seed_ids = [m.memory_id for m in seed_memories[:5]]  # Limit seeds
+
+        # Traverse three explicit graph dimensions in parallel
+        graph_dims: list[tuple[str, list[LinkType]]] = [
+            ("semantic", list(SEMANTIC_LINK_TYPES)),
+            ("temporal", list(TEMPORAL_LINK_TYPES)),
+            ("causal", list(CAUSAL_LINK_TYPES)),
+        ]
+        tasks = [
+            self.store.traverse_graph(
+                sid,
+                max_depth=2,
+                link_types=link_types,
+            )
+            for sid in seed_ids
+            for _, link_types in graph_dims
+        ]
+
+        if not tasks:
+            return []
+
+        all_traversals = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Score by inverse depth
+        scored: dict[str, tuple[MemoryItem, float]] = {}
+        seed_id_set = set(seed_ids)
+        for result in all_traversals:
+            if isinstance(result, BaseException):
+                logger.debug("graph traversal error: %s", result)
+                continue
+            for memory, depth, _path in result:
+                if memory.memory_id in seed_id_set:
+                    continue
+                score = 1.0 / (1.0 + depth)
+                if memory.memory_id in scored:
+                    # Keep higher score
+                    existing = scored[memory.memory_id]
+                    if score > existing[1]:
+                        scored[memory.memory_id] = (memory, score)
+                else:
+                    scored[memory.memory_id] = (memory, score)
+
+        # Entity graph: find memories sharing entities with seeds
+        seed_entities: set[str] = set()
+        for m in seed_memories[:5]:
+            seed_entities.update(m.entities.keys())
+        if seed_entities and isinstance(self.store, SupportsEntityQuery):
+            try:
+                entity_neighbors = await self.store.query_by_entities(
+                    list(seed_entities)[:10]
+                )
+                for mem in entity_neighbors:
+                    if mem.memory_id not in seed_id_set and mem.memory_id not in scored:
+                        sim = 0.5  # default entity co-occurrence score
+                        if query_embedding and mem.embedding:
+                            sim = max(0.0, cosine_similarity(mem.embedding, query_embedding))
+                        scored[mem.memory_id] = (mem, sim)
+            except Exception:
+                pass
+
+        candidates = list(scored.values())
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        logger.debug("graph candidates collected=%d", len(candidates))
+        return candidates[:candidate_k]
 
     # ------------------------------------------------------------------
     # Internal: reranking

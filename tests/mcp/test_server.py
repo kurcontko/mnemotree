@@ -390,7 +390,7 @@ def test_get_mcp_registers_tools(monkeypatch):
     instance = server._get_mcp()
 
     assert isinstance(instance, DummyFastMCP)
-    assert len(instance.tools) == 11
+    assert len(instance.tools) == 13
 
 
 def test_memory_timestamp_fallbacks():
@@ -1202,3 +1202,83 @@ async def test_resolve_conflict_invalid_resolution(monkeypatch):
 
     with pytest.raises(ValueError, match="Unknown resolution"):
         await server.resolve_conflict("m1", "m2", resolution="invalid")
+
+
+# ---------------------------------------------------------------------------
+# Judge conflicts MCP tool
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_judge_conflicts_by_ids(monkeypatch):
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP, embedding=[1.0, 0.0])
+    m1.conflicts_with = ["m2"]
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP, embedding=[1.0, 0.0])
+    m2.conflicts_with = ["m1"]
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+
+    memory_core = MagicMock(store=store)
+    memory_core.judge_conflicts = MagicMock(return_value={
+        "m1": {"memory_id": "m1", "conflicting_ids": ["m2"], "reasons": {"m2": "pre-existing"}},
+    })
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.judge_conflicts(memory_ids=["m1", "m2"])
+    assert result["memories_checked"] == 2
+    assert result["conflicts_found"] == 1
+
+
+@pytest.mark.asyncio
+async def test_judge_conflicts_by_query(monkeypatch):
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP, embedding=[1.0, 0.0])
+
+    memory_core = MagicMock()
+    memory_core.recall = AsyncMock(return_value=[m1])
+    memory_core.judge_conflicts = MagicMock(return_value={})
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.judge_conflicts(query="test", limit=5)
+    assert result["memories_checked"] == 1
+    assert result["conflicts_found"] == 0
+    memory_core.recall.assert_called_once_with("test", limit=5)
+
+
+@pytest.mark.asyncio
+async def test_judge_conflicts_requires_input(monkeypatch):
+    memory_core = MagicMock()
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="Provide either"):
+        await server.judge_conflicts()
+
+
+# ---------------------------------------------------------------------------
+# Consolidate MCP tool
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_consolidate_tool(monkeypatch):
+    from types import SimpleNamespace
+
+    result_obj = SimpleNamespace(
+        total_memories_processed=10,
+        clusters_formed=2,
+        semantic_memories_created=2,
+        memories_deprecated=3,
+        created_semantic_ids=["s1", "s2"],
+        deprecated_memory_ids=["d1", "d2", "d3"],
+        duration_seconds=1.5,
+    )
+
+    memory_core = MagicMock()
+    memory_core.consolidate = AsyncMock(return_value=result_obj)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.consolidate(dry_run=True)
+    assert result["total_memories_processed"] == 10
+    assert result["semantic_memories_created"] == 2
+    assert result["dry_run"] is True
+    memory_core.consolidate.assert_called_once()

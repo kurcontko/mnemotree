@@ -839,6 +839,90 @@ async def resolve_conflict(
     return result
 
 
+async def consolidate(
+    user_id: str | None = None,
+    min_cluster_size: int = 3,
+    similarity_threshold: float = 0.7,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Run offline memory consolidation (RAPTOR-style episodic→semantic promotion).
+
+    Clusters similar episodic memories, generates semantic summaries, and
+    optionally deprecates low-signal memories. Requires an LLM to be configured.
+
+    Args:
+        user_id: Scope consolidation to this user's memories (default: all).
+        min_cluster_size: Minimum memories per cluster (default: 3).
+        similarity_threshold: Clustering similarity threshold (default: 0.7).
+        dry_run: If True, report what would happen without making changes (default: False).
+
+    Returns:
+        Dictionary with consolidation statistics.
+    """
+    memory_core = await _get_memory_core()
+    from mnemotree.experimental.consolidation import ConsolidationConfig
+
+    config = ConsolidationConfig(
+        min_cluster_size=min_cluster_size,
+        similarity_threshold=similarity_threshold,
+        dry_run=dry_run,
+    )
+    result = await memory_core.consolidate(user_id=user_id, config=config)
+    return {
+        "total_memories_processed": result.total_memories_processed,
+        "clusters_formed": result.clusters_formed,
+        "semantic_memories_created": result.semantic_memories_created,
+        "memories_deprecated": result.memories_deprecated,
+        "created_semantic_ids": result.created_semantic_ids,
+        "deprecated_memory_ids": result.deprecated_memory_ids,
+        "duration_seconds": result.duration_seconds,
+        "dry_run": dry_run,
+    }
+
+
+async def judge_conflicts(
+    memory_ids: list[str] | None = None,
+    query: str | None = None,
+    similarity_threshold: float = 0.92,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Detect conflicts among memories (AMA Judge pattern).
+
+    Provide either memory_ids or a query to select memories to check.
+    Uses fast cosine-threshold detection — no LLM required.
+
+    Args:
+        memory_ids: Specific memory IDs to check pairwise.
+        query: Recall query to find memories to check.
+        similarity_threshold: Cosine similarity threshold (default: 0.92).
+        limit: Max memories to check when using query (default: 20).
+
+    Returns:
+        Dictionary with detected conflicts.
+    """
+    memory_core = await _get_memory_core()
+    memories: list[MemoryItem] = []
+
+    if memory_ids:
+        results = await asyncio.gather(
+            *(memory_core.store.get_memory(mid) for mid in memory_ids)
+        )
+        memories = [m for m in results if m is not None]
+    elif query:
+        memories = await memory_core.recall(query, limit=limit)
+    else:
+        raise ValueError("Provide either memory_ids or query.")
+
+    conflicts = memory_core.judge_conflicts(
+        memories, similarity_threshold=similarity_threshold
+    )
+    return {
+        "memories_checked": len(memories),
+        "conflicts_found": len(conflicts),
+        "conflicts": conflicts,
+    }
+
+
 def link_types() -> list[str]:
     """Return all supported link type values.
 
@@ -868,6 +952,9 @@ def _register_tools(mcp: Any) -> None:
     # Conflict tools
     mcp.tool(get_conflicts)
     mcp.tool(resolve_conflict)
+    mcp.tool(judge_conflicts)
+    # Consolidation tools
+    mcp.tool(consolidate)
 
 
 def _load_fastmcp() -> Any:
