@@ -527,3 +527,61 @@ async def test_list_memories(tmp_path, memory_item):
 
     finally:
         await store.close()
+
+
+@pytest.mark.asyncio
+async def test_store_memory_rejects_empty_embedding(tmp_path):
+    """Storing a memory with empty embedding [] should raise ValueError."""
+    from mnemotree.core.models import MemoryItem, MemoryType
+
+    store = SQLiteVecMemoryStore(db_path=tmp_path / "test.sqlite")
+    await store.initialize()
+    try:
+        mem = MemoryItem(
+            content="test",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.5,
+            embedding=[],
+        )
+        with pytest.raises(ValueError, match="requires embeddings"):
+            await store.store_memory(mem)
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_query_memories_dimension_mismatch(tmp_path, memory_item):
+    """Querying with wrong embedding dimension should raise ValueError."""
+    store = SQLiteVecMemoryStore(
+        db_path=tmp_path / "test.sqlite",
+        embedding_dim=len(memory_item.embedding),
+    )
+    await store.initialize()
+    try:
+        await store.store_memory(memory_item)
+
+        # Query with wrong dimension
+        wrong_dim_vector = [0.1, 0.2]  # 2-dim vs memory_item's dimension
+        query = MemoryQuery(vector=wrong_dim_vector, limit=5)
+        with pytest.raises(ValueError, match="dimension.*does not match"):
+            await store.query_memories(query)
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_similar_memories_dimension_mismatch(tmp_path, memory_item):
+    """get_similar_memories with wrong dimension should raise ValueError."""
+    store = SQLiteVecMemoryStore(
+        db_path=tmp_path / "test.sqlite",
+        embedding_dim=len(memory_item.embedding),
+    )
+    await store.initialize()
+    try:
+        await store.store_memory(memory_item)
+
+        wrong_dim = [0.1, 0.2]  # 2-dim vs store dimension
+        with pytest.raises(ValueError, match="dimension.*does not match"):
+            await store.get_similar_memories("test", wrong_dim, top_k=5)
+    finally:
+        await store.close()
