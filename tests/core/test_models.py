@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
+from mnemotree.core.models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
 
 
 def _memory(**overrides) -> MemoryItem:
@@ -141,3 +141,47 @@ def test_to_langchain_document_includes_metadata():
     assert doc.metadata["memory_category"] == MemoryType.SEMANTIC.category
     assert doc.metadata["tags"] == ["tag-1"]
     assert doc.metadata["source_id"] == "abc"
+
+
+# --- MemoryLink tests ---
+
+
+def _link(**overrides) -> MemoryLink:
+    data = {
+        "source_id": "mem-1",
+        "target_id": "mem-2",
+        "link_type": LinkType.SIMILAR_TO,
+        "strength": 0.8,
+    }
+    data.update(overrides)
+    return MemoryLink(**data)
+
+
+def test_decay_strength_clamps_negative_elapsed_time():
+    """If current_time is before last_accessed, elapsed should be clamped to 0."""
+    link = _link(
+        strength=0.8,
+        last_accessed=datetime(2024, 6, 1, tzinfo=timezone.utc),
+    )
+    # current_time is BEFORE last_accessed
+    link.decay_strength(
+        current_time=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        decay_rate=0.01,
+    )
+    # Strength should remain unchanged (elapsed clamped to 0, decay_factor = 1.0)
+    assert link.strength == 0.8
+
+
+def test_decay_strength_normal_decay():
+    """Normal forward-time decay should reduce strength."""
+    link = _link(
+        strength=0.8,
+        last_accessed=datetime(2024, 1, 1, tzinfo=timezone.utc),
+    )
+    link.decay_strength(
+        current_time=datetime(2024, 1, 2, tzinfo=timezone.utc),
+        decay_rate=0.01,
+    )
+    # One day = 86400 seconds; decay_factor = 1 / (1 + 0.01 * 86400)
+    assert link.strength < 0.8
+    assert link.strength > 0.0

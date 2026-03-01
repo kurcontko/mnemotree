@@ -113,3 +113,25 @@ async def test_heuristic_wh_question_gap():
     )
     # Should detect that a PERSON-type answer is missing
     assert len(sub_queries) >= 1
+
+
+@pytest.mark.asyncio
+async def test_heuristic_handles_none_entity_type():
+    """Entities with None type should not crash etype.upper()."""
+    analyzer = HeuristicGapAnalyzer()
+    # Simulate corrupt entity data with None type
+    mem = MemoryItem(
+        content="Corrupt entity data",
+        memory_type=MemoryType.SEMANTIC,
+        importance=0.5,
+    )
+    # Bypass Pydantic validation to inject None value
+    mem.__dict__["entities"] = {"Alice": None}
+    retrieved = [mem]
+    # Should not raise AttributeError on etype.upper()
+    sub_queries = await analyzer.detect_gaps(
+        "Who is Alice?",
+        retrieved,
+        {},
+    )
+    assert isinstance(sub_queries, list)

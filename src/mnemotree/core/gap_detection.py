@@ -96,7 +96,8 @@ class HeuristicGapAnalyzer:
                     covered_types = set()
                     for memory in retrieved:
                         for _e, etype in (memory.entities or {}).items():
-                            covered_types.add(etype.upper())
+                            if etype:
+                                covered_types.add(etype.upper())
                     if not any(t in covered_types for t in expected_types):
                         sub_queries.append(f"{wh_word.capitalize()} is related to: {query}")
 

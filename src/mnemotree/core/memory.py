@@ -2048,7 +2048,7 @@ class MemoryCore:
             Tuple of (memories, clustering_results)
         """
         if not self.clusterer:
-            raise RuntimeError("Clusterer not configured. Use mode='pro' or provide a summarizer.")
+            raise RuntimeError("Clusterer not configured. Use mode='pro' or provide a clusterer.")
 
         # Get memories to cluster
         if query is not None:

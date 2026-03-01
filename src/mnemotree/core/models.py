@@ -575,6 +575,6 @@ class MemoryLink(BaseModel):
             current_time: Current datetime for calculating elapsed time
             decay_rate: Rate of decay (default 0.01)
         """
-        elapsed_seconds = (current_time - self.last_accessed).total_seconds()
+        elapsed_seconds = max(0.0, (current_time - self.last_accessed).total_seconds())
         decay_factor = 1.0 / (1.0 + decay_rate * elapsed_seconds)
         self.strength *= decay_factor
