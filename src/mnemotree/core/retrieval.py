@@ -579,7 +579,7 @@ class HybridRetriever(BaseRetriever):
             rerank_map = {mem.memory_id: score for mem, score in reranked}
             for result in fused_results:
                 if result.memory.memory_id in rerank_map:
-                    result.scores[RetrievalStage.RERANK] = rerank_map[result.memory.memory_id]
+                    result.scores[RetrievalStage.RERANK.value] = rerank_map[result.memory.memory_id]
                     result.retrieval_stages.append(RetrievalStage.RERANK)
                     result.final_score = (
                         0.6 * result.final_score + 0.4 * rerank_map[result.memory.memory_id]
@@ -647,7 +647,9 @@ class HybridRetriever(BaseRetriever):
         if query_embedding:
             entity_memories = sorted(
                 entity_memories,
-                key=lambda memory: cosine_similarity(memory.embedding, query_embedding),
+                key=lambda memory: cosine_similarity(memory.embedding, query_embedding)
+                if memory.embedding
+                else 0.0,
                 reverse=True,
             )
 

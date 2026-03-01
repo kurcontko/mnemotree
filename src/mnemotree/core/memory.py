@@ -885,7 +885,8 @@ class MemoryCore:
 
         _log = _logging.getLogger(__name__)
         try:
-            assert isinstance(self.store, SupportsKnowledgeGraph)
+            if not isinstance(self.store, SupportsKnowledgeGraph):
+                return
             suggestions = await self.store.suggest_links(
                 memory_id, min_similarity=self.auto_link_threshold, limit=10
             )
@@ -969,7 +970,8 @@ class MemoryCore:
         user_id: str | None = None,
     ) -> MemoryItem:
         """Decompose compound content into atomic facts, store each, link via PART_OF."""
-        assert self.fact_decomposer is not None
+        if self.fact_decomposer is None:
+            raise RuntimeError("fact_decomposer is not configured")
         facts = await self.fact_decomposer.decompose(content)
 
         if len(facts) <= 1:
