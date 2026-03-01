@@ -426,6 +426,10 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                     (memory_row_id,),
                 )
                 self._update_entity_index(conn, memory_id, None)
+                conn.execute(
+                    f'DELETE FROM "{self._fts_table}" WHERE memory_id = ?',
+                    (memory_id,),
+                )
                 if cascade:
                     conn.execute(
                         f'DELETE FROM "{self._link_table}" '
