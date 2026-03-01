@@ -141,8 +141,8 @@ class CachedEmbeddings(_EmbeddingsBase):
             if cached is not None:
                 self._hits += 1
                 return cached
+            self._misses += 1
 
-        self._misses += 1
         embedding = await self._embedder.aembed_query(text)
 
         async with self._lock:
@@ -176,7 +176,8 @@ class CachedEmbeddings(_EmbeddingsBase):
                 self._put_cached(text, embedding)
                 results[idx] = embedding
 
-        return [e for e in results if e is not None]
+        # All slots should be filled; cast type (filtering would misalign indices)
+        return list(results)  # type: ignore[arg-type]
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple documents with caching (asynchronous)."""
@@ -204,4 +205,5 @@ class CachedEmbeddings(_EmbeddingsBase):
                     self._put_cached(text, embedding)
                     results[idx] = embedding
 
-        return [e for e in results if e is not None]
+        # All slots should be filled; cast type (filtering would misalign indices)
+        return list(results)  # type: ignore[arg-type]

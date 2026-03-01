@@ -531,6 +531,11 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 if query.vector is not None:
                     if self._embedding_dim is None:
                         return []  # No vector table yet
+                    if len(query.vector) != self._embedding_dim:
+                        raise ValueError(
+                            f"Query vector dimension {len(query.vector)} does not match "
+                            f"store dimension {self._embedding_dim}."
+                        )
                     vector_blob = sqlite_vec.serialize_float32(query.vector)
                     # Use KNN MATCH syntax (sqlite-vec requires this)
                     # Fetch extra candidates to allow for post-filter + offset
@@ -575,6 +580,11 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         await self.initialize()
         if self._embedding_dim is None:
             return []  # No vector table yet — no memories to search
+        if len(query_embedding) != self._embedding_dim:
+            raise ValueError(
+                f"Query embedding dimension {len(query_embedding)} does not match "
+                f"store dimension {self._embedding_dim}."
+            )
         start = time.perf_counter()
         async with self._lock:
             conn = self._require_conn()
