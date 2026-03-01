@@ -129,6 +129,9 @@ class IngestionConfig:
     fact_decomposition_enabled: bool = False
     fact_decomposition_min_length: int = 200
     fact_decomposition_max_facts: int = 10
+    # Write gate (pre-persist filter)
+    write_gate_enabled: bool = False
+    write_gate_policy: str = "permissive"  # "permissive", "balanced", "strict"
 
 
 @dataclass(frozen=True)
@@ -250,6 +253,8 @@ class MemoryCore:
             fact_decomposition_enabled=ingestion_config.fact_decomposition_enabled,
             fact_decomposition_min_length=ingestion_config.fact_decomposition_min_length,
             fact_decomposition_max_facts=ingestion_config.fact_decomposition_max_facts,
+            write_gate_enabled=ingestion_config.write_gate_enabled,
+            write_gate_policy=ingestion_config.write_gate_policy,
         )
         self._init_mode_defaults(
             mode=mode_defaults.mode,
@@ -514,6 +519,31 @@ class MemoryCore:
         enrichment = await self.enrichment.enrich(
             content, context, analyze=analyze, summarize=summarize
         )
+
+        # --- Write gate (pre-filter) ---
+        if not skip_store and self._write_gate is not None:
+            from ..experimental.write_gate import WriteDecision
+
+            gate_result = await self._write_gate.evaluate(
+                memory=MemoryItem(
+                    content=content,
+                    memory_type=memory_type or MemoryType.SEMANTIC,
+                    importance=importance or 0.5,
+                    tags=tags or [],
+                    embedding=enrichment.embedding,
+                ),
+                context=context,
+            )
+            if gate_result.decision == WriteDecision.REJECT:
+                # Return a non-persisted MemoryItem to avoid breaking callers
+                return MemoryItem(
+                    content=content,
+                    memory_type=memory_type or MemoryType.SEMANTIC,
+                    importance=importance or 0.0,
+                    tags=tags or [],
+                    embedding=enrichment.embedding,
+                    metadata={"write_gate_rejected": True, "rejection_reason": str(gate_result.reason)},
+                )
 
         # --- Fact decomposition gate (before dedup, to operate on atomic units) ---
         if (
@@ -1181,6 +1211,70 @@ class MemoryCore:
             await self._update_access_metadata(memories)
 
         return memories, trace
+
+    async def consolidate(
+        self,
+        *,
+        user_id: str | None = None,
+        config: Any | None = None,
+    ) -> Any:
+        """Run memory consolidation (sleep-cycle-inspired episodic→semantic promotion).
+
+        Clusters similar episodic memories, generates semantic summaries, and
+        optionally deprecates low-signal memories.
+
+        Args:
+            user_id: Scope consolidation to this user's memories.
+            config: Optional ``ConsolidationConfig`` instance. Uses defaults if None.
+
+        Returns:
+            ``ConsolidationResult`` with statistics about the consolidation run.
+
+        Raises:
+            RuntimeError: If no LLM is configured (consolidation requires summarization).
+        """
+        from ..experimental.consolidation import ConsolidationConfig, MemoryConsolidator
+
+        if self.llm is None:
+            raise RuntimeError("consolidate() requires an LLM. Pass llm= to MemoryCore.")
+
+        consolidation_cfg = config if isinstance(config, ConsolidationConfig) else ConsolidationConfig()
+
+        consolidator = MemoryConsolidator(llm=self.llm, config=consolidation_cfg)
+
+        # Gather episodic memories via recall (broad fetch)
+        all_results = await self.retrieval.recall(
+            query="*",
+            limit=1000,
+            scoring=False,
+            update_access=False,
+        )
+        memories = [
+            m for m in all_results
+            if m.memory_type in (MemoryType.EPISODIC, MemoryType.AUTOBIOGRAPHICAL)
+            and (user_id is None or m.user_id == user_id)
+        ]
+
+        if not memories:
+            from datetime import datetime as _dt
+
+            from ..experimental.consolidation import ConsolidationResult
+
+            now = _dt.now(timezone.utc)
+            return ConsolidationResult(
+                total_memories_processed=0,
+                clusters_formed=0,
+                semantic_memories_created=0,
+                memories_deprecated=0,
+                created_semantic_ids=[],
+                deprecated_memory_ids=[],
+                cluster_summaries=[],
+                started_at=now,
+                completed_at=now,
+                duration_seconds=0.0,
+            )
+
+        return await consolidator.consolidate(memories, user_id=user_id)
 
     def _resolve_recall_options(
         self,
@@ -1964,6 +2058,8 @@ class MemoryCore:
         fact_decomposition_enabled: bool = False,
         fact_decomposition_min_length: int = 200,
         fact_decomposition_max_facts: int = 10,
+        write_gate_enabled: bool = False,
+        write_gate_policy: str = "permissive",
     ) -> None:
         self.mode = mode
         self.retrieval_mode = retrieval_mode
@@ -1997,10 +2093,13 @@ class MemoryCore:
         self.fact_decomposition_enabled = fact_decomposition_enabled
         self.fact_decomposition_min_length = fact_decomposition_min_length
         self.fact_decomposition_max_facts = fact_decomposition_max_facts
+        self.write_gate_enabled = write_gate_enabled
+        self.write_gate_policy = write_gate_policy
         # Helper instances — set later by _init_ingestion_helpers() once retrieval/llm are ready
         self.dedup_checker: DedupChecker | None = None
         self.conflict_detector: ConflictDetector | None = None
         self.fact_decomposer: FactDecomposer | None = None
+        self._write_gate: Any | None = None
 
     def _init_mode_defaults(
         self,
@@ -2173,13 +2272,23 @@ class MemoryCore:
             )
 
     def _init_ingestion_helpers(self, *, llm: Any) -> None:
-        """Instantiate dedup / conflict / fact-decomp helpers after retrieval and llm are ready."""
+        """Instantiate dedup / conflict / fact-decomp / write-gate helpers."""
         if self.dedup_enabled:
             self.dedup_checker = DedupChecker(self.retrieval, self.dedup_threshold)
         if self.conflict_detection_enabled:
             self.conflict_detector = ConflictDetector(llm)
         if self.fact_decomposition_enabled and llm is not None:
             self.fact_decomposer = FactDecomposer(llm, self.fact_decomposition_max_facts)
+        if self.write_gate_enabled:
+            from ..experimental.write_gate import ContextAwareWriteGate, WritePolicy
+
+            policies = {
+                "permissive": WritePolicy.permissive,
+                "balanced": WritePolicy.balanced,
+                "strict": WritePolicy.strict,
+            }
+            policy_factory = policies.get(self.write_gate_policy, WritePolicy.permissive)
+            self._write_gate = ContextAwareWriteGate(policy=policy_factory())
 
     def _init_normalizer(self, config: NormalizationConfig) -> None:
         from ..normalization import create_normalization_pipeline
