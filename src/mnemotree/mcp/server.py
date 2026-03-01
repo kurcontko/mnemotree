@@ -191,11 +191,13 @@ def _build_timeline_results(
     include_embedding: bool,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    for local_rank, memory in enumerate(slice_memories, start=1):
-        idx = start + local_rank - 1
+    result_rank = 0
+    for i, memory in enumerate(slice_memories):
+        idx = start + i
         if not include_anchor and anchor_id and memory.memory_id == anchor_id:
             continue
-        entry = _serialize_memory_index(memory, local_rank)
+        result_rank += 1
+        entry = _serialize_memory_index(memory, result_rank)
         entry["offset"] = idx - anchor_index
         if anchor_id and memory.memory_id == anchor_id:
             entry["anchor"] = True
@@ -305,6 +307,10 @@ async def remember(
     Returns:
         The stored memory record as a dictionary.
     """
+    if not content or not content.strip():
+        raise ValueError("content cannot be empty")
+    if importance is not None and not (0.0 <= importance <= 1.0):
+        raise ValueError("importance must be between 0.0 and 1.0")
     memory_core = await _get_memory_core()
     parsed_type = _parse_memory_type(memory_type)
     remember_kwargs: dict[str, Any] = {
@@ -997,6 +1003,8 @@ def _register_tools(mcp: Any) -> None:
     mcp.tool(get_memories)
     mcp.tool(update_memory)
     mcp.tool(forget)
+    mcp.tool(timeline)
+    mcp.tool(reflect)
     # Knowledge graph tools
     mcp.tool(link_memories)
     mcp.tool(get_links)
