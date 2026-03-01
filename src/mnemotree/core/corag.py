@@ -134,7 +134,7 @@ class OpenAIReasoningHook:
         try:
             response = await client.chat.completions.create(
                 model=self.model,
-                messages=messages,  # type: ignore[arg-type]
+                messages=messages,
                 max_tokens=self.max_tokens,
                 temperature=0.0,
             )

@@ -3,7 +3,13 @@ from __future__ import annotations
 from ..rerankers import CrossEncoderReranker, NoOpReranker
 from .builder import MemoryCoreBuilder
 from .hybrid_retrieval import FusionStrategy, HybridRetriever, RetrievalStage
-from .intent import INTENT_TO_TYPES, IntentClassifier, KeywordIntentClassifier, LLMIntentClassifier, RetrievalIntent
+from .intent import (
+    INTENT_TO_TYPES,
+    IntentClassifier,
+    KeywordIntentClassifier,
+    LLMIntentClassifier,
+    RetrievalIntent,
+)
 from .memory import (
     IngestionConfig,
     MemoryCore,

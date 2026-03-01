@@ -1,15 +1,12 @@
 """Unit tests for PPR algorithm (src/mnemotree/core/ppr.py)."""
 from __future__ import annotations
 
-import pytest
-
 from mnemotree.core.models import LinkType, MemoryLink
 from mnemotree.core.ppr import (
     PPRConfig,
     build_adjacency_from_links,
     personalized_pagerank,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -44,8 +44,7 @@ class DedupChecker:
             if not candidate.embedding:
                 continue
             score = cosine_similarity(embedding, candidate.embedding)
-            if score >= self.threshold:
-                if best is None or score > best[1]:
-                    best = (candidate, score)
+            if score >= self.threshold and (best is None or score > best[1]):
+                best = (candidate, score)
 
         return best

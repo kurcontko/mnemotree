@@ -6,7 +6,6 @@ import pytest
 from mnemotree.core.corag import ChainOfRetrieval, CoRAGConfig
 from mnemotree.core.models import MemoryItem, MemoryType
 
-
 # ---------------------------------------------------------------------------
 # Helpers / Stubs
 # ---------------------------------------------------------------------------

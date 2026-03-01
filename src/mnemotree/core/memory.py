@@ -5,12 +5,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, cast
+from uuid import uuid4
 
 if TYPE_CHECKING:
-    from .hyde import HyDEEmbedder
     from .intent import IntentClassifier
-    from .query_decomposition import QueryDecomposer
-from uuid import uuid4
 
 from langchain_core.embeddings.embeddings import Embeddings
 from langchain_core.language_models.base import BaseLanguageModel
@@ -842,7 +840,7 @@ class MemoryCore:
             suggestions = await self.store.suggest_links(
                 memory_id, min_similarity=self.auto_link_threshold, limit=10
             )
-            for target, link_type, score, reason in suggestions:
+            for target, link_type, score, _reason in suggestions:
                 await self.link(
                     memory_id,
                     target.memory_id,
@@ -1027,7 +1025,7 @@ class MemoryCore:
 
         # MS-RAG: decompose compound queries and fuse sub-results
         if self._query_decomposer is not None and isinstance(query, str):
-            from .query_decomposition import QueryDecomposer, rrf_merge
+            from .query_decomposition import rrf_merge
 
             sub_queries = await self._query_decomposer.decompose(query)
             if len(sub_queries) > 1:
@@ -2151,6 +2149,8 @@ class MemoryCore:
         )
 
         # MS-RAG query decomposer
+        from .query_decomposition import QueryDecomposer
+
         self._query_decomposer: QueryDecomposer | None = None
         if enable_ms_rag:
             if self.llm is None:

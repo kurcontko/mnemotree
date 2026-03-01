@@ -7,6 +7,11 @@ from __future__ import annotations
 
 import pytest
 
+from mnemotree.core.models import LinkType, MemoryItem, MemoryType
+from mnemotree.core.ppr import PPRConfig, build_adjacency_from_links, personalized_pagerank
+from mnemotree.core.query import TypedPathQuery
+from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
+
 pytest_plugins = ["anyio"]
 
 try:
@@ -19,13 +24,6 @@ except ImportError:
 pytestmark = pytest.mark.skipif(
     not _HAS_SQLITE_VEC, reason="sqlite_vec not installed"
 )
-
-
-from mnemotree.core.models import LinkType, MemoryItem, MemoryType
-from mnemotree.core.ppr import PPRConfig, build_adjacency_from_links, personalized_pagerank
-from mnemotree.core.query import TypedPathQuery
-from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

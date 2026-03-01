@@ -76,7 +76,6 @@ async def test_find_duplicate_filters_by_user_id():
 @pytest.mark.asyncio
 async def test_find_duplicate_picks_best_match():
     vec = [1.0, 0.0]
-    import math
 
     # Two candidates: one exactly matches (score=1.0), one is slightly off
     good = _make_memory("good", [1.0, 0.0])

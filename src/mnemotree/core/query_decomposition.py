@@ -44,7 +44,7 @@ def rrf_merge(
     limit: int | None,
 ) -> list[MemoryItem]:
     """RRF-fuse memories from multiple sub-query retrievals, dedup by memory_id."""
-    stage_candidates = {i: results for i, results in enumerate(results_per_query)}
+    stage_candidates = dict(enumerate(results_per_query))
     fused, _scores, _stage_scores = rrf_fuse(stage_candidates=stage_candidates)
     if limit is not None:
         return fused[:limit]

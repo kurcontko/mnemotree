@@ -640,7 +640,7 @@ class SCMRAGRetriever(BaseRetriever):
     def __init__(
         self,
         *args: Any,
-        base_retriever: BaseRetriever,
+        base_retriever: Retriever,
         gap_analyzer: Any,  # GapAnalyzer protocol - avoid circular import
         max_correction_rounds: int = 2,
         **kwargs: Any,
@@ -760,7 +760,7 @@ class TypedPathRetriever(BaseRetriever):
     ) -> list[MemoryItem]:
         started = time.perf_counter()
         if not isinstance(query, str):
-            return await self._query_store(query)[0]  # type: ignore[return-value]
+            return (await self._query_store(query))[0]
 
         resolved_limit = limit if limit is not None else 10
 

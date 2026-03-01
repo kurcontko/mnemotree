@@ -6,7 +6,6 @@ import pytest
 from mnemotree.core.gap_detection import HeuristicGapAnalyzer, _extract_wh_word
 from mnemotree.core.models import MemoryItem, MemoryType
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
