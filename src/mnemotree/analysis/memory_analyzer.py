@@ -50,8 +50,13 @@ class MemoryAnalyzer:
         emotional = EmotionAnalysisResult(**emotional)
         concepts = ConceptExtractionResult(**concepts)
 
+        try:
+            memory_type = MemoryType(classification.memory_type)
+        except ValueError:
+            memory_type = MemoryType.SEMANTIC
+
         return MemoryAnalysisResult(
-            memory_type=MemoryType(classification.memory_type),
+            memory_type=memory_type,
             importance=classification.importance,
             emotions=emotional.emotions,
             emotional_valence=emotional.emotional_valence,
