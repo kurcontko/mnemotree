@@ -162,6 +162,37 @@ class TestSQLiteSerialization:
         assert record["valid_from"] is None
         assert record["is_hot"] == 0
 
+    def test_deserialization_preserves_zero_confidence_fidelity(self) -> None:
+        """Confidence and fidelity of 0.0 must not silently become 1.0."""
+        import sqlite3
+
+        from mnemotree.store._records import sqlite_memory_from_row, sqlite_record_from_memory
+        from mnemotree.store._schema import create_sqlite_schema
+
+        m = MemoryItem(
+            content="zero conf",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.5,
+            confidence=0.0,
+            fidelity=0.0,
+        )
+        record = sqlite_record_from_memory(m)
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        create_sqlite_schema(conn, collection_name="t", meta_table="t_meta")
+
+        cols = ", ".join(f'"{k}"' for k in record)
+        placeholders = ", ".join("?" for _ in record)
+        conn.execute(f'INSERT INTO "t" ({cols}) VALUES ({placeholders})', list(record.values()))
+
+        row = conn.execute('SELECT * FROM "t" LIMIT 1').fetchone()
+        restored = sqlite_memory_from_row(row)
+
+        assert restored.confidence == 0.0
+        assert restored.fidelity == 0.0
+        conn.close()
+
 
 class TestSchemasMigration:
     def test_phase1_migration_idempotent(self) -> None:
