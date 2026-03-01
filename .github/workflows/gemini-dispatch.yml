@@ -2,7 +2,7 @@ name: '🔀 Gemini Dispatch'
 
 on:
   pull_request:
-    types: ['opened', 'reopened', 'synchronize']
+    types: ['opened', 'reopened']
   issues:
     types: ['opened', 'reopened']
   issue_comment:
@@ -79,7 +79,7 @@ jobs:
             } else if (request.startsWith('@gemini-cli')) {
               core.setOutput('command', 'invoke');
               core.setOutput('additional_context', request.replace(/^@gemini-cli/, '').trim());
-            } else if (['pull_request.opened', 'pull_request.reopened', 'pull_request.synchronize'].includes(eventType)) {
+            } else if (['pull_request.opened', 'pull_request.reopened'].includes(eventType)) {
               core.setOutput('command', 'review');
             } else if (['issues.opened', 'issues.reopened'].includes(eventType)) {
               core.setOutput('command', 'triage');
