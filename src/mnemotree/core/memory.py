@@ -29,7 +29,10 @@ from ..store.protocols import (
     SupportsVectorSearch,
 )
 from ..store.serialization import serialize_datetime
+from ._internal.conflict import ConflictDetector
+from ._internal.deduplication import DedupChecker
 from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
+from ._internal.fact_decomposer import FactDecomposer
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
@@ -37,7 +40,7 @@ from .models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetim
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
 from .retrieval import Retriever
 from .retriever_factory import RetrieverFactory
-from .scoring import MemoryScoring
+from .scoring import MemoryScoring, cosine_similarity
 
 MemoryMode = Literal["lite", "pro"]
 RetrievalMode = Literal["basic", "hybrid"]
@@ -101,6 +104,19 @@ class NormalizationConfig:
 class IngestionConfig:
     async_ingest: bool = False
     ingestion_queue_size: int = 100
+    # Deduplication
+    dedup_enabled: bool = True
+    dedup_threshold: float = 0.88
+    # Auto-linking (background SIMILAR_TO links after each remember)
+    auto_link_enabled: bool = True
+    auto_link_threshold: float = 0.80
+    # Conflict detection (background CONTRADICTS links)
+    conflict_detection_enabled: bool = True
+    conflict_similarity_min: float = 0.55
+    # Atomic fact decomposition (opt-in; requires llm=)
+    fact_decomposition_enabled: bool = False
+    fact_decomposition_min_length: int = 200
+    fact_decomposition_max_facts: int = 10
 
 
 @dataclass(frozen=True)
@@ -213,6 +229,15 @@ class MemoryCore:
             rerank_candidates=retrieval_config.rerank_candidates,
             async_ingest=ingestion_config.async_ingest,
             ingestion_queue_size=ingestion_config.ingestion_queue_size,
+            dedup_enabled=ingestion_config.dedup_enabled,
+            dedup_threshold=ingestion_config.dedup_threshold,
+            auto_link_enabled=ingestion_config.auto_link_enabled,
+            auto_link_threshold=ingestion_config.auto_link_threshold,
+            conflict_detection_enabled=ingestion_config.conflict_detection_enabled,
+            conflict_similarity_min=ingestion_config.conflict_similarity_min,
+            fact_decomposition_enabled=ingestion_config.fact_decomposition_enabled,
+            fact_decomposition_min_length=ingestion_config.fact_decomposition_min_length,
+            fact_decomposition_max_facts=ingestion_config.fact_decomposition_max_facts,
         )
         self._init_mode_defaults(
             mode=mode_defaults.mode,
@@ -251,6 +276,7 @@ class MemoryCore:
             retriever=retriever,
         )
         self._init_normalizer(normalization_config)
+        self._init_ingestion_helpers(llm=llm)
 
     async def remember(
         self,
@@ -461,6 +487,7 @@ class MemoryCore:
         metadata: dict[str, Any] | None = None,
         conversation_id: str | None = None,
         user_id: str | None = None,
+        _skip_decompose: bool = False,
     ) -> MemoryItem:
         analyze, summarize = self._resolve_analysis_flags(analyze, summarize)
 
@@ -470,6 +497,55 @@ class MemoryCore:
         enrichment = await self.enrichment.enrich(
             content, context, analyze=analyze, summarize=summarize
         )
+
+        # --- Fact decomposition gate (before dedup, to operate on atomic units) ---
+        if (
+            not _skip_decompose
+            and not skip_store
+            and self.fact_decomposer is not None
+            and self.fact_decomposer.is_compound(content, self.fact_decomposition_min_length)
+        ):
+            return await self._decompose_and_store(
+                content,
+                memory_type=memory_type,
+                importance=importance,
+                tags=tags,
+                context=context,
+                analyze=analyze,
+                summarize=summarize,
+                references=references,
+                memory_id=memory_id,
+                timestamp=timestamp,
+                source=source,
+                author=author,
+                metadata=metadata,
+                conversation_id=conversation_id,
+                user_id=user_id,
+            )
+
+        # --- Deduplication check ---
+        if not skip_store and self.dedup_checker is not None:
+            try:
+                dup_result = await self.dedup_checker.find_duplicate(
+                    enrichment.embedding, content, user_id, limit=3
+                )
+            except Exception:
+                import logging as _logging
+
+                _logging.getLogger(__name__).debug(
+                    "Dedup check failed — proceeding without deduplication", exc_info=True
+                )
+                dup_result = None
+            if dup_result is not None:
+                existing, score = dup_result
+                return await self._merge_into(
+                    existing=existing,
+                    new_content=content,
+                    new_enrichment=enrichment,
+                    new_tags=tags,
+                    new_importance=importance,
+                    new_metadata=metadata,
+                )
 
         memory_type, importance = self._resolve_importance_and_type(
             memory_type,
@@ -698,6 +774,189 @@ class MemoryCore:
         if references:
             store_tasks.append(self.connect(memory.memory_id, related_to=references))
         await asyncio.gather(*store_tasks)
+
+        if self.auto_link_enabled and isinstance(self.store, SupportsKnowledgeGraph):
+            asyncio.create_task(self._auto_link_background(memory.memory_id))
+
+        if self.conflict_detection_enabled and self.conflict_detector is not None:
+            asyncio.create_task(self._detect_and_link_conflicts(memory))
+
+    async def _merge_into(
+        self,
+        *,
+        existing: MemoryItem,
+        new_content: str,
+        new_enrichment: EnrichmentResult,
+        new_tags: list[str] | None,
+        new_importance: float | None,
+        new_metadata: dict[str, Any] | None,
+    ) -> MemoryItem:
+        """Merge new_content into an existing memory (dedup path)."""
+        merged_content = existing.content + "\n---\n" + new_content
+        merged_enrichment = await self.enrichment.enrich(merged_content)
+
+        merged_tags = sorted(set(existing.tags) | set(new_tags or []))
+        merged_metadata = {**(existing.metadata or {}), **(new_metadata or {})}
+        merged_importance = max(existing.importance, new_importance or 0.0)
+
+        merged = existing.model_copy(
+            update={
+                "content": merged_content,
+                "embedding": merged_enrichment.embedding,
+                "entities": merged_enrichment.entities,
+                "entity_mentions": merged_enrichment.entity_mentions,
+                "tags": merged_tags,
+                "metadata": merged_metadata,
+                "importance": merged_importance,
+            }
+        )
+        await self.persistence.save(merged)
+        return merged
+
+    async def _auto_link_background(self, memory_id: str) -> None:
+        """Fire-and-forget: create SIMILAR_TO links for high-confidence neighbours."""
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+        try:
+            assert isinstance(self.store, SupportsKnowledgeGraph)
+            suggestions = await self.store.suggest_links(
+                memory_id, min_similarity=self.auto_link_threshold, limit=10
+            )
+            for target, link_type, score, reason in suggestions:
+                await self.link(
+                    memory_id,
+                    target.memory_id,
+                    link_type,
+                    context=f"auto-linked score={score:.3f}",
+                )
+        except Exception:
+            _log.warning(
+                "Background auto-linking failed for %s", memory_id, exc_info=True
+            )
+
+    async def _detect_and_link_conflicts(self, memory: MemoryItem) -> None:
+        """Fire-and-forget: detect contradictions and create CONTRADICTS links."""
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+        try:
+            assert self.conflict_detector is not None
+            # Recall candidates in similarity range [conflict_similarity_min, dedup_threshold)
+            candidates = await self.retrieval.recall(
+                query=memory.content,
+                limit=10,
+                scoring=False,
+                update_access=False,
+            )
+            in_range: list[MemoryItem] = []
+            for c in candidates:
+                if c.memory_id == memory.memory_id or not c.embedding or not memory.embedding:
+                    continue
+                sim = cosine_similarity(memory.embedding, c.embedding)
+                if self.conflict_similarity_min <= sim < self.dedup_threshold:
+                    in_range.append(c)
+
+            conflicts = await self.conflict_detector.detect(memory, in_range)
+            for conflict_memory, reason in conflicts:
+                if isinstance(self.store, SupportsKnowledgeGraph):
+                    await self.link(
+                        memory.memory_id,
+                        conflict_memory.memory_id,
+                        LinkType.CONTRADICTS,
+                        context=reason,
+                    )
+        except Exception:
+            _log.warning(
+                "Background conflict detection failed for %s",
+                memory.memory_id,
+                exc_info=True,
+            )
+
+    async def _decompose_and_store(
+        self,
+        content: str,
+        *,
+        memory_type: MemoryType | None = None,
+        importance: float | None = None,
+        tags: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+        analyze: bool | None = None,
+        summarize: bool | None = None,
+        references: list[str] | None = None,
+        memory_id: str | None = None,
+        timestamp: datetime | None = None,
+        source: str | None = None,
+        author: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        user_id: str | None = None,
+    ) -> MemoryItem:
+        """Decompose compound content into atomic facts, store each, link via PART_OF."""
+        assert self.fact_decomposer is not None
+        facts = await self.fact_decomposer.decompose(content)
+
+        if len(facts) <= 1:
+            # Not actually compound — fall through to normal path
+            return await self._remember_sync(
+                content,
+                memory_type=memory_type,
+                importance=importance,
+                tags=tags,
+                context=context,
+                analyze=analyze,
+                summarize=summarize,
+                references=references,
+                memory_id=memory_id,
+                timestamp=timestamp,
+                source=source,
+                author=author,
+                metadata=metadata,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                _skip_decompose=True,
+            )
+
+        # Store original content as semantic parent summary
+        parent = await self._remember_sync(
+            content,
+            memory_type=MemoryType.SEMANTIC,
+            importance=importance,
+            tags=tags,
+            context=context,
+            analyze=analyze,
+            summarize=summarize,
+            references=references,
+            memory_id=memory_id,
+            timestamp=timestamp,
+            source=source,
+            author=author,
+            metadata=metadata,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            _skip_decompose=True,
+        )
+
+        for fact in facts[: self.fact_decomposition_max_facts]:
+            child = await self._remember_sync(
+                fact,
+                memory_type=memory_type,
+                importance=importance,
+                tags=tags,
+                context=context,
+                analyze=analyze,
+                summarize=summarize,
+                timestamp=timestamp,
+                source=source,
+                author=author,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                _skip_decompose=True,
+            )
+            if isinstance(self.store, SupportsKnowledgeGraph):
+                await self.link(child.memory_id, parent.memory_id, LinkType.PART_OF)
+
+        return parent
 
     async def recall(
         self,
@@ -1529,6 +1788,15 @@ class MemoryCore:
         rerank_candidates: int,
         async_ingest: bool,
         ingestion_queue_size: int,
+        dedup_enabled: bool = True,
+        dedup_threshold: float = 0.88,
+        auto_link_enabled: bool = True,
+        auto_link_threshold: float = 0.80,
+        conflict_detection_enabled: bool = True,
+        conflict_similarity_min: float = 0.55,
+        fact_decomposition_enabled: bool = False,
+        fact_decomposition_min_length: int = 200,
+        fact_decomposition_max_facts: int = 10,
     ) -> None:
         self.mode = mode
         self.retrieval_mode = retrieval_mode
@@ -1552,6 +1820,20 @@ class MemoryCore:
         self.async_ingest = async_ingest
         self.ingestion_queue_size = max(1, int(ingestion_queue_size))
         self._ingestion_queue: MemoryIngestionQueue | None = None
+        # Ingestion pipeline settings — helpers instantiated in _init_ingestion_helpers()
+        self.dedup_enabled = dedup_enabled
+        self.dedup_threshold = dedup_threshold
+        self.auto_link_enabled = auto_link_enabled
+        self.auto_link_threshold = auto_link_threshold
+        self.conflict_detection_enabled = conflict_detection_enabled
+        self.conflict_similarity_min = conflict_similarity_min
+        self.fact_decomposition_enabled = fact_decomposition_enabled
+        self.fact_decomposition_min_length = fact_decomposition_min_length
+        self.fact_decomposition_max_facts = fact_decomposition_max_facts
+        # Helper instances — set later by _init_ingestion_helpers() once retrieval/llm are ready
+        self.dedup_checker: DedupChecker | None = None
+        self.conflict_detector: ConflictDetector | None = None
+        self.fact_decomposer: FactDecomposer | None = None
 
     def _init_mode_defaults(
         self,
@@ -1673,6 +1955,15 @@ class MemoryCore:
             enable_rrf_signal_rerank=enable_rrf_signal_rerank,
             rerank_candidates=rerank_candidates,
         )
+
+    def _init_ingestion_helpers(self, *, llm: Any) -> None:
+        """Instantiate dedup / conflict / fact-decomp helpers after retrieval and llm are ready."""
+        if self.dedup_enabled:
+            self.dedup_checker = DedupChecker(self.retrieval, self.dedup_threshold)
+        if self.conflict_detection_enabled:
+            self.conflict_detector = ConflictDetector(llm)
+        if self.fact_decomposition_enabled and llm is not None:
+            self.fact_decomposer = FactDecomposer(llm, self.fact_decomposition_max_facts)
 
     def _init_normalizer(self, config: NormalizationConfig) -> None:
         from ..normalization import create_normalization_pipeline
