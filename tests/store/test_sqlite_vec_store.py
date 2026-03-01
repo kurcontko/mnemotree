@@ -139,35 +139,84 @@ async def test_sqlite_vec_query_memories(tmp_path, memory_item):
 
 @pytest.mark.asyncio
 async def test_sqlite_vec_get_similar_memories(tmp_path, memory_item):
-    """Test vector similarity search."""
+    """Test vector similarity search via get_similar_memories (KNN MATCH)."""
+    dim = 4  # small dimension for fast tests
     db_path = tmp_path / "memories.sqlite"
-    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=len(memory_item.embedding))
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=dim)
     await store.initialize()
 
     try:
-        # Store memories
         mem1 = memory_item.model_copy(
             update={
                 "memory_id": "mem-1",
                 "content": "Python programming tutorial",
                 "importance": 0.8,
+                "embedding": [1.0, 0.0, 0.0, 0.0],
             }
         )
         mem2 = memory_item.model_copy(
-            update={"memory_id": "mem-2", "content": "JavaScript basics", "importance": 0.6}
+            update={
+                "memory_id": "mem-2",
+                "content": "JavaScript basics",
+                "importance": 0.6,
+                "embedding": [0.0, 1.0, 0.0, 0.0],
+            }
         )
         mem3 = memory_item.model_copy(
-            update={"memory_id": "mem-3", "content": "Advanced Python features", "importance": 0.9}
+            update={
+                "memory_id": "mem-3",
+                "content": "Advanced Python features",
+                "importance": 0.9,
+                "embedding": [0.9, 0.1, 0.0, 0.0],
+            }
         )
 
         await store.store_memory(mem1)
         await store.store_memory(mem2)
         await store.store_memory(mem3)
 
-        # Test basic retrieval
-        results = await store.get_memory("mem-1")
-        assert results is not None
-        assert results.content == "Python programming tutorial"
+        # Search near mem1's embedding — should find mem1 and mem3 closest
+        results = await store.get_similar_memories(
+            query="python", query_embedding=[1.0, 0.0, 0.0, 0.0], top_k=3
+        )
+        assert len(results) == 3
+        assert results[0].memory_id == "mem-1"
+        assert results[1].memory_id == "mem-3"
+        assert results[2].memory_id == "mem-2"
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_vec_query_memories_with_vector(tmp_path, memory_item):
+    """Test query_memories with a vector query uses KNN MATCH."""
+    dim = 4
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=dim)
+    await store.initialize()
+
+    try:
+        mem1 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-1",
+                "content": "Alpha memory",
+                "embedding": [1.0, 0.0, 0.0, 0.0],
+            }
+        )
+        mem2 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-2",
+                "content": "Beta memory",
+                "embedding": [0.0, 0.0, 1.0, 0.0],
+            }
+        )
+        await store.store_memory(mem1)
+        await store.store_memory(mem2)
+
+        query = MemoryQuery(vector=[1.0, 0.0, 0.0, 0.0], limit=2)
+        results = await store.query_memories(query)
+        assert len(results) == 2
+        assert results[0].memory_id == "mem-1"
     finally:
         await store.close()
 
