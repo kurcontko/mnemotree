@@ -49,7 +49,6 @@ class ResolutionStrategy(str, Enum):
     ENSEMBLE = "ensemble"  # Combine multiple signals
 
 
-@dataclass
 class Claim(BaseModel):
     """
     A normalized fact or statement extracted from memories.
