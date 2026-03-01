@@ -85,11 +85,14 @@ class LLMIntentClassifier:
         self.llm = llm
 
     async def classify(self, query: str) -> RetrievalIntent:
-        response = await self.llm.ainvoke(_CLASSIFY_PROMPT.format(query=query))
-        text = (
-            response.content if hasattr(response, "content") else str(response)
-        ).strip().lower()
-        for intent in RetrievalIntent:
-            if intent.value in text:
-                return intent
+        try:
+            response = await self.llm.ainvoke(_CLASSIFY_PROMPT.format(query=query))
+            text = (
+                (response.content if hasattr(response, "content") else str(response)) or ""
+            ).strip().lower()
+            for intent in RetrievalIntent:
+                if intent.value in text:
+                    return intent
+        except Exception:
+            pass
         return RetrievalIntent.UNKNOWN

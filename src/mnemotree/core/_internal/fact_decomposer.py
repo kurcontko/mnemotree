@@ -48,9 +48,10 @@ class FactDecomposer:
             response = await self.llm.ainvoke(prompt)
             import json
 
-            text = response.content if hasattr(response, "content") else str(response)
+            text = (response.content if hasattr(response, "content") else str(response)) or ""
             data = json.loads(text)
-            facts: list[str] = [str(f) for f in data.get("facts", []) if str(f).strip()]
+            raw_facts = data.get("facts", []) if isinstance(data, dict) else []
+            facts: list[str] = [str(f) for f in raw_facts if str(f).strip()]
             if not facts:
                 return [content]
             return facts[: self.max_facts]
