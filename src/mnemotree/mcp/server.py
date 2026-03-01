@@ -449,7 +449,8 @@ async def update_memory(
     Args:
         memory_id: ID of the memory to update.
         patch: Dict of fields to update. Supported keys:
-            content, summary, tags, importance, context, metadata.
+            content, summary, tags, importance, context, metadata,
+            is_hot, event_time, valid_from, valid_until, contextual_intent.
         reembed: Recompute embedding when content changes (default: False).
 
     Returns:
@@ -464,6 +465,11 @@ async def update_memory(
         "importance",
         "context",
         "metadata",
+        "is_hot",
+        "event_time",
+        "valid_from",
+        "valid_until",
+        "contextual_intent",
     }
     unknown_fields = {str(key) for key in patch} - allowed_fields
     if unknown_fields:
@@ -502,6 +508,14 @@ async def update_memory(
             raise ValueError("metadata must be a dict")
         else:
             memory.metadata.update(metadata)
+    if "is_hot" in patch:
+        memory.is_hot = bool(patch["is_hot"])
+    if "contextual_intent" in patch:
+        memory.contextual_intent = patch["contextual_intent"] or None
+    for dt_field in ("event_time", "valid_from", "valid_until"):
+        if dt_field in patch:
+            val = patch[dt_field]
+            setattr(memory, dt_field, coerce_datetime(val, default=None) if val else None)
 
     if content_updated and reembed:
         memory.embedding = await memory_core.get_embedding(memory.content)

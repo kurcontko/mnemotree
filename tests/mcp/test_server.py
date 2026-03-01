@@ -822,6 +822,30 @@ async def test_update_memory_valid_importance(mock_memory_core_with_store):
 
 
 @pytest.mark.asyncio
+async def test_update_memory_phase1_fields(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    memory.metadata = {}
+    _, store = mock_memory_core_with_store(memory=memory)
+
+    updated = await server.update_memory(
+        memory_id="mem-1",
+        patch={
+            "is_hot": True,
+            "contextual_intent": "factual_update",
+            "event_time": "2024-06-15T10:30:00+00:00",
+            "valid_from": "2024-01-01T00:00:00+00:00",
+            "valid_until": None,
+        },
+    )
+
+    assert updated["is_hot"] is True
+    assert updated["contextual_intent"] == "factual_update"
+    assert "2024-06-15" in str(updated.get("event_time", ""))
+    assert updated.get("valid_until") is None
+    store.store_memory.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_timeline_empty_memories(timeline_setup):
     timeline_setup([])
     assert await server.timeline(memory_id="mem-1") == []
