@@ -69,7 +69,7 @@ jobs:
 
             core.setOutput('request', request);
 
-            if (eventType === 'pull_request.opened' || eventType === 'pull_request.reopened') {
+            if (['pull_request.opened', 'pull_request.reopened', 'pull_request.synchronize'].includes(eventType)) {
               core.setOutput('command', 'review');
             } else if (['issues.opened', 'issues.reopened'].includes(eventType)) {
               core.setOutput('command', 'triage');
