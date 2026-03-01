@@ -136,7 +136,7 @@ class MnemotreeCrewMemory:
 
         context_parts = []
         for mem in memories:
-            agent = mem.metadata.get("agent_role", "unknown")
+            agent = (mem.metadata or {}).get("agent_role", "unknown")
             context_parts.append(f"[{agent}]: {mem.content}")
 
         return "\n\n".join(context_parts)
