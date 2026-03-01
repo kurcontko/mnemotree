@@ -1088,6 +1088,93 @@ class MemoryCore:
             update_access=update_access,
         )
 
+    async def recall_ppr(
+        self,
+        query: str,
+        limit: int = 10,
+        ppr_cfg: Any | None = None,
+        *,
+        update_access: bool = False,
+    ) -> list[MemoryItem]:
+        """Graph-augmented recall using Personalized PageRank (HippoRAG 2 style).
+
+        Seeds retrieval results with cosine similarity, then propagates activation
+        through the knowledge-graph link structure to surface multi-hop relevant
+        memories.  Requires a store that implements ``SupportsKnowledgeGraph``
+        (e.g. SQLiteVecMemoryStore).
+
+        Args:
+            query: Natural language query.
+            limit: Maximum number of memories to return.
+            ppr_cfg: Optional ``PPRConfig`` instance.  Uses defaults if None.
+            update_access: If True, update last_accessed / access_count.
+
+        Returns:
+            Ranked list of MemoryItem objects.
+        """
+        from .ppr import PPRConfig
+        from .retrieval import PPRGraphRetriever
+
+        cfg = ppr_cfg if isinstance(ppr_cfg, PPRConfig) else PPRConfig()
+
+        retriever = PPRGraphRetriever(
+            store=self.store,
+            scoring_system=self.memory_scoring,
+            ner=self.ner,
+            keyword_extractor=self.keyword_extractor,
+            embedder=self.embedder,
+            index_manager=self.index_manager,
+            ppr_cfg=cfg,
+        )
+        return await retriever.recall(
+            query,
+            limit=limit,
+            scoring=True,
+            update_access=update_access,
+        )
+
+    async def recall_chain(
+        self,
+        query: str,
+        limit: int = 10,
+        max_hops: int = 4,
+        reasoning_hook: Any | None = None,
+        corag_cfg: Any | None = None,
+        *,
+        update_access: bool = False,
+    ) -> tuple[list[MemoryItem], list[str]]:
+        """Iterative Chain-of-Retrieval (CoRAG style).
+
+        Iteratively retrieves, reasons about gaps, and refines sub-queries for up
+        to ``max_hops`` rounds.  Requires a ``ReasoningHook`` (defaults to
+        ``OpenAIReasoningHook`` with environment-variable credentials).
+
+        Args:
+            query: Natural language query.
+            limit: Maximum number of memories to return.
+            max_hops: Maximum retrieval hops.
+            reasoning_hook: Optional ``ReasoningHook`` implementation.  Defaults
+                to ``OpenAIReasoningHook``.
+            corag_cfg: Optional ``CoRAGConfig`` instance.
+            update_access: If True, update last_accessed / access_count on results.
+
+        Returns:
+            Tuple of (memories, reasoning_trace) where trace is the list of
+            sub-queries generated at each hop.
+        """
+        from .corag import ChainOfRetrieval, CoRAGConfig, OpenAIReasoningHook
+
+        cfg = corag_cfg if isinstance(corag_cfg, CoRAGConfig) else CoRAGConfig(max_hops=max_hops)
+        hook = reasoning_hook if reasoning_hook is not None else OpenAIReasoningHook()
+
+        chain = ChainOfRetrieval(retriever=self.retrieval, hook=hook, cfg=cfg)
+        memories, trace = await chain.retrieve(query, limit=limit)
+
+        if update_access and memories:
+            await self._update_access_metadata(memories)
+
+        return memories, trace
+
     def _resolve_recall_options(
         self,
         *,

@@ -14,13 +14,15 @@ from ..rerankers import BaseReranker
 from ..store.protocols import (
     MemoryCRUDStore,
     SupportsEntityQuery,
+    SupportsKnowledgeGraph,
     SupportsMetadataUpdate,
     SupportsStructuredQuery,
     SupportsVectorSearch,
 )
 from ._internal.indexing import IndexManager
 from ._internal.scoring import MemoryScorer, SignalRanker, cosine_similarity
-from .models import MemoryItem
+from .models import LinkType, MemoryItem
+from .ppr import PPRConfig, build_adjacency_from_links, personalized_pagerank
 from .query import MemoryQuery, MemoryQueryBuilder
 from .scoring import MemoryScoring
 
@@ -31,6 +33,9 @@ __all__ = [
     "BaseRetriever",
     "VectorEntityRetriever",
     "HybridFusionRetriever",
+    "PPRGraphRetriever",
+    "SCMRAGRetriever",
+    "TypedPathRetriever",
     "rrf_fuse",
 ]
 
@@ -490,3 +495,318 @@ class HybridFusionRetriever(BaseRetriever):
             rrf_k=rrf_k,
         )
         return fused, scores
+
+
+# ---------------------------------------------------------------------------
+# PPRGraphRetriever
+# ---------------------------------------------------------------------------
+
+
+class PPRGraphRetriever(BaseRetriever):
+    """Graph-augmented retriever using Personalized PageRank.
+
+    Runs standard hybrid retrieval to find seed memories, then propagates
+    activation through the knowledge-graph link structure via PPR to surface
+    multi-hop relevant memories.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        ppr_cfg: PPRConfig | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.ppr_cfg = ppr_cfg or PPRConfig()
+
+    async def recall(
+        self,
+        query: str | MemoryQuery | MemoryQueryBuilder,
+        limit: int | None,
+        scoring: bool,
+        update_access: bool,
+    ) -> list[MemoryItem]:
+        started = time.perf_counter()
+        if not isinstance(query, str):
+            # Fall back to vector retrieval for structured queries
+            memories, query_embedding = await self._query_store(query)
+            if limit is not None:
+                memories = memories[:limit]
+            if update_access and memories:
+                await self._update_access(memories)
+            return memories
+
+        resolved_limit = limit if limit is not None else 10
+        cfg = self.ppr_cfg
+
+        # 1. Seed retrieval via vector search
+        vector_memories, query_embedding = await self._retrieve_vector_candidates(
+            query, resolved_limit * 3
+        )
+
+        if not vector_memories:
+            return []
+
+        # 2. Build seed scores (cosine similarity)
+        seed_scores: dict[str, float] = {}
+        for memory in vector_memories:
+            sim = cosine_similarity(memory.embedding, query_embedding)
+            seed_scores[memory.memory_id] = max(0.0, sim)
+
+        # 3. Fetch neighbourhood links (requires SupportsKnowledgeGraph)
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            logger.warning("PPRGraphRetriever: store does not support SupportsKnowledgeGraph; falling back to seed results")
+            if limit is not None:
+                vector_memories = vector_memories[:limit]
+            return vector_memories
+
+        link_types: list[LinkType] | None = (
+            [LinkType(lt) for lt in cfg.link_types] if cfg.link_types else None
+        )
+        links = await self.store.get_neighborhood_links(
+            list(seed_scores),
+            max_depth=cfg.max_depth,
+            link_types=link_types,
+        )
+
+        # 4. Build adjacency and run PPR
+        adjacency = build_adjacency_from_links(links, cfg)
+        ppr_scores = personalized_pagerank(seed_scores, adjacency, cfg)
+
+        if not ppr_scores:
+            if limit is not None:
+                vector_memories = vector_memories[:limit]
+            return vector_memories
+
+        # 5. Fetch MemoryItems for top PPR nodes not already in seed results
+        seed_ids = {m.memory_id for m in vector_memories}
+        extra_ids = [
+            mid for mid in ppr_scores if mid not in seed_ids
+        ]
+        extra_memories: list[MemoryItem] = []
+        if extra_ids:
+            fetch_tasks = [self.store.get_memory(mid) for mid in extra_ids]
+            fetched = await asyncio.gather(*fetch_tasks)
+            extra_memories = [m for m in fetched if m is not None]
+
+        all_memories_by_id: dict[str, MemoryItem] = {
+            m.memory_id: m for m in vector_memories + extra_memories
+        }
+
+        # 6. Blend PPR + cosine scores
+        ppr_weight = cfg.ppr_weight
+        blended: list[tuple[float, MemoryItem]] = []
+        for mid, memory in all_memories_by_id.items():
+            ppr_s = ppr_scores.get(mid, 0.0)
+            cosine_s = seed_scores.get(mid, 0.0)
+            final = ppr_weight * ppr_s + (1.0 - ppr_weight) * cosine_s
+            blended.append((final, memory))
+
+        blended.sort(key=lambda t: t[0], reverse=True)
+        memories = [m for _, m in blended]
+
+        if scoring:
+            memories = self.memory_scorer.rank(memories, query_embedding)
+
+        if limit is not None:
+            memories = memories[:limit]
+
+        if update_access and memories:
+            await self._update_access(memories)
+
+        logger.debug(
+            "ppr recall done seed=%d extra=%d returned=%d duration_ms=%.2f",
+            len(vector_memories),
+            len(extra_memories),
+            len(memories),
+            (time.perf_counter() - started) * 1000.0,
+        )
+        return memories
+
+
+# ---------------------------------------------------------------------------
+# SCMRAGRetriever
+# ---------------------------------------------------------------------------
+
+
+class SCMRAGRetriever(BaseRetriever):
+    """Self-Corrective Multi-Round Retrieval (SCMRAG-style).
+
+    After an initial retrieval pass, a GapAnalyzer detects missing information
+    and issues targeted sub-queries to fill those gaps.  Runs for at most
+    `max_correction_rounds` correction rounds.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        base_retriever: BaseRetriever,
+        gap_analyzer: Any,  # GapAnalyzer protocol - avoid circular import
+        max_correction_rounds: int = 2,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.base_retriever = base_retriever
+        self.gap_analyzer = gap_analyzer
+        self.max_correction_rounds = max_correction_rounds
+
+    async def recall(
+        self,
+        query: str | MemoryQuery | MemoryQueryBuilder,
+        limit: int | None,
+        scoring: bool,
+        update_access: bool,
+    ) -> list[MemoryItem]:
+        started = time.perf_counter()
+        if not isinstance(query, str):
+            return await self.base_retriever.recall(query, limit, scoring, update_access)
+
+        resolved_limit = limit if limit is not None else 10
+        candidate_limit = resolved_limit * 2
+
+        # Initial retrieval
+        initial = await self.base_retriever.recall(
+            query, candidate_limit, scoring=False, update_access=False
+        )
+        all_results: dict[str, MemoryItem] = {m.memory_id: m for m in initial}
+
+        # Extract query entities (best-effort; NER may not be configured)
+        query_entities: dict[str, str] = {}
+        if self.ner:
+            try:
+                ner_result = await self.ner.extract_entities(query)
+                query_entities = ner_result.entities or {}
+            except Exception:
+                pass
+
+        # Correction rounds
+        for _ in range(self.max_correction_rounds):
+            sub_queries = await self.gap_analyzer.detect_gaps(
+                query, list(all_results.values()), query_entities
+            )
+            if not sub_queries:
+                break
+
+            extra_tasks = [
+                self.base_retriever.recall(sq, resolved_limit, scoring=False, update_access=False)
+                for sq in sub_queries
+            ]
+            extra_batches = await asyncio.gather(*extra_tasks)
+            added = 0
+            for batch in extra_batches:
+                for m in batch:
+                    if m.memory_id not in all_results:
+                        all_results[m.memory_id] = m
+                        added += 1
+            if added == 0:
+                break
+
+        # Re-rank all candidates
+        all_memories = list(all_results.values())
+        if scoring:
+            query_embedding = await self._get_embedding(query)
+            all_memories = self.memory_scorer.rank(all_memories, query_embedding)
+        else:
+            all_memories.sort(key=lambda m: m.importance, reverse=True)
+
+        if limit is not None:
+            all_memories = all_memories[:limit]
+
+        if update_access and all_memories:
+            await self._update_access(all_memories)
+
+        logger.debug(
+            "scmrag recall done initial=%d total=%d returned=%d duration_ms=%.2f",
+            len(initial),
+            len(all_results),
+            len(all_memories),
+            (time.perf_counter() - started) * 1000.0,
+        )
+        return all_memories
+
+
+# ---------------------------------------------------------------------------
+# TypedPathRetriever
+# ---------------------------------------------------------------------------
+
+
+class TypedPathRetriever(BaseRetriever):
+    """Semantic GraphRAG-style retriever using typed-path traversal.
+
+    Seeds are found via vector search, then each seed is used as a start node
+    for `traverse_typed_path` with the caller-supplied path_pattern.  Results
+    are merged and optionally re-scored via PPR.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        path_pattern: list[LinkType],
+        ppr_cfg: PPRConfig | None = None,
+        min_strength: float = 0.0,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.path_pattern = path_pattern
+        self.ppr_cfg = ppr_cfg
+        self.min_strength = min_strength
+
+    async def recall(
+        self,
+        query: str | MemoryQuery | MemoryQueryBuilder,
+        limit: int | None,
+        scoring: bool,
+        update_access: bool,
+    ) -> list[MemoryItem]:
+        started = time.perf_counter()
+        if not isinstance(query, str):
+            return await self._query_store(query)[0]  # type: ignore[return-value]
+
+        resolved_limit = limit if limit is not None else 10
+
+        if not isinstance(self.store, SupportsKnowledgeGraph):
+            logger.warning("TypedPathRetriever: store does not support SupportsKnowledgeGraph; returning empty")
+            return []
+
+        # Seed retrieval
+        seed_memories, query_embedding = await self._retrieve_vector_candidates(
+            query, resolved_limit * 2
+        )
+
+        # Typed-path traversal from each seed
+        traverse_tasks = [
+            self.store.traverse_typed_path(
+                m.memory_id,
+                self.path_pattern,
+                max_results=resolved_limit,
+            )
+            for m in seed_memories
+        ]
+        all_traversals = await asyncio.gather(*traverse_tasks)
+
+        collected: dict[str, MemoryItem] = {m.memory_id: m for m in seed_memories}
+        for traversal in all_traversals:
+            for end_memory, _path_links in traversal:
+                collected.setdefault(end_memory.memory_id, end_memory)
+
+        memories = list(collected.values())
+
+        if scoring:
+            memories = self.memory_scorer.rank(memories, query_embedding)
+        else:
+            memories.sort(key=lambda m: m.importance, reverse=True)
+
+        if limit is not None:
+            memories = memories[:limit]
+
+        if update_access and memories:
+            await self._update_access(memories)
+
+        logger.debug(
+            "typed_path recall done seed=%d total=%d returned=%d duration_ms=%.2f",
+            len(seed_memories),
+            len(collected),
+            len(memories),
+            (time.perf_counter() - started) * 1000.0,
+        )
+        return memories
