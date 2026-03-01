@@ -200,7 +200,7 @@ Claims:"""
 
         chain = prompt | self.llm
         result = await chain.ainvoke({"content": memory.content})
-        text = result.content if hasattr(result, "content") else str(result)
+        text = (result.content if hasattr(result, "content") else str(result)) or ""
 
         # Parse claims from LLM output
         claims = []
