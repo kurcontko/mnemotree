@@ -17,18 +17,6 @@ dependencies = [
 
     # Default store — SQLite with vector search (zero-infra)
     "sqlite-vec>=0.1.0",
-
-    # Langchain
-    "langchain>=0.3.7,<0.4.0",
-    "langchain-openai>=0.2.14,<0.3.0",
-    "langchain-community>=0.3.7,<0.4.0",
-    "langchain-core>=0.3.19,<0.4.0",
-
-    # Llama-index
-    #"llama-index>=0.12.0,<0.13.0",
-
-    # LLMs
-    "openai>=1.0.0",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -70,6 +58,15 @@ vectors = [
     "chromadb>=0.5.23",
     "pymilvus>=2.2.0",
     "sqlite-vec>=0.1.0",
+]
+
+# LangChain integration (analysis pipeline, adapters, LCEL chains)
+langchain = [
+    "langchain>=0.3.7,<0.4.0",
+    "langchain-openai>=0.2.14,<0.3.0",
+    "langchain-community>=0.3.7,<0.4.0",
+    "langchain-core>=0.3.19,<0.4.0",
+    "openai>=1.0.0",
 ]
 
 # Local embeddings
@@ -126,10 +123,15 @@ all = [
     "yake>=0.4.8",
     "streamlit>=1.40.0",
     "fastmcp<4",
+    "langchain>=0.3.7,<0.4.0",
+    "langchain-openai>=0.2.14,<0.3.0",
+    "langchain-community>=0.3.7,<0.4.0",
+    "langchain-core>=0.3.19,<0.4.0",
+    "openai>=1.0.0",
     "langchain-google-genai>=2.0.7",
     "langchain-anthropic>=0.3.0",
     "langchain-aws>=0.2.0",
-    "langchain-huggingface>=0.1.0"
+    "langchain-huggingface>=0.1.0",
 ]
 
 [tool.uv]
