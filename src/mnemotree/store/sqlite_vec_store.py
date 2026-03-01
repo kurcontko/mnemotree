@@ -21,7 +21,11 @@ from ..utils.serialization import json_dumps_safe, json_loads_dict
 from ._filters import build_sqlite_filter_clauses, normalize_filter_value
 from ._queries import build_entity_set
 from ._records import sqlite_memory_from_row, sqlite_record_from_memory
-from ._schema import create_sqlite_schema, ensure_sqlite_vector_table
+from ._schema import (
+    create_sqlite_schema,
+    ensure_sqlite_vector_table,
+    migrate_sqlite_phase1_fields,
+)
 from .base import BaseMemoryStore
 from .logging import elapsed_ms, store_log_context
 from .query_builders import UnsupportedQueryError
@@ -114,6 +118,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             collection_name=self.collection_name,
             meta_table=self._meta_table,
         )
+        migrate_sqlite_phase1_fields(conn, self.collection_name)
         conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS "{self._entity_table}" (

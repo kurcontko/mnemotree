@@ -875,7 +875,9 @@ class MemoryCore:
                     in_range.append(c)
 
             conflicts = await self.conflict_detector.detect(memory, in_range)
+            conflict_ids: list[str] = []
             for conflict_memory, reason in conflicts:
+                conflict_ids.append(conflict_memory.memory_id)
                 if isinstance(self.store, SupportsKnowledgeGraph):
                     await self.link(
                         memory.memory_id,
@@ -883,6 +885,13 @@ class MemoryCore:
                         LinkType.CONTRADICTS,
                         context=reason,
                     )
+            # Populate conflicts_with on the MemoryItem and persist
+            if conflict_ids:
+                existing = set(memory.conflicts_with)
+                new_conflicts = [cid for cid in conflict_ids if cid not in existing]
+                if new_conflicts:
+                    memory.conflicts_with = list(existing | set(new_conflicts))
+                    await self.persistence.save(memory)
         except Exception:
             _log.warning(
                 "Background conflict detection failed for %s",

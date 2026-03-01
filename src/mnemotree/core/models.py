@@ -82,6 +82,9 @@ class LinkType(str, Enum):
     FOLLOWS = "follows"  # Sequence
     PART_OF = "part_of"  # Component
     DERIVES_FROM = "derives_from"  # Intellectual lineage
+    SUPERSEDES = "supersedes"  # Replaces an older memory (A-MEM evolution)
+    UPDATES = "updates"  # Partial update of an older memory
+    SEQUENCE = "sequence"  # Temporal ordering (MAGMA four-graph)
 
 
 @overload
@@ -136,51 +139,43 @@ class MemoryItem(BaseModel):
     - Lists of references (e.g., linked_concepts as string IDs)
 
     Attributes:
-        memory_id (str): Unique identifier for the memory
-        conversation_id (Optional[str]): Reference to parent conversation
-        user_id (Optional[str]): Reference to owner/creator
-
-        # Core Information
-        content (str): Main content of the memory
-        summary (Optional[str]): Condensed version of content
-        tags (List[str]): Categorization labels
-        author (Optional[str]): Creator of the memory
-        memory_type (MemoryType): Type classification (episodic, semantic, etc.)
-        timestamp (datetime): Creation time in UTC
-
-        # Access Tracking
-        last_accessed (datetime): Last retrieval time in UTC
-        access_count (int): Number of times retrieved
-        access_history (List[datetime]): Timestamp history of accesses
-
-        # Quality Metrics
-        importance (float): Relevance score (0-1)
-        decay_rate (float): Memory degradation rate
-        confidence (float): Certainty level (0-1)
-        fidelity (float): Quality/accuracy score (0-1)
-
-        # Emotional Components (flattened from EmotionalContext)
-        emotional_valence (Optional[float]): Negative to positive (-1 to 1)
-        emotional_arousal (Optional[float]): Intensity level (0-1)
-        emotions (List[Union[EmotionCategory, str]]): Identified emotions
-
-        # Relationships (flattened from Connections)
-        linked_concepts (List[str]): Related concept IDs
-        associations (List[str]): Positively related memory IDs
-        conflicts_with (List[str]): Negatively related memory IDs
-        previous_event_id (Optional[str]): Temporal predecessor
-        next_event_id (Optional[str]): Temporal successor
-
-        # Source Attribution (flattened from SourceInfo)
-        source (Optional[str]): Origin reference
-        credibility (Optional[float]): Source reliability (0-1)
-
-        # Vector Representation
-        embedding (Optional[List[float]]): Vector embedding for similarity search
-
-        # Additional Data
-        context (Optional[Union[Dict[str, Any], str]]): Contextual information
-        metadata (Dict[str, Any]): Flexible additional attributes
+        memory_id: Unique identifier for the memory
+        conversation_id: Reference to parent conversation
+        user_id: Reference to owner/creator
+        content: Main content of the memory
+        summary: Condensed version of content
+        tags: Categorization labels
+        author: Creator of the memory
+        memory_type: Type classification (episodic, semantic, etc.)
+        timestamp: Creation time in UTC (storage time)
+        event_time: When the event actually happened (vs timestamp = storage time)
+        valid_from: Temporal validity start (bi-temporal)
+        valid_until: Temporal validity end (None = still valid)
+        observation_date: Mastra-style 3-date anchoring — when the observation was made
+        referenced_date: Date the memory refers to
+        temporal_offset: Relative offset hint ("2 days ago")
+        contextual_intent: STITCH inferred intent at ingest time
+        is_hot: Codified Context — HOT memories always included, COLD retrieved on-demand
+        last_accessed: Last retrieval time in UTC
+        access_count: Number of times retrieved
+        access_history: Timestamp history of accesses
+        importance: Relevance score (0-1)
+        decay_rate: Memory degradation rate (deprecated, kept for compat)
+        confidence: Certainty level (0-1)
+        fidelity: Quality/accuracy score (0-1)
+        emotional_valence: Negative to positive (-1 to 1)
+        emotional_arousal: Intensity level (0-1)
+        emotions: Identified emotions
+        linked_concepts: Related concept IDs
+        associations: Positively related memory IDs
+        conflicts_with: Negatively related memory IDs (auto-populated by conflict detection)
+        previous_event_id: Temporal predecessor
+        next_event_id: Temporal successor
+        source: Origin reference
+        credibility: Source reliability (0-1)
+        embedding: Vector embedding for similarity search
+        context: Contextual information
+        metadata: Flexible additional attributes
     """
 
     # Core Identifiers
@@ -200,6 +195,18 @@ class MemoryItem(BaseModel):
     author: str | None = None
     memory_type: MemoryType
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Bi-temporal fields (TSM / Mastra OM 3-date anchoring)
+    event_time: datetime | None = None  # When the event actually happened (vs timestamp = storage time)
+    valid_from: datetime | None = None  # Temporal validity start
+    valid_until: datetime | None = None  # Temporal validity end (None = still valid)
+    observation_date: datetime | None = None  # Mastra-style: when the observation was made
+    referenced_date: datetime | None = None  # Date the memory refers to
+    temporal_offset: str | None = None  # Relative offset hint ("2 days ago", "last week")
+
+    # Retrieval hints
+    contextual_intent: str | None = None  # STITCH: inferred intent at ingest time (+35.6% retrieval)
+    is_hot: bool = False  # Codified Context: HOT memories always included, COLD retrieved on-demand
 
     # Access information
     last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

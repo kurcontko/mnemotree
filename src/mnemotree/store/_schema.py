@@ -90,7 +90,15 @@ def create_sqlite_schema(
             conflicts_with TEXT,
             previous_event_id TEXT,
             next_event_id TEXT,
-            stability_seconds REAL
+            stability_seconds REAL,
+            event_time TEXT,
+            valid_from TEXT,
+            valid_until TEXT,
+            observation_date TEXT,
+            referenced_date TEXT,
+            temporal_offset TEXT,
+            contextual_intent TEXT,
+            is_hot INTEGER DEFAULT 0
         )
         """
     )
@@ -138,6 +146,36 @@ def migrate_sqlite_add_stability(
     columns = {row[1] for row in cursor.fetchall()}
     if "stability_seconds" not in columns:
         conn.execute(f'ALTER TABLE "{collection_name}" ADD COLUMN stability_seconds REAL')
+        conn.commit()
+
+
+_PHASE1_COLUMNS: list[tuple[str, str]] = [
+    ("event_time", "TEXT"),
+    ("valid_from", "TEXT"),
+    ("valid_until", "TEXT"),
+    ("observation_date", "TEXT"),
+    ("referenced_date", "TEXT"),
+    ("temporal_offset", "TEXT"),
+    ("contextual_intent", "TEXT"),
+    ("is_hot", "INTEGER DEFAULT 0"),
+]
+
+
+def migrate_sqlite_phase1_fields(
+    conn: sqlite3.Connection,
+    collection_name: str,
+) -> None:
+    """Idempotent migration: add bi-temporal, intent, and hot/cold fields."""
+    cursor = conn.execute(f'PRAGMA table_info("{collection_name}")')
+    columns = {row[1] for row in cursor.fetchall()}
+    added = False
+    for col_name, col_type in _PHASE1_COLUMNS:
+        if col_name not in columns:
+            conn.execute(
+                f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}'
+            )
+            added = True
+    if added:
         conn.commit()
 
 

@@ -181,6 +181,14 @@ def sqlite_record_from_memory(memory: MemoryItem) -> dict[str, Any]:
         "previous_event_id": memory.previous_event_id,
         "next_event_id": memory.next_event_id,
         "stability_seconds": memory.stability_seconds,
+        "event_time": serialize_datetime(memory.event_time) if memory.event_time else None,
+        "valid_from": serialize_datetime(memory.valid_from) if memory.valid_from else None,
+        "valid_until": serialize_datetime(memory.valid_until) if memory.valid_until else None,
+        "observation_date": serialize_datetime(memory.observation_date) if memory.observation_date else None,
+        "referenced_date": serialize_datetime(memory.referenced_date) if memory.referenced_date else None,
+        "temporal_offset": memory.temporal_offset,
+        "contextual_intent": memory.contextual_intent,
+        "is_hot": 1 if memory.is_hot else 0,
     }
 
 
@@ -225,9 +233,25 @@ def sqlite_memory_from_row(row: sqlite3.Row) -> MemoryItem:
         "previous_event_id": row["previous_event_id"] or None,
         "next_event_id": row["next_event_id"] or None,
     }
-    # stability_seconds may not exist in old DBs
+    # Fields that may not exist in old DBs — graceful fallback
     with contextlib.suppress(IndexError, KeyError):
         memory_data["stability_seconds"] = row["stability_seconds"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["event_time"] = row["event_time"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["valid_from"] = row["valid_from"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["valid_until"] = row["valid_until"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["observation_date"] = row["observation_date"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["referenced_date"] = row["referenced_date"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["temporal_offset"] = row["temporal_offset"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["contextual_intent"] = row["contextual_intent"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["is_hot"] = bool(row["is_hot"])
     return MemoryItem(**memory_data)
 
 
