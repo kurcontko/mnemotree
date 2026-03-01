@@ -120,6 +120,8 @@ class MnemotreeChatMessageHistory(BaseChatMessageHistory):
         msg_type = "ai" if isinstance(message, AIMessage) else "human"
 
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return
         # Convert message.content to string if it's not already
         content_str = (
             str(message.content) if not isinstance(message.content, str) else message.content
@@ -155,8 +157,8 @@ class MnemotreeChatMessageHistory(BaseChatMessageHistory):
         import asyncio
 
         loop = asyncio.get_event_loop()
-        # Note: MemoryCore doesn't have delete_by_filter yet
-        # This is a placeholder - implement in MemoryCore
+        if loop.is_running():
+            return
         loop.run_until_complete(self._clear_session())
 
     async def _clear_session(self) -> None:
@@ -278,6 +280,8 @@ class LangChainMemoryAdapter(BaseMemory):
         ai_output = outputs.get(self.output_key, "")
 
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return
 
         # Save user message
         loop.run_until_complete(
@@ -304,6 +308,8 @@ class LangChainMemoryAdapter(BaseMemory):
         import asyncio
 
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return
 
         async def _clear():
             memories = await self.memory_core.recall(
