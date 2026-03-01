@@ -801,12 +801,12 @@ async def resolve_conflict(
         t1 = coerce_datetime(m1.timestamp, default=None)
         t2 = coerce_datetime(m2.timestamp, default=None)
         if t1 is not None and t2 is not None and t1 >= t2:
-            await memory_core.forget(conflicting_id)
+            await memory_core.forget(conflicting_id, cascade=True)
             result["action"] = f"Deleted older memory {conflicting_id}."
             result["deleted"] = conflicting_id
             result["kept"] = memory_id
         else:
-            await memory_core.forget(memory_id)
+            await memory_core.forget(memory_id, cascade=True)
             result["action"] = f"Deleted older memory {memory_id}."
             result["deleted"] = memory_id
             result["kept"] = conflicting_id
@@ -815,7 +815,7 @@ async def resolve_conflict(
         if not winner_id or winner_id not in (memory_id, conflicting_id):
             raise ValueError("winner_id must be one of memory_id or conflicting_id.")
         loser_id = conflicting_id if winner_id == memory_id else memory_id
-        await memory_core.forget(loser_id)
+        await memory_core.forget(loser_id, cascade=True)
         result["action"] = f"Deleted loser memory {loser_id}."
         result["deleted"] = loser_id
         result["kept"] = winner_id

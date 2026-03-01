@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from mnemotree.core.models import LinkType
 from mnemotree.core.query import FilterOperator, MemoryFilter, MemoryQuery, SortOrder
 from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
 
@@ -434,6 +435,58 @@ async def test_sqlite_vec_error_handling(tmp_path, memory_item):
         # Test updating connections for non-existent memory
         # Should handle gracefully without error
         await store.update_connections("non-existent-id", related_ids=["rel-1"])
+
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_cascade_delete_removes_links(tmp_path, memory_item):
+    """Cascade delete should remove links pointing to/from the deleted memory."""
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=len(memory_item.embedding))
+    await store.initialize()
+
+    try:
+        from mnemotree.core.models import MemoryItem, MemoryType
+
+        m2 = MemoryItem(
+            memory_id="target-mem",
+            content="target memory",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.5,
+            embedding=memory_item.embedding,
+        )
+        await store.store_memory(memory_item)
+        await store.store_memory(m2)
+
+        # Create a link between them
+        await store.create_link(
+            source_id=memory_item.memory_id,
+            target_id=m2.memory_id,
+            link_type=LinkType.REFERENCES,
+        )
+        links_before = await store.get_links(memory_item.memory_id)
+        assert len(links_before) >= 1
+
+        # Delete without cascade — links should remain
+        await store.delete_memory(memory_item.memory_id, cascade=False)
+        # Re-store to get links back for comparison later
+        await store.store_memory(memory_item)
+
+        # Create link again
+        await store.create_link(
+            source_id=memory_item.memory_id,
+            target_id=m2.memory_id,
+            link_type=LinkType.REFERENCES,
+        )
+
+        # Delete WITH cascade — links should be cleaned up
+        await store.delete_memory(memory_item.memory_id, cascade=True)
+
+        # Links from/to deleted memory should be gone
+        links_after = await store.get_links(memory_item.memory_id)
+        assert len(links_after) == 0
 
     finally:
         await store.close()
