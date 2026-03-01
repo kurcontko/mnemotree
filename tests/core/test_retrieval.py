@@ -7,7 +7,9 @@ from mnemotree.core.retrieval import (
     SEMANTIC_LINK_TYPES,
     TEMPORAL_LINK_TYPES,
     BaseRetriever,
+    FusionStrategy,
     HybridRetriever,
+    RetrievalStage,
     VectorEntityRetriever,
     rrf_fuse,
 )
@@ -507,3 +509,138 @@ async def test_graph_candidates_with_none_entities():
         MemoryQuery(vector=[1.0, 0.0]), limit=5, scoring=False, update_access=False
     )
     assert isinstance(results, list)
+
+
+# ---------------------------------------------------------------------------
+# Fusion strategy tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hybrid_weighted_sum_fusion():
+    """WeightedSum fusion normalizes scores and applies weights."""
+    query = "test"
+    embedder = DummyEmbedder({query: [1.0, 0.0]})
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore(vector_memories=[m1, m2])
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        fusion_strategy=FusionStrategy.WEIGHTED_SUM,
+    )
+    results = await retriever.recall(query, limit=5, scoring=False, update_access=False)
+    assert len(results) >= 1
+    # m1 should rank first (higher embedding similarity)
+    assert results[0].memory_id == "m1"
+
+
+@pytest.mark.asyncio
+async def test_hybrid_max_score_fusion():
+    """MaxScore fusion takes the maximum score per memory across stages."""
+    query = "test"
+    embedder = DummyEmbedder({query: [1.0, 0.0]})
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore(vector_memories=[m1, m2])
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        fusion_strategy=FusionStrategy.MAX_SCORE,
+    )
+    results = await retriever.recall(query, limit=5, scoring=False, update_access=False)
+    assert len(results) >= 1
+    assert results[0].memory_id == "m1"
+
+
+@pytest.mark.asyncio
+async def test_hybrid_retrieve_standalone():
+    """The standalone retrieve() method fuses pre-scored candidates."""
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+    m3 = _memory("m3", [0.0, 1.0])
+
+    store = DummyStore()
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=DummyEmbedder({"q": [1.0, 0.0]}),
+    )
+    results = await retriever.retrieve(
+        query="q",
+        vector_candidates=[(m1, 0.9), (m2, 0.5)],
+        entity_candidates=[(m3, 0.8)],
+        top_k=3,
+        apply_reranking=False,
+    )
+    assert len(results) >= 1
+    # All three memories should appear in results
+    result_ids = {r.memory.memory_id for r in results}
+    assert result_ids == {"m1", "m2", "m3"}
+
+
+@pytest.mark.asyncio
+async def test_hybrid_retrieve_with_reranking():
+    """Standalone retrieve() applies reranking when configured."""
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore()
+    reranker = DummyReranker({"m2": 0, "m1": 1})
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=DummyEmbedder({"q": [1.0, 0.0]}),
+        reranker=reranker,
+    )
+    results = await retriever.retrieve(
+        query="q",
+        vector_candidates=[(m1, 0.9), (m2, 0.5)],
+        entity_candidates=[],
+        top_k=2,
+        apply_reranking=True,
+    )
+    # Reranker should have been called
+    assert len(reranker.calls) == 1
+    # Rerank scores should appear in result scores
+    for r in results:
+        assert RetrievalStage.RERANK.value in r.scores
+        assert RetrievalStage.RERANK in r.retrieval_stages
+
+
+@pytest.mark.asyncio
+async def test_maybe_rerank_error_returns_original():
+    """If reranking fails, _maybe_rerank returns original order."""
+
+    class FailingReranker(BaseReranker):
+        async def rerank(self, query, candidates, top_k=None):
+            raise RuntimeError("model failed")
+
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore()
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=DummyEmbedder({"q": [1.0, 0.0]}),
+        reranker=FailingReranker(),
+        rerank_candidates=10,
+    )
+    result = await retriever._maybe_rerank("q", [m1, m2])
+    # Should return original order, not crash
+    assert [m.memory_id for m in result] == ["m1", "m2"]
