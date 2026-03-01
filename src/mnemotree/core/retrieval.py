@@ -4,6 +4,8 @@ import asyncio
 import logging
 import time
 from collections.abc import Hashable, Mapping, Sequence
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from langchain_core.embeddings.embeddings import Embeddings
@@ -32,12 +34,50 @@ __all__ = [
     "Retriever",
     "BaseRetriever",
     "VectorEntityRetriever",
-    "HybridFusionRetriever",
+    "HybridRetriever",
+    "RetrievalStage",
+    "FusionStrategy",
+    "RetrievalResult",
     "PPRGraphRetriever",
     "SCMRAGRetriever",
     "TypedPathRetriever",
     "rrf_fuse",
 ]
+
+
+class RetrievalStage(str, Enum):
+    """Stages in the retrieval pipeline."""
+
+    VECTOR = "vector"
+    ENTITY = "entity"
+    BM25 = "bm25"
+    GRAPH = "graph"
+    FUSION = "fusion"
+    RERANK = "rerank"
+
+
+class FusionStrategy(str, Enum):
+    """Strategies for combining retrieval results."""
+
+    RRF = "reciprocal_rank_fusion"
+    WEIGHTED_SUM = "weighted_sum"
+    MAX_SCORE = "max_score"
+    LEARNED = "learned"
+
+
+@dataclass
+class RetrievalResult:
+    """Container for retrieval results with provenance."""
+
+    memory: MemoryItem
+    scores: dict[str, float]
+    final_score: float
+    retrieval_stages: list[RetrievalStage]
+    metadata: dict[str, Any] | None = None
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
 
 
 @runtime_checkable
@@ -285,21 +325,97 @@ class VectorEntityRetriever(BaseRetriever):
         return filtered, entity_memory_ids
 
 
-class HybridFusionRetriever(BaseRetriever):
+class HybridRetriever(BaseRetriever):
+    """Unified multi-stage hybrid retrieval pipeline.
+
+    Combines vector similarity, entity matching, BM25, and optional graph
+    traversal with configurable fusion scoring and cross-encoder reranking.
+
+    Can be used in two modes:
+    - **Integrated** (via ``recall()``): collects candidates internally using
+      store/embedder from BaseRetriever.
+    - **Standalone** (via ``retrieve()``): accepts pre-scored candidate lists
+      from external sources.
+    """
+
     def __init__(
         self,
         *args: Any,
+        vector_weight: float = 0.50,
+        entity_weight: float = 0.15,
+        bm25_weight: float = 0.35,
+        graph_weight: float = 0.0,
+        fusion_strategy: FusionStrategy = FusionStrategy.RRF,
         rrf_k: int = 60,
         enable_rrf_signal_rerank: bool = False,
         reranker: BaseReranker | None = None,
         rerank_candidates: int = 50,
+        # Allow standalone mode (retrieve() only) without store/embedder.
+        store: MemoryCRUDStore | None = None,
+        embedder: Embeddings | None = None,
+        ner: BaseNER | None = None,
+        keyword_extractor: KeywordExtractor | None = None,
+        scoring_system: MemoryScoring | None = None,
+        index_manager: IndexManager | None = None,
+        memory_scoring: MemoryScoring | None = None,
+        hyde_embedder: Any = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        # Support both positional (BaseRetriever style) and keyword-only args.
+        # When no positional args and no store/embedder, run in standalone mode.
+        resolved_scoring = scoring_system or memory_scoring or MemoryScoring()
+        if args or store is not None:
+            if store is not None and not args:
+                super().__init__(
+                    store=store,
+                    scoring_system=resolved_scoring,
+                    ner=ner,
+                    keyword_extractor=keyword_extractor,
+                    embedder=embedder,
+                    index_manager=index_manager,
+                    hyde_embedder=hyde_embedder,
+                    **kwargs,
+                )
+            else:
+                super().__init__(*args, **kwargs)
+            self._standalone = False
+        else:
+            # Standalone mode — retrieve() only, no store/embedder required.
+            self._standalone = True
+            self.store = None  # type: ignore[assignment]
+            self.scoring_system = resolved_scoring
+            self.memory_scorer = MemoryScorer(resolved_scoring)
+            self.signal_ranker = SignalRanker()
+            self.ner = ner
+            self.keyword_extractor = keyword_extractor
+            self.embedder = embedder
+            self.index_manager = index_manager
+            self.hyde_embedder = hyde_embedder
+        self.weights = {
+            RetrievalStage.VECTOR: vector_weight,
+            RetrievalStage.ENTITY: entity_weight,
+            RetrievalStage.BM25: bm25_weight,
+            RetrievalStage.GRAPH: graph_weight,
+        }
+        self._normalize_weights()
+        self.fusion_strategy = fusion_strategy
         self.rrf_k = rrf_k
         self.enable_rrf_signal_rerank = enable_rrf_signal_rerank
         self.reranker = reranker
         self.rerank_candidates = rerank_candidates
+
+    # ------------------------------------------------------------------
+    # Weight helpers
+    # ------------------------------------------------------------------
+
+    def _normalize_weights(self) -> None:
+        total = sum(self.weights.values())
+        if total > 0:
+            self.weights = {k: v / total for k, v in self.weights.items()}
+
+    # ------------------------------------------------------------------
+    # recall() — integrated mode (Retriever protocol)
+    # ------------------------------------------------------------------
 
     async def recall(
         self,
@@ -308,6 +424,11 @@ class HybridFusionRetriever(BaseRetriever):
         scoring: bool,
         update_access: bool,
     ) -> list[MemoryItem]:
+        if self._standalone:
+            raise RuntimeError(
+                "HybridRetriever.recall() requires store and embedder. "
+                "Pass store= and embedder= at construction, or use retrieve() with explicit candidates."
+            )
         started = time.perf_counter()
         if not isinstance(query, str):
             return await self._recall_structured(
@@ -320,7 +441,7 @@ class HybridFusionRetriever(BaseRetriever):
 
         resolved_limit = limit if limit is not None else 10
         logger.debug(
-            "rrf recall start limit=%s resolved_limit=%d scoring=%s rerank=%s",
+            "hybrid recall start limit=%s resolved_limit=%d scoring=%s rerank=%s",
             limit,
             resolved_limit,
             scoring,
@@ -339,20 +460,22 @@ class HybridFusionRetriever(BaseRetriever):
             query_embedding,
             entity_memory_ids,
             keyword_task,
-        ) = await self._collect_rrf_candidates(query, candidate_k)
+        ) = await self._collect_candidates(query, candidate_k)
 
-        memories, rrf_scores = self._rrf_fuse_with_scores(
-            vector_memories=vector_memories,
-            entity_memories=entity_memories,
-            bm25_memories=bm25_memories,
-            rrf_k=self.rrf_k,
-        )
+        # Fuse using configured strategy
+        results = self._fuse_candidates({
+            RetrievalStage.VECTOR: self._score_candidates(vector_memories, query_embedding),
+            RetrievalStage.ENTITY: self._score_candidates(entity_memories, query_embedding),
+            RetrievalStage.BM25: [
+                (m, 1.0 / (i + 1)) for i, m in enumerate(bm25_memories)
+            ],
+        })
+
+        memories = [r.memory for r in results]
+        rrf_scores = {r.memory.memory_id: r.final_score for r in results}
 
         if scoring:
-            memories = self.memory_scorer.rank(
-                memories,
-                query_embedding,
-            )
+            memories = self.memory_scorer.rank(memories, query_embedding)
 
         if self.enable_rrf_signal_rerank and query_embedding:
             query_keywords = await keyword_task if keyword_task else []
@@ -374,12 +497,55 @@ class HybridFusionRetriever(BaseRetriever):
             await self._update_access(memories)
 
         logger.debug(
-            "rrf recall done returned=%d duration_ms=%.2f",
+            "hybrid recall done returned=%d duration_ms=%.2f",
             len(memories),
             (time.perf_counter() - started) * 1000.0,
         )
-
         return memories
+
+    # ------------------------------------------------------------------
+    # retrieve() — standalone mode (explicit candidates)
+    # ------------------------------------------------------------------
+
+    async def retrieve(
+        self,
+        query: str,
+        vector_candidates: list[tuple[MemoryItem, float]],
+        entity_candidates: list[tuple[MemoryItem, float]],
+        graph_candidates: list[tuple[MemoryItem, float]] | None = None,
+        bm25_candidates: list[tuple[MemoryItem, float]] | None = None,
+        top_k: int = 10,
+        apply_reranking: bool = True,
+    ) -> list[RetrievalResult]:
+        stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]] = {
+            RetrievalStage.VECTOR: vector_candidates,
+            RetrievalStage.ENTITY: entity_candidates,
+        }
+        if graph_candidates:
+            stage_candidates[RetrievalStage.GRAPH] = graph_candidates
+        if bm25_candidates:
+            stage_candidates[RetrievalStage.BM25] = bm25_candidates
+
+        fused_results = self._fuse_candidates(stage_candidates)
+
+        if apply_reranking and self.reranker:
+            memories = [r.memory for r in fused_results]
+            reranked = await self.reranker.rerank(query, memories, top_k=top_k * 2)
+            rerank_map = {mem.memory_id: score for mem, score in reranked}
+            for result in fused_results:
+                if result.memory.memory_id in rerank_map:
+                    result.scores[RetrievalStage.RERANK] = rerank_map[result.memory.memory_id]
+                    result.retrieval_stages.append(RetrievalStage.RERANK)
+                    result.final_score = (
+                        0.6 * result.final_score + 0.4 * rerank_map[result.memory.memory_id]
+                    )
+            fused_results.sort(key=lambda x: x.final_score, reverse=True)
+
+        return fused_results[:top_k]
+
+    # ------------------------------------------------------------------
+    # Internal: structured query fallback
+    # ------------------------------------------------------------------
 
     async def _recall_structured(
         self,
@@ -392,24 +558,23 @@ class HybridFusionRetriever(BaseRetriever):
     ) -> list[MemoryItem]:
         memories, query_embedding = await self._query_store(query)
         if scoring:
-            memories = self.memory_scorer.rank(
-                memories,
-                query_embedding,
-            )
-
+            memories = self.memory_scorer.rank(memories, query_embedding)
         if limit is not None:
             memories = memories[:limit]
         if update_access and memories:
             await self._update_access(memories)
-
         logger.debug(
-            "rrf recall done (structured) returned=%d duration_ms=%.2f",
+            "hybrid recall done (structured) returned=%d duration_ms=%.2f",
             len(memories),
             (time.perf_counter() - started) * 1000.0,
         )
         return memories
 
-    async def _collect_rrf_candidates(
+    # ------------------------------------------------------------------
+    # Internal: candidate collection
+    # ------------------------------------------------------------------
+
+    async def _collect_candidates(
         self, query: str, candidate_k: int
     ) -> tuple[
         list[MemoryItem],
@@ -450,7 +615,7 @@ class HybridFusionRetriever(BaseRetriever):
                     bm25_memories.append(cached_memory)
 
         logger.debug(
-            "rrf recall staged vector=%d entity=%d bm25=%d candidate_k=%d",
+            "hybrid recall staged vector=%d entity=%d bm25=%d candidate_k=%d",
             len(vector_memories),
             len(entity_memories),
             len(bm25_memories),
@@ -465,6 +630,10 @@ class HybridFusionRetriever(BaseRetriever):
             keyword_task,
         )
 
+    # ------------------------------------------------------------------
+    # Internal: reranking
+    # ------------------------------------------------------------------
+
     async def _maybe_rerank(self, query: str, memories: list[MemoryItem]) -> list[MemoryItem]:
         if not self.reranker or self.rerank_candidates <= 0:
             return memories
@@ -476,25 +645,117 @@ class HybridFusionRetriever(BaseRetriever):
         reranked = [memory for memory, _score in reranked_tuples]
         return reranked + memories[rerank_limit:]
 
-    def _rrf_fuse_with_scores(
+    # ------------------------------------------------------------------
+    # Fusion strategies
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _score_candidates(
+        memories: list[MemoryItem],
+        query_embedding: list[float] | None,
+    ) -> list[tuple[MemoryItem, float]]:
+        if not memories:
+            return []
+        if not query_embedding:
+            return [(m, 0.0) for m in memories]
+        return [
+            (m, max(0.0, cosine_similarity(m.embedding, query_embedding)))
+            for m in memories
+        ]
+
+    def _fuse_candidates(
+        self, stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]]
+    ) -> list[RetrievalResult]:
+        if self.fusion_strategy == FusionStrategy.RRF:
+            return self._reciprocal_rank_fusion(stage_candidates)
+        elif self.fusion_strategy == FusionStrategy.WEIGHTED_SUM:
+            return self._weighted_sum_fusion(stage_candidates)
+        elif self.fusion_strategy == FusionStrategy.MAX_SCORE:
+            return self._max_score_fusion(stage_candidates)
+        else:
+            raise ValueError(f"Unknown fusion strategy: {self.fusion_strategy}")
+
+    def _reciprocal_rank_fusion(
         self,
-        *,
-        vector_memories: list[MemoryItem],
-        entity_memories: list[MemoryItem],
-        bm25_memories: list[MemoryItem],
-        rrf_k: int,
-    ) -> tuple[list[MemoryItem], dict[str, float]]:
-        weights = {"vector": 0.50, "bm25": 0.35, "entity": 0.15}
-        fused, scores, _stage_scores = rrf_fuse(
-            stage_candidates={
-                "vector": vector_memories,
-                "bm25": bm25_memories,
-                "entity": entity_memories,
-            },
-            weights=weights,
-            rrf_k=rrf_k,
+        stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]],
+    ) -> list[RetrievalResult]:
+        memory_candidates = {
+            stage: [memory for memory, _score in candidates]
+            for stage, candidates in stage_candidates.items()
+        }
+        fused, scores, stage_scores = rrf_fuse(
+            stage_candidates=memory_candidates,
+            weights=self.weights,
+            rrf_k=self.rrf_k,
         )
-        return fused, scores
+        results: list[RetrievalResult] = []
+        for memory in fused:
+            mid = memory.memory_id
+            result = RetrievalResult(
+                memory=memory,
+                scores={},
+                final_score=scores.get(mid, 0.0),
+                retrieval_stages=[],
+            )
+            for stage, per_stage in stage_scores.items():
+                if mid in per_stage:
+                    result.scores[stage.value] = per_stage[mid]
+                    result.retrieval_stages.append(stage)
+            results.append(result)
+        return results
+
+    def _weighted_sum_fusion(
+        self,
+        stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]],
+    ) -> list[RetrievalResult]:
+        memory_map: dict[str, RetrievalResult] = {}
+        for stage, candidates in stage_candidates.items():
+            weight = self.weights.get(stage, 0.0)
+            if not candidates:
+                continue
+            scores = [score for _, score in candidates]
+            max_score = max(scores) if scores else 1.0
+            for memory, score in candidates:
+                normalized = score / max_score if max_score > 0 else 0.0
+                weighted = weight * normalized
+                result = self._ensure_result(memory_map, memory)
+                result.scores[stage.value] = weighted
+                result.final_score += weighted
+                if stage not in result.retrieval_stages:
+                    result.retrieval_stages.append(stage)
+        results = list(memory_map.values())
+        results.sort(key=lambda x: x.final_score, reverse=True)
+        return results
+
+    def _max_score_fusion(
+        self,
+        stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]],
+    ) -> list[RetrievalResult]:
+        memory_map: dict[str, RetrievalResult] = {}
+        for stage, candidates in stage_candidates.items():
+            for memory, score in candidates:
+                result = self._ensure_result(memory_map, memory)
+                result.scores[stage.value] = score
+                result.final_score = max(result.final_score, score)
+                if stage not in result.retrieval_stages:
+                    result.retrieval_stages.append(stage)
+        results = list(memory_map.values())
+        results.sort(key=lambda x: x.final_score, reverse=True)
+        return results
+
+    @staticmethod
+    def _ensure_result(
+        memory_map: dict[str, RetrievalResult],
+        memory: MemoryItem,
+    ) -> RetrievalResult:
+        if memory.memory_id not in memory_map:
+            memory_map[memory.memory_id] = RetrievalResult(
+                memory=memory,
+                scores={},
+                final_score=0.0,
+                retrieval_stages=[],
+            )
+        return memory_map[memory.memory_id]
 
 
 # ---------------------------------------------------------------------------

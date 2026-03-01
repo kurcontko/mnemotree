@@ -12,10 +12,10 @@ from mnemotree.core.memory import (
     RecallFilters,
     RetrievalConfig,
 )
-from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
+from mnemotree.core.models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
 from mnemotree.ner import create_ner
 from mnemotree.store.base import BaseMemoryStore
-from mnemotree.store.protocols import SupportsMemoryListing
+from mnemotree.store.protocols import SupportsKnowledgeGraph, SupportsMemoryListing
 
 _memory_lock = asyncio.Lock()
 _memory_core: MemoryCore | None = None
@@ -554,6 +554,300 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _parse_link_type(value: str | None) -> LinkType:
+    if value is None:
+        return LinkType.REFERENCES
+    normalized = value.strip().lower()
+    for lt in LinkType:
+        if lt.value == normalized or lt.name.lower() == normalized:
+            return lt
+    raise ValueError(f"Unknown link_type '{value}'. Valid: {[lt.value for lt in LinkType]}")
+
+
+def _serialize_link(link: MemoryLink) -> dict[str, Any]:
+    return {
+        "link_id": link.link_id,
+        "source_id": link.source_id,
+        "target_id": link.target_id,
+        "link_type": link.link_type.value,
+        "strength": link.strength,
+        "context": link.context,
+        "created_at": link.created_at.isoformat() if link.created_at else None,
+    }
+
+
+async def link_memories(
+    source_id: str,
+    target_id: str,
+    link_type: str | None = None,
+    context: str | None = None,
+    bidirectional: bool = False,
+) -> dict[str, Any]:
+    """Create a typed link between two memories.
+
+    Args:
+        source_id: ID of the source memory.
+        target_id: ID of the target memory.
+        link_type: Relationship type (references, elaborates, contradicts,
+            supports, derives_from, similar_to, supersedes, updates, sequence).
+            Default: references.
+        context: Optional explanation of the relationship.
+        bidirectional: Create reverse link as well (default: False).
+
+    Returns:
+        The created link record.
+    """
+    memory_core = await _get_memory_core()
+    parsed_type = _parse_link_type(link_type)
+    link = await memory_core.link(
+        source_id,
+        target_id,
+        parsed_type,
+        context=context,
+        bidirectional=bidirectional,
+    )
+    return _serialize_link(link)
+
+
+async def get_links(
+    memory_id: str,
+    direction: str = "both",
+    link_types: list[str] | None = None,
+    min_strength: float = 0.0,
+) -> list[dict[str, Any]]:
+    """Get all links for a memory.
+
+    Args:
+        memory_id: ID of the memory.
+        direction: Which links to retrieve (outgoing, incoming, both). Default: both.
+        link_types: Optional list of link type names to filter by.
+        min_strength: Minimum link strength threshold (default: 0.0).
+
+    Returns:
+        List of link records.
+    """
+    memory_core = await _get_memory_core()
+    parsed_types = (
+        [_parse_link_type(lt) for lt in link_types]
+        if link_types
+        else None
+    )
+    if direction not in ("outgoing", "incoming", "both"):
+        raise ValueError(f"direction must be 'outgoing', 'incoming', or 'both', got '{direction}'")
+    links = await memory_core.get_links(
+        memory_id,
+        direction=direction,  # type: ignore[arg-type]
+        link_types=parsed_types,
+        min_strength=min_strength,
+    )
+    return [_serialize_link(link) for link in links]
+
+
+async def traverse_graph(
+    memory_id: str,
+    depth: int = 2,
+) -> dict[str, Any]:
+    """Explore the knowledge graph around a memory.
+
+    Args:
+        memory_id: Starting memory ID.
+        depth: How many hops to explore (default: 2, max: 5).
+
+    Returns:
+        Graph structure with nodes, edges, and counts.
+    """
+    memory_core = await _get_memory_core()
+    return await memory_core.explore(memory_id, depth=min(depth, 5))
+
+
+async def suggest_links(
+    memory_id: str,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Suggest potential links for a memory based on semantic similarity.
+
+    Args:
+        memory_id: ID of the memory to find suggestions for.
+        limit: Maximum number of suggestions (default: 5).
+
+    Returns:
+        List of suggested link records with target memory info and scores.
+    """
+    memory_core = await _get_memory_core()
+    store = memory_core.store
+    if not isinstance(store, SupportsKnowledgeGraph):
+        raise RuntimeError("Store does not support knowledge graph operations.")
+    suggestions = await store.suggest_links(memory_id, limit=limit)
+    results: list[dict[str, Any]] = []
+    for suggestion in suggestions:
+        entry: dict[str, Any] = {}
+        if isinstance(suggestion, dict):
+            entry = suggestion
+        elif isinstance(suggestion, tuple) and len(suggestion) >= 2:
+            target_memory, score = suggestion[0], suggestion[1]
+            entry = {
+                "target_id": target_memory.memory_id if isinstance(target_memory, MemoryItem) else str(target_memory),
+                "score": float(score),
+            }
+            if isinstance(target_memory, MemoryItem):
+                entry["snippet"] = _memory_snippet(target_memory)
+                entry["memory_type"] = target_memory.memory_type.value
+        else:
+            entry = {"raw": str(suggestion)}
+        results.append(entry)
+    return results
+
+
+async def get_conflicts(
+    memory_id: str,
+) -> dict[str, Any]:
+    """Get conflicts for a memory (memories it contradicts).
+
+    Args:
+        memory_id: ID of the memory to check.
+
+    Returns:
+        Dictionary with the memory's conflict info and related conflicting memories.
+    """
+    memory_core = await _get_memory_core()
+    memory = await memory_core.store.get_memory(memory_id)
+    if memory is None:
+        raise ValueError(f"Memory '{memory_id}' not found.")
+
+    result: dict[str, Any] = {
+        "memory_id": memory_id,
+        "snippet": _memory_snippet(memory),
+        "conflicts_with": memory.conflicts_with or [],
+        "conflicting_memories": [],
+    }
+
+    if memory.conflicts_with:
+        conflict_tasks = [memory_core.store.get_memory(cid) for cid in memory.conflicts_with]
+        conflict_memories = await asyncio.gather(*conflict_tasks)
+        for cm in conflict_memories:
+            if cm is not None:
+                result["conflicting_memories"].append({
+                    "memory_id": cm.memory_id,
+                    "snippet": _memory_snippet(cm),
+                    "importance": cm.importance,
+                    "memory_type": cm.memory_type.value,
+                })
+
+    # Also check for CONTRADICTS links
+    try:
+        links = await memory_core.get_links(
+            memory_id,
+            link_types=[LinkType.CONTRADICTS],
+        )
+        result["contradiction_links"] = [_serialize_link(link) for link in links]
+    except RuntimeError:
+        result["contradiction_links"] = []
+
+    return result
+
+
+async def resolve_conflict(
+    memory_id: str,
+    conflicting_id: str,
+    resolution: str = "keep_both",
+    winner_id: str | None = None,
+) -> dict[str, Any]:
+    """Resolve a conflict between two memories.
+
+    Args:
+        memory_id: ID of the first memory.
+        conflicting_id: ID of the conflicting memory.
+        resolution: Resolution strategy:
+            - keep_both: Keep both, remove from conflicts list.
+            - keep_newer: Delete the older memory.
+            - keep_winner: Delete the loser (requires winner_id).
+            - supersede: Mark winner as superseding loser with SUPERSEDES link.
+        winner_id: Required when resolution is 'keep_winner' or 'supersede'.
+
+    Returns:
+        Dictionary describing the resolution action taken.
+    """
+    memory_core = await _get_memory_core()
+    m1 = await memory_core.store.get_memory(memory_id)
+    m2 = await memory_core.store.get_memory(conflicting_id)
+    if m1 is None:
+        raise ValueError(f"Memory '{memory_id}' not found.")
+    if m2 is None:
+        raise ValueError(f"Memory '{conflicting_id}' not found.")
+
+    result: dict[str, Any] = {
+        "memory_id": memory_id,
+        "conflicting_id": conflicting_id,
+        "resolution": resolution,
+    }
+
+    if resolution == "keep_both":
+        # Remove from each other's conflicts_with
+        m1.conflicts_with = [c for c in (m1.conflicts_with or []) if c != conflicting_id]
+        m2.conflicts_with = [c for c in (m2.conflicts_with or []) if c != memory_id]
+        await memory_core.store.store_memory(m1)
+        await memory_core.store.store_memory(m2)
+        result["action"] = "Removed from conflicts lists, both memories kept."
+
+    elif resolution == "keep_newer":
+        t1 = coerce_datetime(m1.timestamp, default=None)
+        t2 = coerce_datetime(m2.timestamp, default=None)
+        if t1 is not None and t2 is not None and t1 >= t2:
+            await memory_core.forget(conflicting_id)
+            result["action"] = f"Deleted older memory {conflicting_id}."
+            result["deleted"] = conflicting_id
+            result["kept"] = memory_id
+        else:
+            await memory_core.forget(memory_id)
+            result["action"] = f"Deleted older memory {memory_id}."
+            result["deleted"] = memory_id
+            result["kept"] = conflicting_id
+
+    elif resolution == "keep_winner":
+        if not winner_id or winner_id not in (memory_id, conflicting_id):
+            raise ValueError("winner_id must be one of memory_id or conflicting_id.")
+        loser_id = conflicting_id if winner_id == memory_id else memory_id
+        await memory_core.forget(loser_id)
+        result["action"] = f"Deleted loser memory {loser_id}."
+        result["deleted"] = loser_id
+        result["kept"] = winner_id
+
+    elif resolution == "supersede":
+        if not winner_id or winner_id not in (memory_id, conflicting_id):
+            raise ValueError("winner_id must be one of memory_id or conflicting_id.")
+        loser_id = conflicting_id if winner_id == memory_id else memory_id
+        try:
+            link = await memory_core.link(
+                winner_id,
+                loser_id,
+                LinkType.SUPERSEDES,
+                context="Conflict resolution: superseded",
+            )
+            result["link"] = _serialize_link(link)
+        except RuntimeError:
+            pass
+        result["action"] = f"Memory {winner_id} now supersedes {loser_id}."
+        result["winner"] = winner_id
+        result["loser"] = loser_id
+
+    else:
+        raise ValueError(
+            f"Unknown resolution '{resolution}'. "
+            "Valid: keep_both, keep_newer, keep_winner, supersede."
+        )
+
+    return result
+
+
+def link_types() -> list[str]:
+    """Return all supported link type values.
+
+    Returns:
+        List of valid link_type strings.
+    """
+    return [lt.value for lt in LinkType]
+
+
 _FASTMCP_IMPORT_ERROR = (
     "FastMCP is required to run the MCP server. Install with `mnemotree[mcp_server]`."
 )
@@ -566,6 +860,14 @@ def _register_tools(mcp: Any) -> None:
     mcp.tool(get_memories)
     mcp.tool(update_memory)
     mcp.tool(forget)
+    # Knowledge graph tools
+    mcp.tool(link_memories)
+    mcp.tool(get_links)
+    mcp.tool(traverse_graph)
+    mcp.tool(suggest_links)
+    # Conflict tools
+    mcp.tool(get_conflicts)
+    mcp.tool(resolve_conflict)
 
 
 def _load_fastmcp() -> Any:

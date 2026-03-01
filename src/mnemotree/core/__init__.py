@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from ..rerankers import CrossEncoderReranker, NoOpReranker
 from .builder import MemoryCoreBuilder
-from .hybrid_retrieval import FusionStrategy, HybridRetriever, RetrievalStage
 from .intent import (
     INTENT_TO_TYPES,
     IntentClassifier,
@@ -25,6 +24,7 @@ from .memory import (
 )
 from .models import LinkType, MemoryItem, MemoryLink, MemoryType
 from .query import MemoryQuery, MemoryQueryBuilder
+from .retrieval import FusionStrategy, HybridRetriever, RetrievalResult, RetrievalStage
 from .retriever_factory import RetrieverFactory
 
 __all__ = [
@@ -53,6 +53,7 @@ __all__ = [
     "CrossEncoderReranker",
     "NoOpReranker",
     "FusionStrategy",
+    "RetrievalResult",
     "RetrievalStage",
     "RetrieverFactory",
     # SimpleMem intent classification

@@ -4,7 +4,7 @@ from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.core.query import MemoryQuery, MemoryQueryBuilder
 from mnemotree.core.retrieval import (
     BaseRetriever,
-    HybridFusionRetriever,
+    HybridRetriever,
     VectorEntityRetriever,
     rrf_fuse,
 )
@@ -276,7 +276,7 @@ async def test_hybrid_fusion_recall_structured_updates_access():
     m1 = _memory("m1", [1.0, 0.0])
     store = DummyStore(structured_memories=[m1])
 
-    retriever = HybridFusionRetriever(
+    retriever = HybridRetriever(
         store=store,
         scoring_system=MemoryScoring(),
         ner=None,
@@ -309,7 +309,7 @@ async def test_hybrid_fusion_recall_reranks_top_candidates():
     )
     reranker = DummyReranker({"m2": 0, "m1": 1, "m3": 2})
 
-    retriever = HybridFusionRetriever(
+    retriever = HybridRetriever(
         store=store,
         scoring_system=MemoryScoring(),
         ner=ner,
