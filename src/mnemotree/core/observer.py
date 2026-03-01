@@ -122,9 +122,9 @@ class MemoryObserver:
             response = await self.llm.ainvoke(  # type: ignore[union-attr]
                 _EXTRACT_PROMPT.format(content=content)
             )
-            text = response.content if hasattr(response, "content") else str(response)
+            text = (response.content if hasattr(response, "content") else str(response)) or ""
 
-            if text.strip().upper() == "NONE":
+            if not text.strip() or text.strip().upper() == "NONE":
                 return []
 
             observations: list[Observation] = []
