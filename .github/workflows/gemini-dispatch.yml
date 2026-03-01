@@ -57,18 +57,21 @@ jobs:
           EVENT_TYPE: '${{ github.event_name }}.${{ github.event.action }}'
           COMMENT_BODY: '${{ github.event.comment.body }}'
           ISSUE_BODY: '${{ github.event.issue.body }}'
+          PR_BODY: '${{ github.event.pull_request.body }}'
         with:
           script: |
             const eventType = process.env.EVENT_TYPE;
-            const request   = (process.env.COMMENT_BODY || process.env.ISSUE_BODY || '').trim();
+            const request   = (
+              process.env.COMMENT_BODY ||
+              process.env.PR_BODY      ||
+              process.env.ISSUE_BODY   ||
+              ''
+            ).trim();
 
             core.setOutput('request', request);
 
-            if (['pull_request.opened', 'pull_request.reopened', 'pull_request.synchronize'].includes(eventType)) {
-              core.setOutput('command', 'review');
-            } else if (['issues.opened', 'issues.reopened'].includes(eventType)) {
-              core.setOutput('command', 'triage');
-            } else if (request.startsWith('@gemini-cli /review')) {
+            // Check explicit @gemini-cli commands first so PR body overrides can work
+            if (request.startsWith('@gemini-cli /review')) {
               core.setOutput('command', 'review');
               core.setOutput('additional_context', request.replace(/^@gemini-cli \/review/, '').trim());
             } else if (request.startsWith('@gemini-cli /triage')) {
@@ -76,6 +79,10 @@ jobs:
             } else if (request.startsWith('@gemini-cli')) {
               core.setOutput('command', 'invoke');
               core.setOutput('additional_context', request.replace(/^@gemini-cli/, '').trim());
+            } else if (['pull_request.opened', 'pull_request.reopened', 'pull_request.synchronize'].includes(eventType)) {
+              core.setOutput('command', 'review');
+            } else if (['issues.opened', 'issues.reopened'].includes(eventType)) {
+              core.setOutput('command', 'triage');
             } else {
               core.setOutput('command', 'fallthrough');
             }
@@ -98,7 +105,6 @@ jobs:
     uses: './.github/workflows/gemini-review.yml'
     permissions:
       contents: 'read'
-      id-token: 'write'
       issues: 'write'
       pull-requests: 'write'
     with:
@@ -112,7 +118,6 @@ jobs:
     uses: './.github/workflows/gemini-triage.yml'
     permissions:
       contents: 'read'
-      id-token: 'write'
       issues: 'write'
       pull-requests: 'write'
     with:
@@ -126,7 +131,6 @@ jobs:
     uses: './.github/workflows/gemini-invoke.yml'
     permissions:
       contents: 'read'
-      id-token: 'write'
       issues: 'write'
       pull-requests: 'write'
     with:
