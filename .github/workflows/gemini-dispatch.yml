@@ -7,10 +7,6 @@ on:
     types: ['opened', 'reopened']
   issue_comment:
     types: ['created']
-  pull_request_review_comment:
-    types: ['created']
-  pull_request_review:
-    types: ['submitted']
 
 defaults:
   run:
@@ -59,13 +55,12 @@ jobs:
         uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea'
         env:
           EVENT_TYPE: '${{ github.event_name }}.${{ github.event.action }}'
-          REQUEST: >-
-            ${{ github.event.comment.body || github.event.review.body ||
-                github.event.issue.body || '' }}
+          COMMENT_BODY: '${{ github.event.comment.body }}'
+          ISSUE_BODY: '${{ github.event.issue.body }}'
         with:
           script: |
             const eventType = process.env.EVENT_TYPE;
-            const request   = (process.env.REQUEST || '').trim();
+            const request   = (process.env.COMMENT_BODY || process.env.ISSUE_BODY || '').trim();
 
             core.setOutput('request', request);
 
@@ -108,7 +103,8 @@ jobs:
       pull-requests: 'write'
     with:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
-    secrets: 'inherit'
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
 
   triage:
     needs: 'dispatch'
@@ -121,7 +117,8 @@ jobs:
       pull-requests: 'write'
     with:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
-    secrets: 'inherit'
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
 
   invoke:
     needs: 'dispatch'
@@ -134,7 +131,8 @@ jobs:
       pull-requests: 'write'
     with:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
-    secrets: 'inherit'
+    secrets:
+      GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
 
   fallthrough:
     needs: ['dispatch', 'review', 'triage', 'invoke']

@@ -7,6 +7,9 @@ on:
         type: 'string'
         description: 'The user request (everything after @gemini-cli)'
         required: true
+    secrets:
+      GEMINI_API_KEY:
+        required: true
 
 concurrency:
   group: '${{ github.workflow }}-invoke-${{ github.event.pull_request.number || github.event.issue.number }}'
