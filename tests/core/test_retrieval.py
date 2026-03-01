@@ -482,3 +482,28 @@ async def test_hybrid_retriever_skips_graph_when_weight_zero() -> None:
 
     await retriever.recall(query, limit=5, scoring=False, update_access=False)
     assert len(store.traverse_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_graph_candidates_with_none_entities():
+    """Memories with entities=None should not crash graph candidate collection."""
+    m1 = _memory("m1", [1.0, 0.0])
+    m1.entities = None  # type: ignore[assignment]
+    m2 = _memory("m2", [0.9, 0.1])
+    m2.entities = {"org": "ACME"}
+
+    store = DummyStore(vector_memories=[m1, m2])
+    embedder = DummyEmbedder({"q": [1.0, 0.0]})
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        graph_weight=0.3,
+    )
+    # Should not raise AttributeError: 'NoneType' object has no attribute 'keys'
+    results = await retriever.recall(
+        MemoryQuery(vector=[1.0, 0.0]), limit=5, scoring=False, update_access=False
+    )
+    assert isinstance(results, list)

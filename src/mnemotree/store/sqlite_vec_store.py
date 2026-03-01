@@ -37,6 +37,18 @@ logger = logging.getLogger(__name__)
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_]\w*$", re.ASCII)
 
 
+def _safe_json_loads(raw: str | None) -> dict[str, Any]:
+    """Parse JSON string, returning empty dict on None or malformed input."""
+    if not raw:
+        return {}
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Invalid JSON in stored metadata, returning empty dict")
+        return {}
+
+
 class SQLiteVecMemoryStore(BaseMemoryStore):
     store_type = "sqlite-vec"
 
@@ -715,7 +727,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             access_count=row["access_count"],
             created_by=row["created_by"],
             similarity_score=row["similarity_score"],
-            metadata=json.loads(metadata_str) if metadata_str else {},
+            metadata=_safe_json_loads(metadata_str),
         )
 
     async def create_link(

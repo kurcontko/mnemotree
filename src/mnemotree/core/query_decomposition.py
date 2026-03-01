@@ -34,7 +34,7 @@ class QueryDecomposer:
         response = await self.llm.ainvoke(
             _DECOMPOSE_PROMPT.format(query=query, max_sub=self.max_sub_queries)
         )
-        content = response.content if hasattr(response, "content") else str(response)
+        content = (response.content if hasattr(response, "content") else str(response)) or ""
         lines = [line.strip() for line in content.splitlines() if line.strip()]
         return lines[: self.max_sub_queries] or [query]
 

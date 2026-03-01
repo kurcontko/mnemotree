@@ -732,7 +732,8 @@ class HybridRetriever(BaseRetriever):
         # Entity graph: find memories sharing entities with seeds
         seed_entities: set[str] = set()
         for m in seed_memories[:5]:
-            seed_entities.update(m.entities.keys())
+            if m.entities:
+                seed_entities.update(m.entities.keys())
         if seed_entities and isinstance(self.store, SupportsEntityQuery):
             try:
                 entity_neighbors = await self.store.query_by_entities(

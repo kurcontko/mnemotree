@@ -168,7 +168,7 @@ class BM25Index:
             if tf <= 0:
                 continue
             dl = self.doc_len.get(memory_id, 0)
-            denom = tf + self.k1 * (1 - self.b + self.b * (dl / avgdl))
+            denom = tf + self.k1 * (1 - self.b + self.b * (dl / avgdl if avgdl > 0 else 1.0))
             score = idf * (tf * (self.k1 + 1)) / denom if denom else 0.0
             scores[memory_id] = scores.get(memory_id, 0.0) + score
 
