@@ -549,6 +549,71 @@ async def forget(memory_id: str) -> bool:
     return await memory_core.forget(memory_id)
 
 
+async def export_memories_tool(
+    mode: str = "single",
+    output_path: str | None = None,
+    filters: dict[str, Any] | None = None,
+    include_links: bool = True,
+    sort_by: str = "timestamp",
+) -> dict[str, Any]:
+    """Export stored memories to markdown files.
+
+    Args:
+        mode: Export mode - "single" for one file or "vault" for per-memory directory.
+        output_path: Output path (default: memories.md or ./memories/).
+        filters: Optional dict with keys:
+            - memory_types: List of types to include.
+            - tags: List of tags to filter by.
+            - min_importance / max_importance: Float thresholds.
+            - since / until: ISO-8601 timestamps for time range.
+        include_links: Include memory links in output (default: True).
+        sort_by: Sort field - "timestamp", "importance", or "memory_type".
+
+    Returns:
+        Dictionary with path, count, and mode of the export.
+    """
+    from mnemotree.export.markdown import ExportFilters, ExportOptions, export_memories
+
+    memory_core = await _get_memory_core()
+    store = memory_core.store
+
+    parsed_filters: ExportFilters | None = None
+    if filters:
+        from mnemotree.core.models import coerce_datetime
+
+        raw_types = filters.get("memory_types") or filters.get("memory_type")
+        parsed_types: list[MemoryType] | None = None
+        if raw_types:
+            type_list = _ensure_list(raw_types) or []
+            built: list[MemoryType] = []
+            for v in type_list:
+                parsed = _parse_memory_type(str(v))
+                if parsed is not None:
+                    built.append(parsed)
+            parsed_types = built or None
+
+        since = filters.get("since")
+        until = filters.get("until")
+        parsed_filters = ExportFilters(
+            memory_types=parsed_types,
+            tags=_ensure_list(filters.get("tags")),
+            min_importance=filters.get("min_importance"),
+            max_importance=filters.get("max_importance"),
+            since=coerce_datetime(since, default=None) if since else None,
+            until=coerce_datetime(until, default=None) if until else None,
+        )
+
+    options = ExportOptions(
+        mode=mode if mode in ("single", "vault") else "single",
+        output_path=output_path,
+        include_links=include_links,
+        sort_by=sort_by if sort_by in ("timestamp", "importance", "memory_type") else "timestamp",
+    )
+
+    path, count = await export_memories(store, options, parsed_filters)
+    return {"path": path, "count": count, "mode": options.mode}
+
+
 async def reflect(min_importance: float = 0.7) -> dict[str, Any]:
     """Summarize patterns across higher-importance memories.
 
@@ -1030,6 +1095,8 @@ def _register_tools(mcp: Any) -> None:
     mcp.tool(consolidate)
     # Observer tools
     mcp.tool(observe)
+    # Export tools
+    mcp.tool(export_memories_tool)
 
 
 def _load_fastmcp() -> Any:
