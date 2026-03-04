@@ -238,14 +238,14 @@ wheels = [
 
 [[package]]
 name = "authlib"
-version = "1.6.6"
+version = "1.6.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bb/9b/b1661026ff24bc641b76b78c5222d614776b0c085bcfdac9bd15a1cb4b35/authlib-1.6.6.tar.gz", hash = "sha256:45770e8e056d0f283451d9996fbb59b70d45722b45d854d58f32878d0a40c38e", size = 164894, upload-time = "2025-12-12T08:01:41.464Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/49/dc/ed1681bf1339dd6ea1ce56136bad4baabc6f7ad466e375810702b0237047/authlib-1.6.7.tar.gz", hash = "sha256:dbf10100011d1e1b34048c9d120e83f13b35d69a826ae762b93d2fb5aafc337b", size = 164950, upload-time = "2026-02-06T14:04:14.171Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/51/321e821856452f7386c4e9df866f196720b1ad0c5ea1623ea7399969ae3b/authlib-1.6.6-py2.py3-none-any.whl", hash = "sha256:7d9e9bc535c13974313a87f53e8430eb6ea3d1cf6ae4f6efcd793f2e949143fd", size = 244005, upload-time = "2025-12-12T08:01:40.209Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/00/3ed12264094ec91f534fae429945efbaa9f8c666f3aa7061cc3b2a26a0cd/authlib-1.6.7-py2.py3-none-any.whl", hash = "sha256:c637340d9a02789d2efa1d003a7437d10d3e565237bcb5fcbc6c134c7b95bab0", size = 244115, upload-time = "2026-02-06T14:04:12.141Z" },
 ]
 
 [[package]]
@@ -1032,6 +1032,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/64/a4/f71d9cf3a5ac257c993b5ca3f93df5f7fb395c725e7f1e6479d2514173c3/dataclasses_json-0.6.7.tar.gz", hash = "sha256:b6b3e528266ea45b9535223bc53ca645f5208833c29229e847b3f26a1cc55fc0", size = 32227, upload-time = "2024-06-09T16:20:19.103Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl", hash = "sha256:0dbf33f26c8d5305befd61b39d2b3414e8a407bedc2834dea9b8d642666fb40a", size = 28686, upload-time = "2024-06-09T16:20:16.715Z" },
+]
+
+[[package]]
+name = "dateparser"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "regex" },
+    { name = "tzlocal" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/2c/668dfb8c073a5dde3efb80fa382de1502e3b14002fd386a8c1b0b49e92a9/dateparser-1.3.0.tar.gz", hash = "sha256:5bccf5d1ec6785e5be71cc7ec80f014575a09b4923e762f850e57443bddbf1a5", size = 337152, upload-time = "2026-02-04T16:00:06.162Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/c7/95349670e193b2891176e1b8e5f43e12b31bff6d9994f70e74ab385047f6/dateparser-1.3.0-py3-none-any.whl", hash = "sha256:8dc678b0a526e103379f02ae44337d424bd366aac727d3c6cf52ce1b01efbb5a", size = 318688, upload-time = "2026-02-04T16:00:04.652Z" },
 ]
 
 [[package]]
@@ -2715,6 +2730,7 @@ dependencies = [
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scikit-learn", version = "1.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "spacy" },
+    { name = "sqlite-vec" },
     { name = "urllib3" },
 ]
 
@@ -2793,6 +2809,9 @@ ner-spark = [
 ner-stanza = [
     { name = "stanza" },
 ]
+normalization = [
+    { name = "dateparser" },
+]
 rerank-flashrank = [
     { name = "flashrank" },
 ]
@@ -2815,9 +2834,10 @@ requires-dist = [
     { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=0.5.23" },
     { name = "chromadb", marker = "extra == 'mcp-server'", specifier = ">=0.5.23" },
     { name = "chromadb", marker = "extra == 'vectors'", specifier = ">=0.5.23" },
-    { name = "fastmcp", marker = "extra == 'all'", specifier = "<3" },
-    { name = "fastmcp", marker = "extra == 'mcp'", specifier = "<3" },
-    { name = "fastmcp", marker = "extra == 'mcp-server'", specifier = "<3" },
+    { name = "dateparser", marker = "extra == 'normalization'", specifier = ">=1.2.0" },
+    { name = "fastmcp", marker = "extra == 'all'", specifier = "<4" },
+    { name = "fastmcp", marker = "extra == 'mcp'", specifier = "<4" },
+    { name = "fastmcp", marker = "extra == 'mcp-server'", specifier = "<4" },
     { name = "filelock", specifier = ">=3.20.3,<4.0.0" },
     { name = "flashrank", marker = "extra == 'rerank-flashrank'", specifier = ">=0.2.0" },
     { name = "gliner", marker = "extra == 'ner-gliner'", specifier = ">=0.2.0" },
@@ -2856,6 +2876,7 @@ requires-dist = [
     { name = "sentence-transformers", marker = "extra == 'mcp-server'", specifier = ">=2.7.0" },
     { name = "spacy", specifier = ">=3.8.0,<4.0.0" },
     { name = "spark-nlp", marker = "extra == 'ner-spark'", specifier = ">=5.0.0" },
+    { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "sqlite-vec", marker = "extra == 'all'", specifier = ">=0.1.0" },
     { name = "sqlite-vec", marker = "extra == 'sqlite-vec'", specifier = ">=0.1.0" },
     { name = "sqlite-vec", marker = "extra == 'vectors'", specifier = ">=0.1.0" },
@@ -2869,7 +2890,7 @@ requires-dist = [
     { name = "yake", marker = "extra == 'all'", specifier = ">=0.4.8" },
     { name = "yake", marker = "extra == 'keywords'", specifier = ">=0.4.8" },
 ]
-provides-extras = ["dev", "ner-gliner", "ner-hf", "ner-stanza", "ner-spark", "neo4j", "milvus", "chroma", "sqlite-vec", "vectors", "lite", "rerank-flashrank", "keywords", "ui", "mcp", "mcp-server", "google", "anthropic", "aws", "huggingface", "all"]
+provides-extras = ["dev", "ner-gliner", "ner-hf", "ner-stanza", "ner-spark", "neo4j", "milvus", "chroma", "sqlite-vec", "vectors", "lite", "rerank-flashrank", "normalization", "keywords", "ui", "mcp", "mcp-server", "google", "anthropic", "aws", "huggingface", "all"]
 
 [[package]]
 name = "more-itertools"
@@ -6517,6 +6538,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5e/a7/c202b344c5ca7daf398f3b8a477eeb205cf3b6f32e7ec3a6bac0629ca975/tzdata-2025.3.tar.gz", hash = "sha256:de39c2ca5dc7b0344f2eba86f49d614019d29f060fc4ebc8a417896a620b56a7", size = 196772, upload-time = "2025-12-13T17:45:35.667Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/b0/003792df09decd6849a5e39c28b513c06e84436a54440380862b5aeff25d/tzdata-2025.3-py2.py3-none-any.whl", hash = "sha256:06a47e5700f3081aab02b2e513160914ff0694bce9947d6b76ebd6bf57cfc5d1", size = 348521, upload-time = "2025-12-13T17:45:33.889Z" },
+]
+
+[[package]]
+name = "tzlocal"
+version = "5.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8b/2e/c14812d3d4d9cd1773c6be938f89e5735a1f11a9f184ac3639b93cef35d5/tzlocal-5.3.1.tar.gz", hash = "sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd", size = 30761, upload-time = "2025-03-05T21:17:41.549Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/14/e2a54fabd4f08cd7af1c07030603c3356b74da07f7cc056e600436edfa17/tzlocal-5.3.1-py3-none-any.whl", hash = "sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d", size = 18026, upload-time = "2025-03-05T21:17:39.857Z" },
 ]
 
 [[package]]
