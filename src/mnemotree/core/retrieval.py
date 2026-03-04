@@ -368,9 +368,9 @@ class HybridRetriever(BaseRetriever):
     def __init__(
         self,
         *args: Any,
-        vector_weight: float = 0.50,
-        entity_weight: float = 0.15,
-        bm25_weight: float = 0.35,
+        vector_weight: float = 0.60,
+        entity_weight: float = 0.10,
+        bm25_weight: float = 0.30,
         graph_weight: float = 0.0,
         fusion_strategy: FusionStrategy = FusionStrategy.RRF,
         rrf_k: int = 60,

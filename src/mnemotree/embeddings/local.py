@@ -8,9 +8,9 @@ import numpy as np
 class LocalSentenceTransformerEmbeddings:
     def __init__(
         self,
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        model_name: str = "BAAI/bge-base-en-v1.5",
         *,
-        device: str = "cpu",
+        device: str = "cuda",
         normalize: bool = True,
         batch_size: int = 32,
     ) -> None:

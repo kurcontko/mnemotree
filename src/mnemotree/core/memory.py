@@ -95,7 +95,7 @@ class RetrievalConfig:
     reranker_model: str = "ms-marco-TinyBERT-L-2-v2"
     rerank_candidates: int = 50
     # SimpleMem: intent-aware type pre-filtering (arXiv:2601.02553)
-    enable_intent_filter: bool = True
+    enable_intent_filter: bool = False
     intent_classifier_backend: Literal["keyword", "llm"] = "keyword"
     # HyDE: hypothetical document embedding
     enable_hyde: bool = False
@@ -116,7 +116,7 @@ class IngestionConfig:
     async_ingest: bool = False
     ingestion_queue_size: int = 100
     # Deduplication
-    dedup_enabled: bool = True
+    dedup_enabled: bool = False
     dedup_threshold: float = 0.88
     # Auto-linking (background SIMILAR_TO links after each remember)
     auto_link_enabled: bool = True
@@ -2172,7 +2172,7 @@ class MemoryCore:
         rerank_candidates: int,
         async_ingest: bool,
         ingestion_queue_size: int,
-        dedup_enabled: bool = True,
+        dedup_enabled: bool = False,
         dedup_threshold: float = 0.88,
         auto_link_enabled: bool = True,
         auto_link_threshold: float = 0.80,
@@ -2464,7 +2464,7 @@ class MemoryCore:
         if mode == "lite":
             lite_model = os.getenv(
                 "MNEMOTREE_LITE_EMBEDDING_MODEL",
-                "sentence-transformers/all-MiniLM-L6-v2",
+                "BAAI/bge-base-en-v1.5",
             )
             return LocalSentenceTransformerEmbeddings(model_name=lite_model)
 
