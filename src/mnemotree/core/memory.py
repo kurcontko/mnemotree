@@ -134,6 +134,26 @@ class IngestionConfig:
 
 
 @dataclass(frozen=True)
+class LocalModelConfig:
+    """Configuration for local router + extractor models."""
+
+    router_path: str | None = None
+    extractor_path: str | None = None
+    device: str = "cpu"
+    router_threshold: float = 0.55
+    extractor_max_tokens: int = 512
+
+
+@dataclass(frozen=True)
+class EngramConfig:
+    """ENGRAM-style fact-as-memory architecture settings."""
+
+    enable_fact_memories: bool = False
+    enable_per_type_retrieval: bool = False
+    per_type_k: int = 25
+
+
+@dataclass(frozen=True)
 class ModeConfig:
     analyze_default: bool
     summarize_default: bool
@@ -204,6 +224,8 @@ class MemoryCore:
         retrieval_config: RetrievalConfig | None = None,
         ingestion_config: IngestionConfig | None = None,
         normalization_config: NormalizationConfig | None = None,
+        local_model_config: LocalModelConfig | None = None,
+        engram_config: EngramConfig | None = None,
         default_user_id: str | None = None,
         default_conversation_id: str | None = None,
     ):
@@ -221,10 +243,14 @@ class MemoryCore:
             retrieval_config: Retrieval and reranking configuration.
             ingestion_config: Async ingestion configuration.
             normalization_config: Content normalization configuration.
+            local_model_config: Local router + extractor model configuration.
+            engram_config: ENGRAM-style fact-as-memory settings.
         """
         self.store = store
         self.default_user_id = default_user_id
         self.default_conversation_id = default_conversation_id
+        self._local_model_config = local_model_config
+        self._engram_config = engram_config or EngramConfig()
 
         mode_defaults = mode_defaults or ModeDefaultsConfig()
         ner_config = ner_config or NerConfig()
@@ -637,6 +663,11 @@ class MemoryCore:
 
         memory = await self._apply_pre_remember_hooks(memory)
         await self._persist_memory(memory, references, skip_store)
+
+        # ENGRAM: store extracted fact as a separate searchable memory
+        if not skip_store and self._engram_config.enable_fact_memories:
+            await self._maybe_store_fact_memory(memory, enrichment)
+
         return memory
 
     def _resolve_remember_options(
@@ -846,6 +877,78 @@ class MemoryCore:
 
         if self.conflict_detection_enabled and self.conflict_detector is not None:
             asyncio.create_task(self._detect_and_link_conflicts(memory))
+
+    async def _maybe_store_fact_memory(
+        self,
+        parent: MemoryItem,
+        enrichment: EnrichmentResult,
+    ) -> None:
+        """Store an extracted fact as a separate searchable memory (ENGRAM pattern).
+
+        Called after _persist_memory when engram fact_memories mode is enabled.
+        Extracts the normalized fact text from the analysis extraction data and
+        creates a new MemoryItem linked to the parent via PART_OF.
+        """
+        if not self._engram_config.enable_fact_memories:
+            return
+        if enrichment.analysis is None:
+            return
+        ctx_summary = enrichment.analysis.context_summary
+        if not ctx_summary or "extraction" not in ctx_summary:
+            return
+
+        extraction = ctx_summary["extraction"]
+        if not isinstance(extraction, dict):
+            return
+
+        # Extract the fact text from the extraction payload.
+        # The extractor produces type-specific keys: fact, event, procedure, etc.
+        fact_text = (
+            extraction.get("fact")
+            or extraction.get("event")
+            or extraction.get("procedure")
+            or extraction.get("summary")
+            or extraction.get("description")
+        )
+        if not fact_text or not isinstance(fact_text, str):
+            return
+
+        # Embed the fact text separately (not reusing parent's embedding)
+        result = self.embedder.embed_query(fact_text)
+        fact_embedding = (await result) if asyncio.iscoroutine(result) else result
+
+        fact_memory = MemoryItem(
+            memory_id=str(uuid4()),
+            content=fact_text,
+            memory_type=parent.memory_type,
+            importance=parent.importance,
+            tags=list(parent.tags),
+            context=parent.context,
+            embedding=fact_embedding,
+            metadata={
+                **(parent.metadata or {}),
+                "source_memory_id": parent.memory_id,
+                "is_extracted_fact": True,
+            },
+            user_id=parent.user_id,
+            conversation_id=parent.conversation_id,
+        )
+
+        await self.persistence.save(fact_memory)
+
+        # Link fact → parent via PART_OF if the store supports it
+        if isinstance(self.store, SupportsKnowledgeGraph):
+            try:
+                await self.link(fact_memory.memory_id, parent.memory_id, LinkType.PART_OF)
+            except Exception:
+                logger.debug("Failed to link fact memory to parent", exc_info=True)
+
+        logger.debug(
+            "Stored extracted fact memory %s → parent %s: %s",
+            fact_memory.memory_id,
+            parent.memory_id,
+            fact_text[:80],
+        )
 
     async def _merge_into(
         self,
@@ -1086,6 +1189,10 @@ class MemoryCore:
                 if updates:
                     filters = dataclasses.replace(filters, **updates)
 
+        # ENGRAM: per-type retrieval (overrides normal path)
+        if self._engram_config.enable_per_type_retrieval and isinstance(query, str):
+            return await self.recall_per_type(query, limit=limit)
+
         # SimpleMem: infer MemoryType from query intent and pre-filter results
         if self._intent_classifier is not None and isinstance(query, str):
             from .intent import INTENT_TO_TYPES, RetrievalIntent
@@ -1161,6 +1268,84 @@ class MemoryCore:
             scoring=scoring,
             update_access=update_access,
         )
+
+    async def recall_per_type(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        per_type_k: int | None = None,
+    ) -> list[MemoryItem]:
+        """ENGRAM-style per-type retrieval: top-k per type → merge → deduplicate.
+
+        For each of [episodic, semantic, procedural], retrieves per_type_k
+        candidates using vector similarity with a memory_type filter.
+        Results are merged, deduplicated (preferring extracted facts over raw
+        turns when sharing the same source_memory_id), then truncated to limit.
+        """
+        from ..store.protocols import SupportsVectorSearch
+
+        per_type_k = per_type_k or self._engram_config.per_type_k
+        limit = limit or per_type_k
+        result = self.embedder.embed_query(query)
+        query_embedding = (await result) if asyncio.iscoroutine(result) else result
+
+        types_to_query = [MemoryType.EPISODIC, MemoryType.SEMANTIC, MemoryType.PROCEDURAL]
+        all_candidates: list[MemoryItem] = []
+
+        if isinstance(self.store, SupportsVectorSearch):
+            for mtype in types_to_query:
+                try:
+                    type_results = await self.store.get_similar_memories(
+                        query=query,
+                        query_embedding=query_embedding,
+                        top_k=per_type_k,
+                        filters={"memory_type": mtype.value},
+                    )
+                    all_candidates.extend(type_results)
+                except Exception:
+                    logger.debug("Per-type retrieval failed for %s", mtype.value, exc_info=True)
+        else:
+            # Fallback: use regular recall with no per-type filtering
+            return await self.recall(query=query, limit=limit)
+
+        # Deduplicate: prefer extracted facts over raw turns
+        seen_source_ids: dict[str, MemoryItem] = {}
+        seen_ids: set[str] = set()
+        deduped: list[MemoryItem] = []
+
+        for mem in all_candidates:
+            if mem.memory_id in seen_ids:
+                continue
+            seen_ids.add(mem.memory_id)
+
+            source_id = (mem.metadata or {}).get("source_memory_id")
+            is_fact = (mem.metadata or {}).get("is_extracted_fact", False)
+
+            if source_id:
+                existing = seen_source_ids.get(source_id)
+                if existing is not None:
+                    # Prefer extracted fact over raw turn
+                    existing_is_fact = (existing.metadata or {}).get("is_extracted_fact", False)
+                    if is_fact and not existing_is_fact:
+                        deduped.remove(existing)
+                        deduped.append(mem)
+                        seen_source_ids[source_id] = mem
+                    continue
+                seen_source_ids[source_id] = mem
+
+            deduped.append(mem)
+
+        # Cross-encoder rerank if available
+        if self._reranker is not None and isinstance(query, str):
+            try:
+                reranked = await self._reranker.rerank(query, deduped, top_k=limit)
+                # Reranker returns list[tuple[MemoryItem, float]] — extract items
+                deduped = [item for item, _score in reranked]
+            except Exception:
+                logger.debug("Reranking failed in recall_per_type", exc_info=True)
+
+        return deduped[:limit]
 
     async def recall_ppr(
         self,
@@ -2273,11 +2458,39 @@ class MemoryCore:
         if embeddings is None:
             embeddings = self._resolve_embeddings(self.mode)
         self.embedder = embeddings
-        self.analyzer, self.summarizer = self._resolve_analyzer_and_summarizer(
-            llm,
-            embeddings,
-        )
+
+        # Local models take precedence over LLM-based analysis when configured.
+        if self._local_model_config and self._local_model_config.router_path:
+            self.analyzer = self._build_local_analyzer(self._local_model_config)
+            # Summarizer still requires an LLM; resolve normally.
+            _, self.summarizer = self._resolve_analyzer_and_summarizer(llm, embeddings)
+        else:
+            self.analyzer, self.summarizer = self._resolve_analyzer_and_summarizer(
+                llm,
+                embeddings,
+            )
         self.clusterer = MemoryClusterer(self.summarizer) if self.summarizer else None
+
+    @staticmethod
+    def _build_local_analyzer(config: LocalModelConfig) -> Any:
+        """Construct a :class:`LocalModelAnalyzer` from a :class:`LocalModelConfig`."""
+        from ..inference import ExtractorInference, LocalModelAnalyzer, RouterInference
+
+        router = RouterInference(
+            config.router_path,
+            device=config.device,
+            threshold=config.router_threshold,
+        )
+        extractor = (
+            ExtractorInference(
+                config.extractor_path,
+                device=config.device,
+                max_new_tokens=config.extractor_max_tokens,
+            )
+            if config.extractor_path
+            else None
+        )
+        return LocalModelAnalyzer(router=router, extractor=extractor)
 
     def _init_ner(self, *, ner: BaseNER | None, enable_ner: bool) -> None:
         if enable_ner:

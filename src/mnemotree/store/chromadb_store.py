@@ -337,12 +337,15 @@ class ChromaMemoryStore(BaseMemoryStore):
         try:
             if self.collection is None:
                 return []
-            results = self.collection.query(
-                query_texts=[query],
-                query_embeddings=[query_embedding],
-                n_results=top_k,
-                include=["embeddings", "documents", "metadatas"],
-            )
+            query_kwargs: dict[str, Any] = {
+                "query_texts": [query],
+                "query_embeddings": [query_embedding],
+                "n_results": top_k,
+                "include": ["embeddings", "documents", "metadatas"],
+            }
+            if filters:
+                query_kwargs["where"] = filters
+            results = self.collection.query(**query_kwargs)
 
             memories = []
             for i, memory_id in enumerate(results["ids"][0]):

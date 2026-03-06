@@ -9,7 +9,9 @@ from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER
 from ..store.protocols import MemoryCRUDStore
 from .memory import (
+    EngramConfig,
     IngestionConfig,
+    LocalModelConfig,
     MemoryCore,
     MemoryMode,
     ModeDefaultsConfig,
@@ -39,6 +41,8 @@ class MemoryCoreBuilder:
         self._retrieval_config = RetrievalConfig()
         self._ingestion_config = IngestionConfig()
         self._normalization_config = NormalizationConfig()
+        self._local_model_config: LocalModelConfig | None = None
+        self._engram_config: EngramConfig | None = None
 
     @classmethod
     def default(
@@ -87,6 +91,40 @@ class MemoryCoreBuilder:
 
     def with_embeddings(self, embeddings: EmbeddingModel | None) -> MemoryCoreBuilder:
         self._embeddings = embeddings
+        return self
+
+    def with_local_models(
+        self,
+        router_path: str | None = None,
+        extractor_path: str | None = None,
+        *,
+        device: str = "cpu",
+        router_threshold: float = 0.55,
+        extractor_max_tokens: int = 512,
+    ) -> MemoryCoreBuilder:
+        """Configure local router + extractor models for analysis."""
+        self._local_model_config = LocalModelConfig(
+            router_path=router_path,
+            extractor_path=extractor_path,
+            device=device,
+            router_threshold=router_threshold,
+            extractor_max_tokens=extractor_max_tokens,
+        )
+        return self
+
+    def with_engram(
+        self,
+        *,
+        enable_fact_memories: bool = True,
+        enable_per_type_retrieval: bool = True,
+        per_type_k: int = 25,
+    ) -> MemoryCoreBuilder:
+        """Enable ENGRAM-style fact-as-memory architecture."""
+        self._engram_config = EngramConfig(
+            enable_fact_memories=enable_fact_memories,
+            enable_per_type_retrieval=enable_per_type_retrieval,
+            per_type_k=per_type_k,
+        )
         return self
 
     def with_default_importance(self, default_importance: float) -> MemoryCoreBuilder:
@@ -362,4 +400,6 @@ class MemoryCoreBuilder:
             retrieval_config=self._retrieval_config,
             ingestion_config=self._ingestion_config,
             normalization_config=self._normalization_config,
+            local_model_config=self._local_model_config,
+            engram_config=self._engram_config,
         )
