@@ -5,7 +5,7 @@ import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -46,6 +46,45 @@ from .scoring import MemoryScoring, cosine_similarity
 logger = logging.getLogger(__name__)
 
 MemoryMode = Literal["lite", "pro"]
+
+
+class NormalizationContext(TypedDict, total=False):
+    """Context keys consumed by the normalization pipeline.
+
+    Pass these in the ``context`` parameter of :meth:`MemoryCore.remember`
+    to control coreference resolution and temporal anchoring.
+
+    Example::
+
+        await memory.remember(
+            content="[2023-05-07] Caroline: I told her about my new job",
+            context={
+                "speaker": "Caroline",
+                "other_speaker": "Melanie",
+                "reference_date": "2023-05-07",
+                "recent_entities": ["Caroline", "Melanie"],
+            },
+        )
+    """
+
+    speaker: str
+    """Current speaker name.  First-person pronouns ("I", "me", "my")
+    are replaced with this name during coreference normalization."""
+
+    other_speaker: str | None
+    """The other conversation participant.  Third-person pronouns
+    ("he", "she", "him", "her") are replaced with this name when
+    the referent is unambiguous (single candidate)."""
+
+    reference_date: str | datetime
+    """Anchor date for resolving relative temporal expressions
+    ("yesterday", "3 days ago", "next Monday").  Accepts ISO-8601
+    strings or datetime objects."""
+
+    recent_entities: list[str]
+    """Recently mentioned entity names.  Used by the coreference
+    normalizer to detect ambiguity — third-person pronouns are only
+    resolved when there is a single non-speaker candidate."""
 RetrievalMode = Literal["basic", "hybrid"]
 
 
@@ -106,8 +145,8 @@ class RetrievalConfig:
 
 @dataclass(frozen=True)
 class NormalizationConfig:
-    enable_coref: bool = False
-    enable_temporal: bool = False
+    enable_coref: bool = True
+    enable_temporal: bool = True
     coref_backend: str = "heuristic"
 
 

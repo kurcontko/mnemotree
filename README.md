@@ -190,9 +190,16 @@ make lint typecheck test
 make precommit-install
 ```
 
+## 📚 Docs
+
+- [`docs/README.md`](docs/README.md) — documentation index
+- [`docs/API.md`](docs/API.md) — public API and stability notes
+- [`benchmarks/README.md`](benchmarks/README.md) — benchmark harness usage
+- [`benchmarks/SUMMARY.md`](benchmarks/SUMMARY.md) — high-level benchmark summary
+
 ## 💡 Examples
 
-- [`examples/langchain_agent.py`](examples/langchain_agent.py) — LangChain agent with memory
+- [`examples/agents/langchain_agent.py`](examples/agents/langchain_agent.py) — LangChain agent with memory
 - [`examples/memory_chat/app.py`](examples/memory_chat/app.py) — Streamlit chat app with persistent memory
 
 ## 🤝 Contributing

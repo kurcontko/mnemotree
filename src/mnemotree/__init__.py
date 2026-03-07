@@ -8,6 +8,7 @@ from .core.memory import (
     LocalModelConfig,
     MemoryCore,
     MemoryMode,
+    NormalizationContext,
     RecallFilters,
     RecallOptions,
     RememberOptions,
@@ -34,6 +35,7 @@ __all__ = [
     "RememberOptions",
     "RecallFilters",
     "RecallOptions",
+    "NormalizationContext",
     # Knowledge graph types
     "LinkType",
     "MemoryLink",
