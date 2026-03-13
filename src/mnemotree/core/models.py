@@ -141,6 +141,11 @@ class MemoryItem(BaseModel):
         memory_id: Unique identifier for the memory
         conversation_id: Reference to parent conversation
         user_id: Reference to owner/creator
+        repo_id: Repository scope identifier for shared agent memory
+        worktree_id: Worktree scope identifier within a repository
+        task_id: Task scope identifier within a repository/worktree
+        agent_id: Agent identity for shared memory and coordination
+        run_id: Specific run/session identifier for an agent
         content: Main content of the memory
         summary: Condensed version of content
         tags: Categorization labels
@@ -181,6 +186,11 @@ class MemoryItem(BaseModel):
     memory_id: str = Field(default_factory=lambda: str(uuid4()))
     conversation_id: str | None = None  # TODO: Handle this field in memory core
     user_id: str | None = None  # TODO: Handle this field in memory core
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
 
     # Core Information
     content: str
@@ -512,6 +522,11 @@ class MemoryItem(BaseModel):
             "linked_concepts": self.linked_concepts if self.linked_concepts else None,
             # Include source info
             "source": self.source if self.source else None,
+            "repo_id": self.repo_id,
+            "worktree_id": self.worktree_id,
+            "task_id": self.task_id,
+            "agent_id": self.agent_id,
+            "run_id": self.run_id,
         }
 
         # Add any custom context and metadata

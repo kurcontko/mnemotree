@@ -262,6 +262,91 @@ class TestChromaSerializationNewFields:
         assert restored.temporal_offset == "6 months ago"
         assert restored.event_time is not None
 
+
+class TestAgentScopeFields:
+    def test_memory_item_supports_agent_scope_fields(self) -> None:
+        m = MemoryItem(
+            content="scoped memory",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.5,
+            repo_id="repo-1",
+            worktree_id="wt-1",
+            task_id="task-1",
+            agent_id="agent-1",
+            run_id="run-1",
+        )
+
+        assert m.repo_id == "repo-1"
+        assert m.worktree_id == "wt-1"
+        assert m.task_id == "task-1"
+        assert m.agent_id == "agent-1"
+        assert m.run_id == "run-1"
+
+    def test_sqlite_roundtrip_agent_scope_fields(self) -> None:
+        import sqlite3
+
+        from mnemotree.store._records import sqlite_memory_from_row, sqlite_record_from_memory
+        from mnemotree.store._schema import create_sqlite_schema, migrate_sqlite_agent_scope_fields
+
+        m = MemoryItem(
+            content="scope roundtrip",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.6,
+            repo_id="repo-1",
+            worktree_id="wt-1",
+            task_id="task-1",
+            agent_id="agent-1",
+            run_id="run-1",
+        )
+        record = sqlite_record_from_memory(m)
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        create_sqlite_schema(conn, collection_name="t", meta_table="t_meta")
+        migrate_sqlite_agent_scope_fields(conn, "t")
+
+        cols = ", ".join(f'"{k}"' for k in record)
+        placeholders = ", ".join("?" for _ in record)
+        conn.execute(f'INSERT INTO "t" ({cols}) VALUES ({placeholders})', list(record.values()))
+        row = conn.execute('SELECT * FROM "t" LIMIT 1').fetchone()
+        restored = sqlite_memory_from_row(row)
+
+        assert restored.repo_id == "repo-1"
+        assert restored.worktree_id == "wt-1"
+        assert restored.task_id == "task-1"
+        assert restored.agent_id == "agent-1"
+        assert restored.run_id == "run-1"
+        conn.close()
+
+    def test_chroma_roundtrip_agent_scope_fields(self) -> None:
+        from mnemotree.store._records import chroma_memory_from_record, chroma_metadata_from_memory
+
+        m = MemoryItem(
+            memory_id="scope-test",
+            content="scope chroma",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.6,
+            repo_id="repo-1",
+            worktree_id="wt-1",
+            task_id="task-1",
+            agent_id="agent-1",
+            run_id="run-1",
+            embedding=[0.1, 0.2],
+        )
+        metadata = chroma_metadata_from_memory(m)
+        restored = chroma_memory_from_record(
+            memory_id="scope-test",
+            document="scope chroma",
+            embedding=[0.1, 0.2],
+            metadata=metadata,
+        )
+
+        assert restored.repo_id == "repo-1"
+        assert restored.worktree_id == "wt-1"
+        assert restored.task_id == "task-1"
+        assert restored.agent_id == "agent-1"
+        assert restored.run_id == "run-1"
+
     def test_missing_fields_graceful(self) -> None:
         from mnemotree.store._records import chroma_memory_from_record
 

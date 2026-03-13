@@ -68,6 +68,25 @@ class TestBuildSqliteFilterClauses:
         assert clauses == ["source != ?"]
         assert params == ["test"]
 
+    def test_eq_operator_agent_scope_fields(self):
+        """EQ operator supports agent-layer scope fields."""
+        filters = [
+            MemoryFilter(field="repo_id", operator=FilterOperator.EQ, value="repo-1"),
+            MemoryFilter(field="worktree_id", operator=FilterOperator.EQ, value="wt-1"),
+            MemoryFilter(field="task_id", operator=FilterOperator.EQ, value="task-1"),
+            MemoryFilter(field="agent_id", operator=FilterOperator.EQ, value="agent-1"),
+            MemoryFilter(field="run_id", operator=FilterOperator.EQ, value="run-1"),
+        ]
+        clauses, params = build_sqlite_filter_clauses(filters)
+        assert clauses == [
+            "repo_id = ?",
+            "worktree_id = ?",
+            "task_id = ?",
+            "agent_id = ?",
+            "run_id = ?",
+        ]
+        assert params == ["repo-1", "wt-1", "task-1", "agent-1", "run-1"]
+
     # --- Comparison operators ---
 
     def test_gt_operator(self):

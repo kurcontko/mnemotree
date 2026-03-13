@@ -218,6 +218,11 @@ class RememberOptions:
     metadata: dict[str, Any] | None = None
     conversation_id: str | None = None
     user_id: str | None = None
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -234,6 +239,11 @@ class RecallFilters:
     author: str | None = None
     conversation_id: str | None = None
     user_id: str | None = None
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -267,6 +277,11 @@ class MemoryCore:
         engram_config: EngramConfig | None = None,
         default_user_id: str | None = None,
         default_conversation_id: str | None = None,
+        default_repo_id: str | None = None,
+        default_worktree_id: str | None = None,
+        default_task_id: str | None = None,
+        default_agent_id: str | None = None,
+        default_run_id: str | None = None,
     ):
         """
         Initializes the MemoryCore.
@@ -288,6 +303,11 @@ class MemoryCore:
         self.store = store
         self.default_user_id = default_user_id
         self.default_conversation_id = default_conversation_id
+        self.default_repo_id = default_repo_id
+        self.default_worktree_id = default_worktree_id
+        self.default_task_id = default_task_id
+        self.default_agent_id = default_agent_id
+        self.default_run_id = default_run_id
         self._local_model_config = local_model_config
         self._engram_config = engram_config or EngramConfig()
 
@@ -387,6 +407,11 @@ class MemoryCore:
         metadata: dict[str, Any] | None = None,
         conversation_id: str | None = None,
         user_id: str | None = None,
+        repo_id: str | None = None,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        run_id: str | None = None,
         options: RememberOptions | None = None,
     ) -> MemoryItem:
         """Store a new memory with optional analysis - delegating to EnrichmentPipeline."""
@@ -406,6 +431,11 @@ class MemoryCore:
             metadata,
             conversation_id,
             user_id,
+            repo_id,
+            worktree_id,
+            task_id,
+            agent_id,
+            run_id,
         ) = self._resolve_remember_options(
             options=options,
             memory_type=memory_type,
@@ -423,6 +453,11 @@ class MemoryCore:
             metadata=metadata,
             conversation_id=conversation_id,
             user_id=user_id,
+            repo_id=repo_id,
+            worktree_id=worktree_id,
+            task_id=task_id,
+            agent_id=agent_id,
+            run_id=run_id,
         )
 
         if self.async_ingest and not skip_store:
@@ -442,6 +477,11 @@ class MemoryCore:
                 metadata=metadata,
                 conversation_id=conversation_id,
                 user_id=user_id,
+                repo_id=repo_id,
+                worktree_id=worktree_id,
+                task_id=task_id,
+                agent_id=agent_id,
+                run_id=run_id,
             )
         return await self._remember_sync(
             content,
@@ -460,6 +500,11 @@ class MemoryCore:
             metadata=metadata,
             conversation_id=conversation_id,
             user_id=user_id,
+            repo_id=repo_id,
+            worktree_id=worktree_id,
+            task_id=task_id,
+            agent_id=agent_id,
+            run_id=run_id,
         )
 
     async def remember_async(
@@ -480,6 +525,11 @@ class MemoryCore:
         metadata: dict[str, Any] | None = None,
         conversation_id: str | None = None,
         user_id: str | None = None,
+        repo_id: str | None = None,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        run_id: str | None = None,
         options: RememberOptions | None = None,
     ) -> MemoryItem:
         """Queue memory ingestion for background processing."""
@@ -499,6 +549,11 @@ class MemoryCore:
             metadata,
             conversation_id,
             user_id,
+            repo_id,
+            worktree_id,
+            task_id,
+            agent_id,
+            run_id,
         ) = self._resolve_remember_options(
             options=options,
             memory_type=memory_type,
@@ -516,6 +571,11 @@ class MemoryCore:
             metadata=metadata,
             conversation_id=conversation_id,
             user_id=user_id,
+            repo_id=repo_id,
+            worktree_id=worktree_id,
+            task_id=task_id,
+            agent_id=agent_id,
+            run_id=run_id,
         )
         if skip_store:
             raise ValueError("remember_async does not support skip_store.")
@@ -542,6 +602,11 @@ class MemoryCore:
                 metadata=metadata,
                 conversation_id=conversation_id,
                 user_id=user_id,
+                repo_id=repo_id,
+                worktree_id=worktree_id,
+                task_id=task_id,
+                agent_id=agent_id,
+                run_id=run_id,
             )
         )
         return self._queued_memory_stub(
@@ -557,6 +622,11 @@ class MemoryCore:
             metadata=metadata,
             conversation_id=conversation_id,
             user_id=user_id,
+            repo_id=repo_id,
+            worktree_id=worktree_id,
+            task_id=task_id,
+            agent_id=agent_id,
+            run_id=run_id,
         )
 
     async def _remember_sync(
@@ -578,6 +648,11 @@ class MemoryCore:
         metadata: dict[str, Any] | None = None,
         conversation_id: str | None = None,
         user_id: str | None = None,
+        repo_id: str | None = None,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        run_id: str | None = None,
         _skip_decompose: bool = False,
     ) -> MemoryItem:
         analyze, summarize = self._resolve_analysis_flags(analyze, summarize)
@@ -611,8 +686,13 @@ class MemoryCore:
                     importance=importance or 0.0,
                     tags=tags or [],
                     embedding=enrichment.embedding,
-                    metadata={"write_gate_rejected": True, "rejection_reason": str(gate_result.reason)},
-                )
+                metadata={"write_gate_rejected": True, "rejection_reason": str(gate_result.reason)},
+                repo_id=repo_id,
+                worktree_id=worktree_id,
+                task_id=task_id,
+                agent_id=agent_id,
+                run_id=run_id,
+            )
 
         # --- Fact decomposition gate (before dedup, to operate on atomic units) ---
         if (
@@ -637,13 +717,26 @@ class MemoryCore:
                 metadata=metadata,
                 conversation_id=conversation_id,
                 user_id=user_id,
+                repo_id=repo_id,
+                worktree_id=worktree_id,
+                task_id=task_id,
+                agent_id=agent_id,
+                run_id=run_id,
             )
 
         # --- Deduplication check ---
         if not skip_store and self.dedup_checker is not None:
             try:
                 dup_result = await self.dedup_checker.find_duplicate(
-                    enrichment.embedding, content, user_id, limit=3
+                    enrichment.embedding,
+                    content,
+                    user_id,
+                    repo_id=repo_id,
+                    worktree_id=worktree_id,
+                    task_id=task_id,
+                    agent_id=agent_id,
+                    run_id=run_id,
+                    limit=3,
                 )
             except Exception:
                 import logging as _logging
@@ -688,6 +781,11 @@ class MemoryCore:
             metadata=metadata,
             conversation_id=conversation_id,
             user_id=user_id,
+            repo_id=repo_id,
+            worktree_id=worktree_id,
+            task_id=task_id,
+            agent_id=agent_id,
+            run_id=run_id,
         )
 
         memory = MemoryItem(**memory_data)
@@ -728,6 +826,11 @@ class MemoryCore:
         metadata: dict[str, Any] | None,
         conversation_id: str | None,
         user_id: str | None,
+        repo_id: str | None,
+        worktree_id: str | None,
+        task_id: str | None,
+        agent_id: str | None,
+        run_id: str | None,
     ) -> tuple[
         MemoryType | None,
         float | None,
@@ -742,6 +845,11 @@ class MemoryCore:
         str | None,
         str | None,
         dict[str, Any] | None,
+        str | None,
+        str | None,
+        str | None,
+        str | None,
+        str | None,
         str | None,
         str | None,
     ]:
@@ -776,6 +884,16 @@ class MemoryCore:
                 conversation_id = options.conversation_id
             if user_id is None:
                 user_id = options.user_id
+            if repo_id is None:
+                repo_id = options.repo_id
+            if worktree_id is None:
+                worktree_id = options.worktree_id
+            if task_id is None:
+                task_id = options.task_id
+            if agent_id is None:
+                agent_id = options.agent_id
+            if run_id is None:
+                run_id = options.run_id
 
         if skip_store is None:
             skip_store = False
@@ -785,6 +903,16 @@ class MemoryCore:
             user_id = self.default_user_id
         if conversation_id is None and self.default_conversation_id is not None:
             conversation_id = self.default_conversation_id
+        if repo_id is None and self.default_repo_id is not None:
+            repo_id = self.default_repo_id
+        if worktree_id is None and self.default_worktree_id is not None:
+            worktree_id = self.default_worktree_id
+        if task_id is None and self.default_task_id is not None:
+            task_id = self.default_task_id
+        if agent_id is None and self.default_agent_id is not None:
+            agent_id = self.default_agent_id
+        if run_id is None and self.default_run_id is not None:
+            run_id = self.default_run_id
 
         if timestamp is not None:
             parsed = coerce_datetime(timestamp, default=None)
@@ -808,6 +936,11 @@ class MemoryCore:
             metadata,
             conversation_id,
             user_id,
+            repo_id,
+            worktree_id,
+            task_id,
+            agent_id,
+            run_id,
         )
 
     def _resolve_analysis_flags(
@@ -854,6 +987,11 @@ class MemoryCore:
         metadata: dict[str, Any] | None,
         conversation_id: str | None,
         user_id: str | None,
+        repo_id: str | None,
+        worktree_id: str | None,
+        task_id: str | None,
+        agent_id: str | None,
+        run_id: str | None,
     ) -> dict[str, Any]:
         data = {
             "memory_id": memory_id or str(uuid4()),
@@ -889,6 +1027,16 @@ class MemoryCore:
             data["conversation_id"] = conversation_id
         if user_id is not None:
             data["user_id"] = user_id
+        if repo_id is not None:
+            data["repo_id"] = repo_id
+        if worktree_id is not None:
+            data["worktree_id"] = worktree_id
+        if task_id is not None:
+            data["task_id"] = task_id
+        if agent_id is not None:
+            data["agent_id"] = agent_id
+        if run_id is not None:
+            data["run_id"] = run_id
         return data
 
     async def _apply_pre_remember_hooks(self, memory: MemoryItem) -> MemoryItem:
@@ -971,6 +1119,11 @@ class MemoryCore:
             },
             user_id=parent.user_id,
             conversation_id=parent.conversation_id,
+            repo_id=parent.repo_id,
+            worktree_id=parent.worktree_id,
+            task_id=parent.task_id,
+            agent_id=parent.agent_id,
+            run_id=parent.run_id,
         )
 
         await self.persistence.save(fact_memory)
@@ -1110,6 +1263,11 @@ class MemoryCore:
         metadata: dict[str, Any] | None = None,
         conversation_id: str | None = None,
         user_id: str | None = None,
+        repo_id: str | None = None,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        run_id: str | None = None,
     ) -> MemoryItem:
         """Decompose compound content into atomic facts, store each, link via PART_OF."""
         if self.fact_decomposer is None:
@@ -1134,6 +1292,11 @@ class MemoryCore:
                 metadata=metadata,
                 conversation_id=conversation_id,
                 user_id=user_id,
+                repo_id=repo_id,
+                worktree_id=worktree_id,
+                task_id=task_id,
+                agent_id=agent_id,
+                run_id=run_id,
                 _skip_decompose=True,
             )
 
@@ -1154,6 +1317,11 @@ class MemoryCore:
             metadata=metadata,
             conversation_id=conversation_id,
             user_id=user_id,
+            repo_id=repo_id,
+            worktree_id=worktree_id,
+            task_id=task_id,
+            agent_id=agent_id,
+            run_id=run_id,
             _skip_decompose=True,
         )
 
@@ -1171,6 +1339,11 @@ class MemoryCore:
                 author=author,
                 conversation_id=conversation_id,
                 user_id=user_id,
+                repo_id=repo_id,
+                worktree_id=worktree_id,
+                task_id=task_id,
+                agent_id=agent_id,
+                run_id=run_id,
                 _skip_decompose=True,
             )
             if isinstance(self.store, SupportsKnowledgeGraph):
@@ -1213,18 +1386,25 @@ class MemoryCore:
             options=options,
         )
 
-        # Namespace isolation: auto-inject default user_id/conversation_id filters
-        if self.default_user_id is not None or self.default_conversation_id is not None:
-            ns_user = self.default_user_id if self.default_user_id else None
-            ns_conv = self.default_conversation_id if self.default_conversation_id else None
+        # Namespace isolation: auto-inject default scope filters
+        default_scope = {
+            "user_id": self.default_user_id,
+            "conversation_id": self.default_conversation_id,
+            "repo_id": self.default_repo_id,
+            "worktree_id": self.default_worktree_id,
+            "task_id": self.default_task_id,
+            "agent_id": self.default_agent_id,
+            "run_id": self.default_run_id,
+        }
+        if any(value is not None for value in default_scope.values()):
             if filters is None:
-                filters = RecallFilters(user_id=ns_user, conversation_id=ns_conv)
+                filters = RecallFilters(**default_scope)
             else:
-                updates: dict[str, Any] = {}
-                if filters.user_id is None and ns_user is not None:
-                    updates["user_id"] = ns_user
-                if filters.conversation_id is None and ns_conv is not None:
-                    updates["conversation_id"] = ns_conv
+                updates = {
+                    field: value
+                    for field, value in default_scope.items()
+                    if getattr(filters, field) is None and value is not None
+                }
                 if updates:
                     filters = dataclasses.replace(filters, **updates)
 
@@ -1616,6 +1796,16 @@ class MemoryCore:
                 continue
             if filters.user_id is not None and memory.user_id != filters.user_id:
                 continue
+            if filters.repo_id is not None and memory.repo_id != filters.repo_id:
+                continue
+            if filters.worktree_id is not None and memory.worktree_id != filters.worktree_id:
+                continue
+            if filters.task_id is not None and memory.task_id != filters.task_id:
+                continue
+            if filters.agent_id is not None and memory.agent_id != filters.agent_id:
+                continue
+            if filters.run_id is not None and memory.run_id != filters.run_id:
+                continue
             if since is not None or until is not None:
                 memory_timestamp = coerce_datetime(memory.timestamp, default=None)
                 if memory_timestamp is None:
@@ -1727,6 +1917,11 @@ class MemoryCore:
         *,
         user_id: str | None = None,
         conversation_id: str | None = None,
+        repo_id: str | None = None,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        run_id: str | None = None,
         context: dict[str, Any] | None = None,
     ) -> list[str]:
         """Extract observations from a conversation turn and store them.
@@ -1753,6 +1948,11 @@ class MemoryCore:
         memory_ids: list[str] = []
         uid = user_id or self.default_user_id
         cid = conversation_id or self.default_conversation_id
+        rid = repo_id or self.default_repo_id
+        wid = worktree_id or self.default_worktree_id
+        tid = task_id or self.default_task_id
+        aid = agent_id or self.default_agent_id
+        run = run_id or self.default_run_id
         for obs in observations:
             memory = await self.remember(
                 obs.content,
@@ -1761,6 +1961,11 @@ class MemoryCore:
                 tags=obs.tags,
                 user_id=uid,
                 conversation_id=cid,
+                repo_id=rid,
+                worktree_id=wid,
+                task_id=tid,
+                agent_id=aid,
+                run_id=run,
                 source=obs.source,
             )
             # Persist observation_date (set after remember, needs re-save)
@@ -2808,6 +3013,11 @@ class MemoryCore:
             metadata=request.metadata,
             conversation_id=request.conversation_id,
             user_id=request.user_id,
+            repo_id=request.repo_id,
+            worktree_id=request.worktree_id,
+            task_id=request.task_id,
+            agent_id=request.agent_id,
+            run_id=request.run_id,
             skip_store=False,
         )
 
@@ -2826,6 +3036,11 @@ class MemoryCore:
         metadata: dict[str, Any] | None,
         conversation_id: str | None,
         user_id: str | None,
+        repo_id: str | None,
+        worktree_id: str | None,
+        task_id: str | None,
+        agent_id: str | None,
+        run_id: str | None,
     ) -> MemoryItem:
         resolved_type, resolved_importance = self._resolve_importance_and_type(
             memory_type,
@@ -2854,4 +3069,14 @@ class MemoryCore:
             memory_kwargs["conversation_id"] = conversation_id
         if user_id is not None:
             memory_kwargs["user_id"] = user_id
+        if repo_id is not None:
+            memory_kwargs["repo_id"] = repo_id
+        if worktree_id is not None:
+            memory_kwargs["worktree_id"] = worktree_id
+        if task_id is not None:
+            memory_kwargs["task_id"] = task_id
+        if agent_id is not None:
+            memory_kwargs["agent_id"] = agent_id
+        if run_id is not None:
+            memory_kwargs["run_id"] = run_id
         return MemoryItem(**memory_kwargs)

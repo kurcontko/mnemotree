@@ -29,6 +29,11 @@ class IngestionRequest:
     metadata: dict[str, object] | None
     conversation_id: str | None
     user_id: str | None
+    repo_id: str | None
+    worktree_id: str | None
+    task_id: str | None
+    agent_id: str | None
+    run_id: str | None
 
 
 class MemoryIngestionQueue:

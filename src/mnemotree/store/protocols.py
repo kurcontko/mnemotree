@@ -73,6 +73,64 @@ class SupportsMemoryListing(Protocol):
 
 
 @runtime_checkable
+class SupportsSummaries(Protocol):
+    async def get_summary(
+        self,
+        *,
+        repo_id: str,
+        scope_kind: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+    ) -> dict[str, Any] | None: ...
+
+    async def upsert_summary(
+        self,
+        *,
+        repo_id: str,
+        scope_kind: str,
+        content: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        source_memory_ids: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class SupportsLeases(Protocol):
+    async def claim_resource(
+        self,
+        *,
+        repo_id: str,
+        resource_type: str,
+        resource_id: str,
+        agent_id: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        ttl_seconds: int = 600,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
+
+    async def renew_resource_claim(
+        self,
+        *,
+        lease_id: str,
+        ttl_seconds: int = 600,
+    ) -> dict[str, Any] | None: ...
+
+    async def release_resource_claim(self, *, lease_id: str) -> bool: ...
+
+    async def list_resource_claims(
+        self,
+        *,
+        repo_id: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        active_only: bool = True,
+    ) -> list[dict[str, Any]]: ...
+
+
+@runtime_checkable
 class SupportsKnowledgeGraph(Protocol):
     """Protocol for knowledge graph operations supporting Zettelkasten-style linking."""
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from mnemotree.core.memory import (
@@ -15,10 +17,15 @@ from mnemotree.core.memory import (
 from mnemotree.core.models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
 from mnemotree.ner import create_ner
 from mnemotree.store.base import BaseMemoryStore
-from mnemotree.store.protocols import SupportsKnowledgeGraph, SupportsMemoryListing
+from mnemotree.store.protocols import (
+    SupportsKnowledgeGraph,
+    SupportsLeases,
+    SupportsMemoryListing,
+    SupportsSummaries,
+)
 
 _memory_lock = asyncio.Lock()
-_memory_core: MemoryCore | None = None
+_memory_cores: dict[str, MemoryCore] = {}
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -79,6 +86,11 @@ def _parse_recall_filters(filters: dict[str, Any] | None) -> RecallFilters | Non
         author=filters.get("author"),
         conversation_id=filters.get("conversation_id"),
         user_id=filters.get("user_id"),
+        repo_id=filters.get("repo_id"),
+        worktree_id=filters.get("worktree_id"),
+        task_id=filters.get("task_id"),
+        agent_id=filters.get("agent_id"),
+        run_id=filters.get("run_id"),
     )
 
 
@@ -121,7 +133,58 @@ def _serialize_memory_index(memory: MemoryItem, rank: int) -> dict[str, Any]:
         "timestamp": data.get("timestamp"),
         "importance": memory.importance,
         "tags": memory.tags,
+        "repo_id": memory.repo_id,
+        "worktree_id": memory.worktree_id,
+        "task_id": memory.task_id,
+        "agent_id": memory.agent_id,
+        "run_id": memory.run_id,
     }
+
+
+def _normalize_repo_scope(
+    *,
+    repo_id: str | None = None,
+    repo_root: str | None = None,
+) -> str | None:
+    if repo_id and repo_id.strip():
+        return repo_id.strip()
+    if repo_root and repo_root.strip():
+        return os.path.abspath(os.path.expanduser(repo_root.strip()))
+    return None
+
+
+def _agent_store_settings(repo_scope: str | None) -> tuple[str, str]:
+    if repo_scope is None:
+        persist_dir = os.getenv("MNEMOTREE_MCP_PERSIST_DIR", ".mnemotree/mnemotree.sqlite")
+        collection_name = os.getenv("MNEMOTREE_MCP_COLLECTION", "memories")
+        return persist_dir, collection_name
+
+    root = Path(
+        os.path.expanduser(
+            os.getenv("MNEMOTREE_MCP_AGENT_PERSIST_ROOT", "~/.mnemotree/agent-memory")
+        )
+    )
+    digest = hashlib.sha1(repo_scope.encode("utf-8")).hexdigest()[:16]
+    db_path = root / f"{digest}.sqlite"
+    return str(db_path), "memories"
+
+
+def _scope_kwargs(
+    *,
+    repo_id: str | None = None,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    agent_id: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, str]:
+    scope = {
+        "repo_id": repo_id,
+        "worktree_id": worktree_id,
+        "task_id": task_id,
+        "agent_id": agent_id,
+        "run_id": run_id,
+    }
+    return {key: value for key, value in scope.items() if value is not None}
 
 
 def _memory_timestamp(memory: MemoryItem) -> datetime:
@@ -207,14 +270,19 @@ def _build_timeline_results(
     return results
 
 
-async def _get_memory_core() -> MemoryCore:
-    global _memory_core
+async def _get_memory_core(
+    *,
+    repo_id: str | None = None,
+    repo_root: str | None = None,
+) -> MemoryCore:
+    repo_scope = _normalize_repo_scope(repo_id=repo_id, repo_root=repo_root)
+    cache_key = repo_scope or "__default__"
     async with _memory_lock:
-        if _memory_core is not None:
-            return _memory_core
+        existing = _memory_cores.get(cache_key)
+        if existing is not None:
+            return existing
 
-        persist_dir = os.getenv("MNEMOTREE_MCP_PERSIST_DIR", ".mnemotree/mnemotree.sqlite")
-        collection_name = os.getenv("MNEMOTREE_MCP_COLLECTION", "memories")
+        persist_dir, collection_name = _agent_store_settings(repo_scope)
 
         # Support legacy ChromaDB via env vars, otherwise default to SQLite (zero-infra).
         chroma_host = os.getenv("MNEMOTREE_MCP_CHROMA_HOST")
@@ -277,13 +345,15 @@ async def _get_memory_core() -> MemoryCore:
             enable_bm25=enable_bm25,
         )
 
-        _memory_core = MemoryCore(
+        memory_core = MemoryCore(
             store=store,
             mode_defaults=mode_defaults,
             ner_config=ner_config,
             retrieval_config=retrieval_config,
+            default_repo_id=repo_scope,
         )
-        return _memory_core
+        _memory_cores[cache_key] = memory_core
+        return memory_core
 
 
 async def remember(
@@ -293,6 +363,12 @@ async def remember(
     tags: list[str] | None = None,
     context: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
+    repo_id: str | None = None,
+    repo_root: str | None = None,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    agent_id: str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     """Store a memory entry and return the stored record.
 
@@ -311,7 +387,7 @@ async def remember(
         raise ValueError("content cannot be empty")
     if importance is not None and not (0.0 <= importance <= 1.0):
         raise ValueError("importance must be between 0.0 and 1.0")
-    memory_core = await _get_memory_core()
+    memory_core = await _get_memory_core(repo_id=repo_id, repo_root=repo_root)
     parsed_type = _parse_memory_type(memory_type)
     remember_kwargs: dict[str, Any] = {
         "content": content,
@@ -319,6 +395,13 @@ async def remember(
         "importance": importance,
         "tags": tags,
         "context": context,
+        **_scope_kwargs(
+            repo_id=repo_id or _normalize_repo_scope(repo_root=repo_root),
+            worktree_id=worktree_id,
+            task_id=task_id,
+            agent_id=agent_id,
+            run_id=run_id,
+        ),
     }
     if metadata is not None:
         remember_kwargs["metadata"] = metadata
@@ -332,6 +415,8 @@ async def recall(
     filters: dict[str, Any] | None = None,
     compact: bool = True,
     include_summary: bool = True,
+    repo_id: str | None = None,
+    repo_root: str | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve memories relevant to a query string.
 
@@ -350,7 +435,7 @@ async def recall(
     Returns:
         List of matching memory dictionaries.
     """
-    memory_core = await _get_memory_core()
+    memory_core = await _get_memory_core(repo_id=repo_id, repo_root=repo_root)
     parsed_filters = _parse_recall_filters(filters)
     recall_kwargs: dict[str, Any] = {
         "query": query,
@@ -370,6 +455,190 @@ async def recall(
             results.append(item)
         return results
     return [_serialize_memory(memory, include_embedding=False) for memory in memories]
+
+
+async def agent_remember_observation(
+    repo_id: str,
+    content: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    agent_id: str | None = None,
+    run_id: str | None = None,
+    importance: float | None = None,
+    tags: list[str] | None = None,
+    context: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+    kind: str = "observation",
+    observation_status: str = "tentative",
+) -> dict[str, Any]:
+    """Store a scoped agent observation in repo memory."""
+    merged_metadata = dict(metadata or {})
+    merged_metadata.setdefault("kind", kind)
+    merged_metadata.setdefault("observation_status", observation_status)
+    merged_metadata.setdefault("agent_layer", True)
+    merged_tags = list(tags or [])
+    if kind not in merged_tags:
+        merged_tags.append(kind)
+
+    return await remember(
+        content=content,
+        memory_type=MemoryType.SEMANTIC.value,
+        importance=importance,
+        tags=merged_tags,
+        context=context,
+        metadata=merged_metadata,
+        repo_id=repo_id,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        agent_id=agent_id,
+        run_id=run_id,
+    )
+
+
+async def agent_recall_context(
+    repo_id: str,
+    query: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    agent_id: str | None = None,
+    run_id: str | None = None,
+    limit: int = 8,
+    compact: bool = True,
+) -> dict[str, Any]:
+    """Recall agent-scoped context for a repo, task, or worktree."""
+    filters = _scope_kwargs(
+        repo_id=repo_id,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        agent_id=agent_id,
+        run_id=run_id,
+    )
+    memories = await recall(
+        query=query,
+        limit=limit,
+        filters=filters,
+        compact=compact,
+        repo_id=repo_id,
+    )
+    return {
+        "scope": filters,
+        "results": memories,
+    }
+
+
+async def agent_upsert_summary(
+    repo_id: str,
+    scope_kind: str,
+    content: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    source_memory_ids: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Create or update a scoped summary for agent coordination."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    if not isinstance(store, SupportsSummaries):
+        raise NotImplementedError("This store does not support summaries.")
+    return await store.upsert_summary(
+        repo_id=repo_id,
+        scope_kind=scope_kind,
+        content=content,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        source_memory_ids=source_memory_ids,
+        metadata=metadata,
+    )
+
+
+async def agent_get_summary(
+    repo_id: str,
+    scope_kind: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Fetch a scoped summary for repo, worktree, or task context."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    if not isinstance(store, SupportsSummaries):
+        raise NotImplementedError("This store does not support summaries.")
+    return await store.get_summary(
+        repo_id=repo_id,
+        scope_kind=scope_kind,
+        worktree_id=worktree_id,
+        task_id=task_id,
+    )
+
+
+async def agent_claim_resource(
+    repo_id: str,
+    resource_type: str,
+    resource_id: str,
+    agent_id: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    ttl_seconds: int = 600,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Claim a scoped coordination resource such as a file, task, or subsystem."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    if not isinstance(store, SupportsLeases):
+        raise NotImplementedError("This store does not support leases.")
+    return await store.claim_resource(
+        repo_id=repo_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        agent_id=agent_id,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        ttl_seconds=ttl_seconds,
+        metadata=metadata,
+    )
+
+
+async def agent_renew_claim(
+    repo_id: str,
+    lease_id: str,
+    ttl_seconds: int = 600,
+) -> dict[str, Any] | None:
+    """Renew an active resource claim."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    if not isinstance(store, SupportsLeases):
+        raise NotImplementedError("This store does not support leases.")
+    return await store.renew_resource_claim(lease_id=lease_id, ttl_seconds=ttl_seconds)
+
+
+async def agent_release_claim(
+    repo_id: str,
+    lease_id: str,
+) -> bool:
+    """Release a resource claim."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    if not isinstance(store, SupportsLeases):
+        raise NotImplementedError("This store does not support leases.")
+    return await store.release_resource_claim(lease_id=lease_id)
+
+
+async def agent_list_claims(
+    repo_id: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    active_only: bool = True,
+) -> list[dict[str, Any]]:
+    """List current resource claims for a repo, worktree, or task."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    if not isinstance(store, SupportsLeases):
+        raise NotImplementedError("This store does not support leases.")
+    return await store.list_resource_claims(
+        repo_id=repo_id,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        active_only=active_only,
+    )
 
 
 async def timeline(
@@ -1012,6 +1281,14 @@ _mcp_instance: Any | None = None
 def _register_tools(mcp: Any) -> None:
     mcp.tool(remember)
     mcp.tool(recall)
+    mcp.tool(agent_remember_observation)
+    mcp.tool(agent_recall_context)
+    mcp.tool(agent_upsert_summary)
+    mcp.tool(agent_get_summary)
+    mcp.tool(agent_claim_resource)
+    mcp.tool(agent_renew_claim)
+    mcp.tool(agent_release_claim)
+    mcp.tool(agent_list_claims)
     mcp.tool(get_memories)
     mcp.tool(update_memory)
     mcp.tool(forget)

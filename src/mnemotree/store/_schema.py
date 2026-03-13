@@ -62,6 +62,11 @@ def create_sqlite_schema(
             memory_id TEXT UNIQUE NOT NULL,
             conversation_id TEXT,
             user_id TEXT,
+            repo_id TEXT,
+            worktree_id TEXT,
+            task_id TEXT,
+            agent_id TEXT,
+            run_id TEXT,
             content TEXT NOT NULL,
             summary TEXT,
             author TEXT,
@@ -160,6 +165,14 @@ _PHASE1_COLUMNS: list[tuple[str, str]] = [
     ("is_hot", "INTEGER DEFAULT 0"),
 ]
 
+_AGENT_SCOPE_COLUMNS: list[tuple[str, str]] = [
+    ("repo_id", "TEXT"),
+    ("worktree_id", "TEXT"),
+    ("task_id", "TEXT"),
+    ("agent_id", "TEXT"),
+    ("run_id", "TEXT"),
+]
+
 
 def migrate_sqlite_phase1_fields(
     conn: sqlite3.Connection,
@@ -179,6 +192,32 @@ def migrate_sqlite_phase1_fields(
         conn.commit()
 
 
+def migrate_sqlite_agent_scope_fields(
+    conn: sqlite3.Connection,
+    collection_name: str,
+) -> None:
+    """Idempotent migration: add agent-layer scope columns and indexes."""
+    cursor = conn.execute(f'PRAGMA table_info("{collection_name}")')
+    columns = {row[1] for row in cursor.fetchall()}
+    added = False
+    for col_name, col_type in _AGENT_SCOPE_COLUMNS:
+        if col_name not in columns:
+            conn.execute(f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}')
+            added = True
+
+    for col_name, _ in _AGENT_SCOPE_COLUMNS:
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS "{collection_name}_{col_name}_idx"
+            ON "{collection_name}" ({col_name})
+            """
+        )
+    if added:
+        conn.commit()
+    else:
+        conn.commit()
+
+
 def ensure_sqlite_vector_table(
     conn: sqlite3.Connection,
     *,
@@ -189,6 +228,68 @@ def ensure_sqlite_vector_table(
         f"""
         CREATE VIRTUAL TABLE IF NOT EXISTS "{vector_table}"
         USING vec0(embedding float[{dimension}])
+        """
+    )
+    conn.commit()
+
+
+def create_sqlite_agent_tables(
+    conn: sqlite3.Connection,
+    *,
+    lease_table: str,
+    summary_table: str,
+) -> None:
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS "{lease_table}" (
+            lease_id TEXT PRIMARY KEY,
+            claim_key TEXT UNIQUE NOT NULL,
+            repo_id TEXT NOT NULL,
+            worktree_id TEXT,
+            task_id TEXT,
+            resource_type TEXT NOT NULL,
+            resource_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            state TEXT NOT NULL,
+            claimed_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            heartbeat_at TEXT NOT NULL,
+            metadata TEXT
+        )
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE INDEX IF NOT EXISTS "{lease_table}_repo_idx"
+        ON "{lease_table}" (repo_id)
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE INDEX IF NOT EXISTS "{lease_table}_active_idx"
+        ON "{lease_table}" (repo_id, state, expires_at)
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS "{summary_table}" (
+            summary_id TEXT PRIMARY KEY,
+            summary_key TEXT UNIQUE NOT NULL,
+            repo_id TEXT NOT NULL,
+            worktree_id TEXT,
+            task_id TEXT,
+            scope_kind TEXT NOT NULL,
+            content TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            source_memory_ids TEXT,
+            metadata TEXT
+        )
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE INDEX IF NOT EXISTS "{summary_table}_scope_idx"
+        ON "{summary_table}" (repo_id, worktree_id, task_id, scope_kind)
         """
     )
     conn.commit()

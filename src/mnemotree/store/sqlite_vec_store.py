@@ -8,24 +8,28 @@ import sqlite3
 import time
 from asyncio import Lock
 from collections import deque
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
+from uuid import uuid4
 
 try:
     import sqlite_vec
 except ImportError:  # pragma: no cover - optional dependency
     sqlite_vec = None
 
-from ..core.models import LinkType, MemoryItem, MemoryLink
+from ..core.models import LinkType, MemoryItem, MemoryLink, coerce_datetime
 from ..core.query import MemoryQuery
 from ..utils.serialization import json_dumps_safe, json_loads_dict
 from ._filters import build_sqlite_filter_clauses, normalize_filter_value
 from ._queries import build_entity_set
 from ._records import sqlite_memory_from_row, sqlite_record_from_memory
 from ._schema import (
+    create_sqlite_agent_tables,
     create_sqlite_schema,
     ensure_sqlite_vector_table,
     migrate_sqlite_add_stability,
+    migrate_sqlite_agent_scope_fields,
     migrate_sqlite_phase1_fields,
 )
 from .base import BaseMemoryStore
@@ -50,6 +54,17 @@ def _safe_json_loads(raw: str | None) -> dict[str, Any]:
         return {}
 
 
+def _safe_json_list(raw: str | None) -> list[Any]:
+    if not raw:
+        return []
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, list) else []
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Invalid JSON list in stored metadata, returning empty list")
+        return []
+
+
 class SQLiteVecMemoryStore(BaseMemoryStore):
     store_type = "sqlite-vec"
 
@@ -70,6 +85,8 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         self._meta_table = f"{collection_name}_meta"
         self._entity_table = f"{collection_name}_entity_index"
         self._link_table = f"{collection_name}_links"
+        self._lease_table = f"{collection_name}_agent_leases"
+        self._summary_table = f"{collection_name}_agent_summaries"
         self._entity_index_version = 1
         self._conn: sqlite3.Connection | None = None
         self._embedding_dim = embedding_dim
@@ -132,8 +149,14 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
             collection_name=self.collection_name,
             meta_table=self._meta_table,
         )
+        create_sqlite_agent_tables(
+            conn,
+            lease_table=self._lease_table,
+            summary_table=self._summary_table,
+        )
         migrate_sqlite_add_stability(conn, self.collection_name)
         migrate_sqlite_phase1_fields(conn, self.collection_name)
+        migrate_sqlite_agent_scope_fields(conn, self.collection_name)
         conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS "{self._entity_table}" (
@@ -594,7 +617,17 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 params: list[Any] = []
                 if filters:
                     for key, value in filters.items():
-                        if key not in {"memory_type", "source"}:
+                        if key not in {
+                            "memory_type",
+                            "source",
+                            "conversation_id",
+                            "user_id",
+                            "repo_id",
+                            "worktree_id",
+                            "task_id",
+                            "agent_id",
+                            "run_id",
+                        }:
                             raise UnsupportedQueryError(f"Unsupported filter field: {key!r}")
                         where_clauses.append(f"{key} = ?")
                         params.append(normalize_filter_value(value))
@@ -721,6 +754,276 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 ),
             )
             raise
+
+    @staticmethod
+    def _scope_key(*parts: str | None) -> str:
+        return "::".join((part or "") for part in parts)
+
+    def _summary_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "summary_id": row["summary_id"],
+            "summary_key": row["summary_key"],
+            "repo_id": row["repo_id"],
+            "worktree_id": row["worktree_id"] or None,
+            "task_id": row["task_id"] or None,
+            "scope_kind": row["scope_kind"],
+            "content": row["content"],
+            "updated_at": row["updated_at"],
+            "source_memory_ids": _safe_json_list(row["source_memory_ids"]),
+            "metadata": _safe_json_loads(row["metadata"]),
+        }
+
+    def _lease_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "lease_id": row["lease_id"],
+            "claim_key": row["claim_key"],
+            "repo_id": row["repo_id"],
+            "worktree_id": row["worktree_id"] or None,
+            "task_id": row["task_id"] or None,
+            "resource_type": row["resource_type"],
+            "resource_id": row["resource_id"],
+            "agent_id": row["agent_id"],
+            "state": row["state"],
+            "claimed_at": row["claimed_at"],
+            "expires_at": row["expires_at"],
+            "heartbeat_at": row["heartbeat_at"],
+            "metadata": _safe_json_loads(row["metadata"]),
+        }
+
+    async def get_summary(
+        self,
+        *,
+        repo_id: str,
+        scope_kind: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        await self.initialize()
+        summary_key = self._scope_key(repo_id, worktree_id, task_id, scope_kind)
+        async with self._lock:
+            conn = self._require_conn()
+            row = conn.execute(
+                f'SELECT * FROM "{self._summary_table}" WHERE summary_key = ?',
+                (summary_key,),
+            ).fetchone()
+            if row is None:
+                return None
+            return self._summary_from_row(row)
+
+    async def upsert_summary(
+        self,
+        *,
+        repo_id: str,
+        scope_kind: str,
+        content: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        source_memory_ids: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        await self.initialize()
+        summary_key = self._scope_key(repo_id, worktree_id, task_id, scope_kind)
+        summary_id = str(uuid4())
+        updated_at = serialize_datetime(datetime.now(timezone.utc))
+        source_json = json.dumps(source_memory_ids or [])
+        metadata_json = json_dumps_safe(metadata or {})
+        async with self._lock:
+            conn = self._require_conn()
+            conn.execute(
+                f"""
+                INSERT INTO "{self._summary_table}" (
+                    summary_id, summary_key, repo_id, worktree_id, task_id,
+                    scope_kind, content, updated_at, source_memory_ids, metadata
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(summary_key) DO UPDATE SET
+                    content = excluded.content,
+                    updated_at = excluded.updated_at,
+                    source_memory_ids = excluded.source_memory_ids,
+                    metadata = excluded.metadata
+                """,
+                (
+                    summary_id,
+                    summary_key,
+                    repo_id,
+                    worktree_id,
+                    task_id,
+                    scope_kind,
+                    content,
+                    updated_at,
+                    source_json,
+                    metadata_json,
+                ),
+            )
+            conn.commit()
+            row = conn.execute(
+                f'SELECT * FROM "{self._summary_table}" WHERE summary_key = ?',
+                (summary_key,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("Failed to read summary after upsert.")
+            return self._summary_from_row(row)
+
+    async def claim_resource(
+        self,
+        *,
+        repo_id: str,
+        resource_type: str,
+        resource_id: str,
+        agent_id: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        ttl_seconds: int = 600,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        await self.initialize()
+        ttl_seconds = max(1, int(ttl_seconds))
+        claim_key = self._scope_key(repo_id, worktree_id, task_id, resource_type, resource_id)
+        now = datetime.now(timezone.utc)
+        now_iso = serialize_datetime(now)
+        expires_at = serialize_datetime(now + timedelta(seconds=ttl_seconds))
+        async with self._lock:
+            conn = self._require_conn()
+            existing = conn.execute(
+                f'SELECT * FROM "{self._lease_table}" WHERE claim_key = ?',
+                (claim_key,),
+            ).fetchone()
+            if existing is not None:
+                existing_lease = self._lease_from_row(existing)
+                existing_expires = coerce_datetime(existing_lease["expires_at"], default=None)
+                if (
+                    existing_lease["state"] == "active"
+                    and existing_expires is not None
+                    and existing_expires > now
+                    and existing_lease["agent_id"] != agent_id
+                ):
+                    raise ValueError(
+                        f"{resource_type}:{resource_id} is already claimed by "
+                        f"{existing_lease['agent_id']}"
+                    )
+                lease_id = existing_lease["lease_id"]
+            else:
+                lease_id = str(uuid4())
+
+            conn.execute(
+                f"""
+                INSERT INTO "{self._lease_table}" (
+                    lease_id, claim_key, repo_id, worktree_id, task_id,
+                    resource_type, resource_id, agent_id, state,
+                    claimed_at, expires_at, heartbeat_at, metadata
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(claim_key) DO UPDATE SET
+                    lease_id = excluded.lease_id,
+                    agent_id = excluded.agent_id,
+                    state = excluded.state,
+                    claimed_at = excluded.claimed_at,
+                    expires_at = excluded.expires_at,
+                    heartbeat_at = excluded.heartbeat_at,
+                    metadata = excluded.metadata
+                """,
+                (
+                    lease_id,
+                    claim_key,
+                    repo_id,
+                    worktree_id,
+                    task_id,
+                    resource_type,
+                    resource_id,
+                    agent_id,
+                    "active",
+                    now_iso,
+                    expires_at,
+                    now_iso,
+                    json_dumps_safe(metadata or {}),
+                ),
+            )
+            conn.commit()
+            row = conn.execute(
+                f'SELECT * FROM "{self._lease_table}" WHERE lease_id = ?',
+                (lease_id,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("Failed to read lease after claim.")
+            return self._lease_from_row(row)
+
+    async def renew_resource_claim(
+        self,
+        *,
+        lease_id: str,
+        ttl_seconds: int = 600,
+    ) -> dict[str, Any] | None:
+        await self.initialize()
+        ttl_seconds = max(1, int(ttl_seconds))
+        now = datetime.now(timezone.utc)
+        now_iso = serialize_datetime(now)
+        expires_at = serialize_datetime(now + timedelta(seconds=ttl_seconds))
+        async with self._lock:
+            conn = self._require_conn()
+            cur = conn.execute(
+                f"""
+                UPDATE "{self._lease_table}"
+                SET expires_at = ?, heartbeat_at = ?, state = 'active'
+                WHERE lease_id = ?
+                """,
+                (expires_at, now_iso, lease_id),
+            )
+            conn.commit()
+            if cur.rowcount == 0:
+                return None
+            row = conn.execute(
+                f'SELECT * FROM "{self._lease_table}" WHERE lease_id = ?',
+                (lease_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            return self._lease_from_row(row)
+
+    async def release_resource_claim(self, *, lease_id: str) -> bool:
+        await self.initialize()
+        now_iso = serialize_datetime(datetime.now(timezone.utc))
+        async with self._lock:
+            conn = self._require_conn()
+            cur = conn.execute(
+                f"""
+                UPDATE "{self._lease_table}"
+                SET state = 'released', expires_at = ?, heartbeat_at = ?
+                WHERE lease_id = ?
+                """,
+                (now_iso, now_iso, lease_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    async def list_resource_claims(
+        self,
+        *,
+        repo_id: str,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        active_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        await self.initialize()
+        async with self._lock:
+            conn = self._require_conn()
+            clauses = ["repo_id = ?"]
+            params: list[Any] = [repo_id]
+            if worktree_id is not None:
+                clauses.append("worktree_id = ?")
+                params.append(worktree_id)
+            if task_id is not None:
+                clauses.append("task_id = ?")
+                params.append(task_id)
+            if active_only:
+                clauses.append("state = 'active'")
+                clauses.append("expires_at > ?")
+                params.append(serialize_datetime(datetime.now(timezone.utc)))
+            where_sql = " AND ".join(clauses)
+            rows = conn.execute(
+                f'SELECT * FROM "{self._lease_table}" WHERE {where_sql} ORDER BY heartbeat_at DESC',
+                params,
+            ).fetchall()
+            return [self._lease_from_row(row) for row in rows]
 
     # -- Knowledge Graph Operations --
 

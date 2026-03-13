@@ -99,7 +99,7 @@ def memory_core_env_setup(monkeypatch, dummy_store_class, dummy_memory_core_clas
     monkeypatch.setitem(sys.modules, "mnemotree.store.sqlite_vec_store", fake_sqlite_module)
 
     monkeypatch.setattr(server, "MemoryCore", dummy_memory_core_class)
-    monkeypatch.setattr(server, "_memory_core", None)
+    monkeypatch.setattr(server, "_memory_cores", {})
 
     return {"store_module": fake_store_module, "store_class": dummy_store_class}
 
@@ -227,6 +227,24 @@ def test_parse_recall_filters_all_fields():
     assert filters.author == "user"
     assert filters.conversation_id == "conv-1"
     assert filters.user_id == "user-1"
+
+
+def test_parse_recall_filters_agent_scope_fields():
+    filters = server._parse_recall_filters(
+        {
+            "repo_id": "repo-1",
+            "worktree_id": "wt-1",
+            "task_id": "task-1",
+            "agent_id": "agent-1",
+            "run_id": "run-1",
+        }
+    )
+    assert filters is not None
+    assert filters.repo_id == "repo-1"
+    assert filters.worktree_id == "wt-1"
+    assert filters.task_id == "task-1"
+    assert filters.agent_id == "agent-1"
+    assert filters.run_id == "run-1"
 
 
 def test_serialize_memory_excludes_embedding():
@@ -390,7 +408,7 @@ def test_get_mcp_registers_tools(monkeypatch):
     instance = server._get_mcp()
 
     assert isinstance(instance, DummyFastMCP)
-    assert len(instance.tools) == 16
+    assert len(instance.tools) == 24
 
 
 def test_memory_timestamp_fallbacks():
@@ -499,6 +517,19 @@ async def test_get_memory_core_persist_dir(monkeypatch, memory_core_env_setup, t
 
 
 @pytest.mark.asyncio
+async def test_get_memory_core_repo_scope_uses_agent_store_root(
+    monkeypatch, memory_core_env_setup, tmp_path
+):
+    monkeypatch.setenv("MNEMOTREE_MCP_AGENT_PERSIST_ROOT", str(tmp_path / "agent-db"))
+
+    core = await server._get_memory_core(repo_id="repo-1")
+
+    assert core.kwargs["default_repo_id"] == "repo-1"
+    assert str(tmp_path / "agent-db") in core.store.kwargs["db_path"]
+    assert core.store.kwargs["collection_name"] == "memories"
+
+
+@pytest.mark.asyncio
 async def test_get_memory_core_retrieval_config_bm25(monkeypatch, memory_core_env_setup, tmp_path):
     def _fake_create_ner(*args, **kwargs) -> None:
         raise AssertionError("create_ner should not be called")
@@ -561,7 +592,7 @@ async def test_get_memory_core_ner_model_non_gliner(
 @pytest.mark.asyncio
 async def test_get_memory_core_cached_instance(monkeypatch):
     sentinel = object()
-    monkeypatch.setattr(server, "_memory_core", sentinel)
+    monkeypatch.setattr(server, "_memory_cores", {"__default__": sentinel})
 
     core = await server._get_memory_core()
 
@@ -578,7 +609,7 @@ async def test_get_memory_core_import_error(monkeypatch):
         return real_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", _blocked_import)
-    monkeypatch.setattr(server, "_memory_core", None)
+    monkeypatch.setattr(server, "_memory_cores", {})
     # Explicitly request chroma backend to trigger the ChromaDB import path
     monkeypatch.setenv("MNEMOTREE_MCP_STORE_BACKEND", "chroma")
 
@@ -679,6 +710,94 @@ async def test_recall_with_filters(monkeypatch):
     assert "filters" in call_kwargs
     assert call_kwargs["filters"].tags == ["important"]
     assert call_kwargs["filters"].min_importance == pytest.approx(0.5)
+
+
+@pytest.mark.asyncio
+async def test_remember_passes_repo_scope(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-scope", ts)
+    memory.repo_id = "repo-1"
+
+    memory_core = MagicMock()
+    memory_core.remember = AsyncMock(return_value=memory)
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    await server.remember(
+        content="test content",
+        repo_id="repo-1",
+        worktree_id="wt-1",
+        task_id="task-1",
+        agent_id="agent-1",
+        run_id="run-1",
+    )
+
+    memory_core.remember.assert_awaited_once()
+    kwargs = memory_core.remember.await_args.kwargs
+    assert kwargs["repo_id"] == "repo-1"
+    assert kwargs["worktree_id"] == "wt-1"
+    assert kwargs["task_id"] == "task-1"
+    assert kwargs["agent_id"] == "agent-1"
+    assert kwargs["run_id"] == "run-1"
+
+
+@pytest.mark.asyncio
+async def test_agent_remember_observation_sets_agent_metadata(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-agent", ts)
+    memory.metadata = {
+        "kind": "attempt",
+        "observation_status": "tentative",
+        "agent_layer": True,
+    }
+
+    memory_core = MagicMock()
+    memory_core.remember = AsyncMock(return_value=memory)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    await server.agent_remember_observation(
+        repo_id="repo-1",
+        content="This approach failed",
+        task_id="task-1",
+        kind="attempt",
+        observation_status="tentative",
+    )
+
+    kwargs = memory_core.remember.await_args.kwargs
+    assert kwargs["repo_id"] == "repo-1"
+    assert kwargs["task_id"] == "task-1"
+    assert kwargs["memory_type"] == MemoryType.SEMANTIC
+    assert kwargs["metadata"]["kind"] == "attempt"
+    assert kwargs["metadata"]["observation_status"] == "tentative"
+    assert kwargs["metadata"]["agent_layer"] is True
+    assert "attempt" in kwargs["tags"]
+
+
+@pytest.mark.asyncio
+async def test_agent_recall_context_applies_scope(monkeypatch):
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    memory = _make_memory("mem-context", ts)
+
+    memory_core = MagicMock()
+    memory_core.recall = AsyncMock(return_value=[memory])
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.agent_recall_context(
+        repo_id="repo-1",
+        query="what did we learn?",
+        task_id="task-1",
+        agent_id="agent-1",
+    )
+
+    kwargs = memory_core.recall.await_args.kwargs
+    assert kwargs["filters"].repo_id == "repo-1"
+    assert kwargs["filters"].task_id == "task-1"
+    assert kwargs["filters"].agent_id == "agent-1"
+    assert result["scope"] == {
+        "repo_id": "repo-1",
+        "task_id": "task-1",
+        "agent_id": "agent-1",
+    }
 
 
 @pytest.mark.asyncio

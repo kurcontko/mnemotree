@@ -27,6 +27,12 @@ class DedupChecker:
         embedding: list[float],
         content: str,
         user_id: str | None,
+        *,
+        repo_id: str | None = None,
+        worktree_id: str | None = None,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        run_id: str | None = None,
         limit: int = 3,
     ) -> tuple[MemoryItem, float] | None:
         """Return the best-matching existing memory and its cosine similarity if above threshold."""
@@ -42,6 +48,16 @@ class DedupChecker:
         best: tuple[MemoryItem, float] | None = None
         for candidate in candidates:
             if user_id is not None and candidate.user_id != user_id:
+                continue
+            if repo_id is not None and candidate.repo_id != repo_id:
+                continue
+            if worktree_id is not None and candidate.worktree_id != worktree_id:
+                continue
+            if task_id is not None and candidate.task_id != task_id:
+                continue
+            if agent_id is not None and candidate.agent_id != agent_id:
+                continue
+            if run_id is not None and candidate.run_id != run_id:
                 continue
             if not candidate.embedding:
                 continue
