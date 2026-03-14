@@ -79,6 +79,12 @@ def _parse_recall_filters(filters: dict[str, Any] | None) -> RecallFilters | Non
         author=filters.get("author"),
         conversation_id=filters.get("conversation_id"),
         user_id=filters.get("user_id"),
+        # Agent scoping
+        repo_id=filters.get("repo_id"),
+        worktree_id=filters.get("worktree_id"),
+        task_id=filters.get("task_id"),
+        agent_id=filters.get("agent_id"),
+        run_id=filters.get("run_id"),
     )
 
 
