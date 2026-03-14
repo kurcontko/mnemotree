@@ -15,6 +15,7 @@ from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
 
 pytest_plugins = ["anyio"]
 
+
 def _sqlite_vec_loadable() -> bool:
     try:
         import sqlite3

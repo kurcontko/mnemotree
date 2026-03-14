@@ -2464,14 +2464,13 @@ class MemoryCore:
             )
             return LocalSentenceTransformerEmbeddings(model_name=lite_model)
 
-        from langchain_openai import OpenAIEmbeddings
-
-        openai_base_url = os.getenv("OPENAI_BASE_URL")
-        openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-        openai_client_kwargs: dict[str, Any] = (
-            {"base_url": openai_base_url} if openai_base_url else {}
+        # Pro mode: return a PydanticAI-compatible model string.
+        # Users who need LangChain embeddings can pass them explicitly.
+        return (
+            os.getenv("MNEMOTREE_EMBEDDING_MODEL")
+            or os.getenv("OPENAI_EMBEDDING_MODEL")
+            or "openai:text-embedding-3-small"
         )
-        return OpenAIEmbeddings(model=openai_embedding_model, **openai_client_kwargs)
 
     def _resolve_analyzer_and_summarizer(
         self,
@@ -2481,17 +2480,13 @@ class MemoryCore:
         should_enable_llm_defaults = self.default_analyze or self.default_summarize
 
         if self.mode == "pro" and llm is None and should_enable_llm_defaults:
-            try:
-                from langchain_openai import ChatOpenAI
-
-                openai_base_url = os.getenv("OPENAI_BASE_URL")
-                openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-                openai_client_kwargs: dict[str, Any] = (
-                    {"base_url": openai_base_url} if openai_base_url else {}
-                )
-                llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
-            except ImportError:
-                pass
+            # Default to a PydanticAI-compatible model string.
+            # Users who need LangChain LLMs can pass them explicitly.
+            llm = (
+                os.getenv("MNEMOTREE_LLM_MODEL")
+                or os.getenv("OPENAI_MODEL")
+                or "openai:gpt-4.1-mini"
+            )
         if llm is None:
             return None, None
         return (
