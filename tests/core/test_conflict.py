@@ -1,4 +1,5 @@
 """Tests for ConflictDetector."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -60,9 +61,7 @@ async def test_heuristic_conflict_detected():
 @pytest.mark.asyncio
 async def test_llm_conflict_skips_on_no_contradiction():
     llm = MagicMock()
-    llm.ainvoke = AsyncMock(
-        return_value=MagicMock(content='{"contradicts": false, "reason": ""}')
-    )
+    llm.ainvoke = AsyncMock(return_value=MagicMock(content='{"contradicts": false, "reason": ""}'))
     detector = ConflictDetector(llm=llm)
     new_mem = _make_memory("new", "Python is not compiled.", {"Python": "language"})
     candidate = _make_memory("c1", "Python is a compiled language.", {"Python": "language"})

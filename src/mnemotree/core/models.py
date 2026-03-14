@@ -196,7 +196,9 @@ class MemoryItem(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Bi-temporal fields (TSM / Mastra OM 3-date anchoring)
-    event_time: datetime | None = None  # When the event actually happened (vs timestamp = storage time)
+    event_time: datetime | None = (
+        None  # When the event actually happened (vs timestamp = storage time)
+    )
     valid_from: datetime | None = None  # Temporal validity start
     valid_until: datetime | None = None  # Temporal validity end (None = still valid)
     observation_date: datetime | None = None  # Mastra-style: when the observation was made
@@ -204,7 +206,9 @@ class MemoryItem(BaseModel):
     temporal_offset: str | None = None  # Relative offset hint ("2 days ago", "last week")
 
     # Retrieval hints
-    contextual_intent: str | None = None  # STITCH: inferred intent at ingest time (+35.6% retrieval)
+    contextual_intent: str | None = (
+        None  # STITCH: inferred intent at ingest time (+35.6% retrieval)
+    )
     is_hot: bool = False  # Codified Context: HOT memories always included, COLD retrieved on-demand
 
     # Access information

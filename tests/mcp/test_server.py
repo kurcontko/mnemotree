@@ -1117,9 +1117,13 @@ async def test_get_conflicts(monkeypatch):
     store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
 
     memory_core = MagicMock(store=store)
-    memory_core.get_links = AsyncMock(return_value=[
-        MemoryLink(source_id="m1", target_id="m2", link_type=LinkType.CONTRADICTS, strength=1.0),
-    ])
+    memory_core.get_links = AsyncMock(
+        return_value=[
+            MemoryLink(
+                source_id="m1", target_id="m2", link_type=LinkType.CONTRADICTS, strength=1.0
+            ),
+        ]
+    )
 
     monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
 
@@ -1233,9 +1237,7 @@ async def test_resolve_conflict_supersede(monkeypatch):
     memory_core.link = AsyncMock(return_value=link)
     monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
 
-    result = await server.resolve_conflict(
-        "m1", "m2", resolution="supersede", winner_id="m1"
-    )
+    result = await server.resolve_conflict("m1", "m2", resolution="supersede", winner_id="m1")
 
     assert result["winner"] == "m1"
     assert result["loser"] == "m2"
@@ -1273,9 +1275,11 @@ async def test_judge_conflicts_by_ids(monkeypatch):
     store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
 
     memory_core = MagicMock(store=store)
-    memory_core.judge_conflicts = MagicMock(return_value={
-        "m1": {"memory_id": "m1", "conflicting_ids": ["m2"], "reasons": {"m2": "pre-existing"}},
-    })
+    memory_core.judge_conflicts = MagicMock(
+        return_value={
+            "m1": {"memory_id": "m1", "conflicting_ids": ["m2"], "reasons": {"m2": "pre-existing"}},
+        }
+    )
     monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
 
     result = await server.judge_conflicts(memory_ids=["m1", "m2"])
@@ -1384,9 +1388,7 @@ async def test_suggest_links_tool(monkeypatch):
     )
     # suggest_links returns list[tuple[MemoryItem, LinkType, float, str|None]]
     mock_store = MagicMock(spec=SupportsKnowledgeGraph)
-    mock_store.suggest_links = AsyncMock(
-        return_value=[(target, LinkType.SIMILAR_TO, 0.85, None)]
-    )
+    mock_store.suggest_links = AsyncMock(return_value=[(target, LinkType.SIMILAR_TO, 0.85, None)])
 
     memory_core = MagicMock()
     memory_core.store = mock_store

@@ -2,6 +2,7 @@
 Internal protocols that decouple the core from any specific LLM/embedding library.
 These are intentionally minimal — only what Mnemotree actually uses.
 """
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable

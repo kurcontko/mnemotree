@@ -68,11 +68,7 @@ class MemorySystemConfig:
         if self.llm is not None:
             llm = self.llm
         else:
-            llm = (
-                os.getenv("MNEMOTREE_LLM_MODEL")
-                or os.getenv("OPENAI_MODEL")
-                or "openai:gpt-4o"
-            )
+            llm = os.getenv("MNEMOTREE_LLM_MODEL") or os.getenv("OPENAI_MODEL") or "openai:gpt-4o"
 
         if self.embeddings is not None:
             embeddings = self.embeddings

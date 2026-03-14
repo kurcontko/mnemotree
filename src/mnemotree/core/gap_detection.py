@@ -7,6 +7,7 @@ Two implementations are provided:
 - HeuristicGapAnalyzer: lightweight, no LLM required (lite mode)
 - LLMGapAnalyzer: uses an OpenAI-compatible endpoint (pro mode)
 """
+
 from __future__ import annotations
 
 import logging
@@ -154,12 +155,17 @@ class LLMGapAnalyzer:
 
         import os
 
-        api_key = self.api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY") or ""
+        api_key = (
+            self.api_key
+            or os.environ.get("OPENAI_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
+            or ""
+        )
 
         client = AsyncOpenAI(base_url=self.base_url, api_key=api_key)
 
         summaries = "\n".join(
-            f"- [{i+1}] {m.content[:200]}" for i, m in enumerate(retrieved[:10])
+            f"- [{i + 1}] {m.content[:200]}" for i, m in enumerate(retrieved[:10])
         )
 
         messages = [
@@ -201,6 +207,7 @@ class LLMGapAnalyzer:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _extract_wh_word(text: str) -> str | None:
     """Return the first wh-question word found in text, or None."""

@@ -391,11 +391,13 @@ class GraphAwareDummyStore(DummyStore):
         link_types: list[LinkType] | None = None,
         strategy: str = "bfs",
     ) -> list[tuple[MemoryItem, int, list[MemoryLink]]]:
-        self.traverse_calls.append({
-            "start_id": start_id,
-            "max_depth": max_depth,
-            "link_types": link_types,
-        })
+        self.traverse_calls.append(
+            {
+                "start_id": start_id,
+                "max_depth": max_depth,
+                "link_types": link_types,
+            }
+        )
         return self.graph_neighbors
 
     async def create_link(self, *a, **kw) -> MemoryLink:
