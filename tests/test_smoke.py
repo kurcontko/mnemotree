@@ -1,5 +1,7 @@
 """Smoke tests: verify core imports and basic construction without optional deps."""
 
+# ruff: noqa: F401, I001
+
 from __future__ import annotations
 
 
