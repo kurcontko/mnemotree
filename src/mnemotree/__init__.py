@@ -4,6 +4,7 @@ from .core.builder import MemoryCoreBuilder
 from .core.corag import ChainOfRetrieval, CoRAGConfig, OpenAIReasoningHook, ReasoningHook
 from .core.gap_detection import GapAnalyzer, HeuristicGapAnalyzer, LLMGapAnalyzer
 from .core.memory import (
+    AgentLayerConfig,
     EngramConfig,
     LocalModelConfig,
     MemoryCore,
@@ -13,7 +14,7 @@ from .core.memory import (
     RecallOptions,
     RememberOptions,
 )
-from .core.models import LinkType, MemoryLink
+from .core.models import LinkType, MemoryLink, ObservationKind, ObservationStatus
 from .core.ppr import PPRConfig
 from .core.query import TypedPathQuery
 from .core.retrieval import PPRGraphRetriever, SCMRAGRetriever, TypedPathRetriever
@@ -54,6 +55,10 @@ __all__ = [
     "ChainOfRetrieval",
     "ReasoningHook",
     "OpenAIReasoningHook",
+    # Agent layer
+    "AgentLayerConfig",
+    "ObservationStatus",
+    "ObservationKind",
     # Error types
     "MnemotreeError",
     "StoreError",

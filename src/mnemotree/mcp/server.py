@@ -14,7 +14,15 @@ from mnemotree.core.memory import (
     RecallFilters,
     RetrievalConfig,
 )
-from mnemotree.core.models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
+from mnemotree.core.models import (
+    LinkType,
+    MemoryItem,
+    MemoryLink,
+    MemoryType,
+    ObservationKind,
+    ObservationStatus,
+    coerce_datetime,
+)
 from mnemotree.ner import create_ner
 from mnemotree.store.base import BaseMemoryStore
 from mnemotree.store.protocols import (
@@ -138,6 +146,9 @@ def _serialize_memory_index(memory: MemoryItem, rank: int) -> dict[str, Any]:
         "task_id": memory.task_id,
         "agent_id": memory.agent_id,
         "run_id": memory.run_id,
+        "observation_status": memory.observation_status.value if memory.observation_status else None,
+        "observation_kind": memory.observation_kind.value if memory.observation_kind else None,
+        "is_hot": memory.is_hot,
     }
 
 
@@ -470,11 +481,26 @@ async def agent_remember_observation(
     metadata: dict[str, Any] | None = None,
     kind: str = "observation",
     observation_status: str = "tentative",
+    evidence_refs: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Store a scoped agent observation in repo memory."""
+    """Store a scoped agent observation in repo memory.
+
+    Args:
+        kind: One of attempt, result, decision, handoff, warning, observation.
+        observation_status: One of hypothesis, tentative, confirmed, refuted.
+        evidence_refs: List of evidence references (commit SHAs, file paths, test names).
+    """
     merged_metadata = dict(metadata or {})
-    merged_metadata.setdefault("kind", kind)
-    merged_metadata.setdefault("observation_status", observation_status)
+    merged_metadata["observation_status"] = observation_status
+    if kind != "observation":
+        try:
+            merged_metadata["observation_kind"] = ObservationKind(kind).value
+        except ValueError:
+            merged_metadata["observation_kind"] = kind
+    else:
+        merged_metadata["observation_kind"] = "observation"
+    if evidence_refs:
+        merged_metadata["evidence_refs"] = evidence_refs
     merged_metadata.setdefault("agent_layer", True)
     merged_tags = list(tags or [])
     if kind not in merged_tags:
@@ -639,6 +665,333 @@ async def agent_list_claims(
         task_id=task_id,
         active_only=active_only,
     )
+
+
+async def agent_update_observation_status(
+    repo_id: str,
+    memory_id: str,
+    observation_status: str,
+    evidence_refs: list[str] | None = None,
+) -> dict[str, Any]:
+    """Update the observation status of a memory (e.g. promote tentative to confirmed).
+
+    Args:
+        memory_id: The memory to update.
+        observation_status: New status: hypothesis, tentative, confirmed, refuted.
+        evidence_refs: Optional new evidence references to append.
+    """
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    memory = await store.get_memory(memory_id)
+    if memory is None:
+        raise ValueError(f"Memory {memory_id} not found.")
+
+    try:
+        new_status = ObservationStatus(observation_status)
+    except ValueError:
+        raise ValueError(
+            f"Invalid observation_status '{observation_status}'. "
+            f"Must be one of: {', '.join(s.value for s in ObservationStatus)}"
+        )
+
+    updates: dict[str, Any] = {"observation_status": new_status.value}
+    if evidence_refs:
+        existing = list(memory.evidence_refs or [])
+        existing.extend(evidence_refs)
+        updates["evidence_refs"] = existing
+
+    from mnemotree.store.protocols import SupportsMetadataUpdate
+
+    if not isinstance(store, SupportsMetadataUpdate):
+        raise NotImplementedError("Store does not support metadata updates.")
+    await store.update_memory_metadata(memory_id, updates)
+    return {"memory_id": memory_id, "observation_status": new_status.value, "updated": True}
+
+
+async def agent_recall_with_summary(
+    repo_id: str,
+    query: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    agent_id: str | None = None,
+    run_id: str | None = None,
+    limit: int = 8,
+    scope_kind: str = "task",
+    exclude_refuted: bool = True,
+) -> dict[str, Any]:
+    """Summary-first recall: returns summary + hot observations + top-k matches.
+
+    This is the primary agent recall endpoint for fresh sessions:
+    1. Load the relevant summary for the scope
+    2. Fetch pinned HOT observations
+    3. Retrieve top-k matching observations
+    4. Exclude refuted and coordination records
+    """
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+
+    # Step 1: Load summary
+    summary_data = None
+    if isinstance(store, SupportsSummaries):
+        summary_data = await store.get_summary(
+            repo_id=repo_id,
+            scope_kind=scope_kind,
+            worktree_id=worktree_id,
+            task_id=task_id,
+        )
+
+    # Step 2: Recall scoped observations
+    from mnemotree.core.memory import RecallFilters
+
+    filters_dict = _scope_kwargs(
+        repo_id=repo_id,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        agent_id=agent_id,
+        run_id=run_id,
+    )
+    memories = await recall(
+        query=query,
+        limit=limit * 2,  # fetch extra for filtering
+        filters=filters_dict,
+        compact=False,
+        repo_id=repo_id,
+    )
+
+    # Step 3: Separate hot observations and filter
+    hot_observations = []
+    regular_observations = []
+    for mem in memories:
+        # Exclude refuted
+        obs_status = mem.get("observation_status") or (mem.get("metadata") or {}).get(
+            "observation_status"
+        )
+        if exclude_refuted and obs_status == "refuted":
+            continue
+        if mem.get("is_hot"):
+            hot_observations.append(mem)
+        else:
+            regular_observations.append(mem)
+
+    # Trim regular to limit
+    regular_observations = regular_observations[:limit]
+
+    return {
+        "scope": filters_dict,
+        "summary": summary_data,
+        "hot_observations": hot_observations,
+        "observations": regular_observations,
+        "total_results": len(hot_observations) + len(regular_observations),
+    }
+
+
+async def agent_compact_summary(
+    repo_id: str,
+    scope_kind: str,
+    query: str = "recent activity",
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Compact recent observations into a summary for the given scope.
+
+    Fetches recent observations, synthesizes a summary, and stores it.
+    This is the compaction path for summary-first retrieval.
+    """
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+
+    if not isinstance(store, SupportsSummaries):
+        raise NotImplementedError("This store does not support summaries.")
+
+    # Fetch recent observations for this scope
+    filters_dict = _scope_kwargs(
+        repo_id=repo_id,
+        worktree_id=worktree_id,
+        task_id=task_id,
+    )
+    memories = await recall(
+        query=query,
+        limit=limit,
+        filters=filters_dict,
+        compact=False,
+        repo_id=repo_id,
+    )
+
+    if not memories:
+        return {"compacted": False, "reason": "no observations to compact"}
+
+    # Synthesize summary from observations
+    memory_ids = []
+    content_parts = []
+    for mem in memories:
+        mid = mem.get("memory_id", "")
+        memory_ids.append(mid)
+        snippet = mem.get("summary") or mem.get("content", "")
+        obs_status = mem.get("observation_status") or (mem.get("metadata") or {}).get(
+            "observation_status", ""
+        )
+        kind = mem.get("observation_kind") or (mem.get("metadata") or {}).get("kind", "")
+        prefix = f"[{kind}]" if kind else ""
+        suffix = f"({obs_status})" if obs_status else ""
+        content_parts.append(f"{prefix} {snippet} {suffix}".strip())
+
+    summary_content = "\n".join(f"- {part}" for part in content_parts)
+
+    result = await store.upsert_summary(
+        repo_id=repo_id,
+        scope_kind=scope_kind,
+        content=summary_content,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        source_memory_ids=memory_ids,
+    )
+
+    return {"compacted": True, "summary": result, "observation_count": len(memories)}
+
+
+async def agent_inspect_memories(
+    repo_id: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    agent_id: str | None = None,
+    observation_status: str | None = None,
+    observation_kind: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Audit/inspect agent memories for a given scope (Phase 8: human surface).
+
+    Returns a structured list of memories with their observation metadata.
+    """
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+
+    if not isinstance(store, SupportsMemoryListing):
+        raise NotImplementedError("This store does not support memory listing.")
+
+    all_memories = await store.list_memories(include_embeddings=False)
+
+    # Filter by scope
+    results = []
+    for mem in all_memories:
+        if repo_id and mem.repo_id != repo_id:
+            continue
+        if worktree_id and mem.worktree_id != worktree_id:
+            continue
+        if task_id and mem.task_id != task_id:
+            continue
+        if agent_id and mem.agent_id != agent_id:
+            continue
+        if observation_status:
+            mem_status = mem.observation_status.value if mem.observation_status else None
+            if mem_status != observation_status:
+                continue
+        if observation_kind:
+            mem_kind = mem.observation_kind.value if mem.observation_kind else None
+            if mem_kind != observation_kind:
+                continue
+
+        results.append({
+            "memory_id": mem.memory_id,
+            "content": mem.content[:200],
+            "summary": mem.summary,
+            "memory_type": mem.memory_type.value,
+            "importance": mem.importance,
+            "observation_status": mem.observation_status.value if mem.observation_status else None,
+            "observation_kind": mem.observation_kind.value if mem.observation_kind else None,
+            "evidence_refs": mem.evidence_refs,
+            "is_hot": mem.is_hot,
+            "tags": mem.tags,
+            "timestamp": mem.model_dump(mode="json").get("timestamp"),
+            "agent_id": mem.agent_id,
+            "worktree_id": mem.worktree_id,
+            "task_id": mem.task_id,
+        })
+        if len(results) >= limit:
+            break
+
+    return {"count": len(results), "memories": results}
+
+
+async def agent_inspect_summaries(
+    repo_id: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Inspect all summaries for a given scope (Phase 8: human surface)."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+
+    if not isinstance(store, SupportsSummaries):
+        raise NotImplementedError("This store does not support summaries.")
+
+    # Check common scope kinds
+    scope_kinds = ["repo", "worktree", "task", "sprint", "feature"]
+    summaries = []
+    for sk in scope_kinds:
+        result = await store.get_summary(
+            repo_id=repo_id,
+            scope_kind=sk,
+            worktree_id=worktree_id,
+            task_id=task_id,
+        )
+        if result:
+            summaries.append(result)
+
+    return {"count": len(summaries), "summaries": summaries}
+
+
+async def agent_delete_memory(
+    repo_id: str,
+    memory_id: str,
+) -> dict[str, Any]:
+    """Delete a specific memory by ID (Phase 8: human surface)."""
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    deleted = await store.delete_memory(memory_id)
+    return {"memory_id": memory_id, "deleted": deleted}
+
+
+async def agent_correct_memory(
+    repo_id: str,
+    memory_id: str,
+    content: str | None = None,
+    observation_status: str | None = None,
+    importance: float | None = None,
+    tags: list[str] | None = None,
+    evidence_refs: list[str] | None = None,
+) -> dict[str, Any]:
+    """Correct or update an existing memory (Phase 8: human surface).
+
+    Allows humans to fix observation content, status, importance, or evidence.
+    """
+    memory_core = await _get_memory_core(repo_id=repo_id)
+    store = memory_core.store
+    memory = await store.get_memory(memory_id)
+    if memory is None:
+        raise ValueError(f"Memory {memory_id} not found.")
+
+    from mnemotree.store.protocols import SupportsMetadataUpdate
+
+    if not isinstance(store, SupportsMetadataUpdate):
+        raise NotImplementedError("Store does not support updates.")
+
+    updates: dict[str, Any] = {}
+    if content is not None:
+        updates["content"] = content
+    if observation_status is not None:
+        updates["observation_status"] = ObservationStatus(observation_status).value
+    if importance is not None:
+        updates["importance"] = importance
+    if tags is not None:
+        updates["tags"] = tags
+    if evidence_refs is not None:
+        updates["evidence_refs"] = evidence_refs
+
+    if updates:
+        await store.update_memory_metadata(memory_id, updates)
+
+    return {"memory_id": memory_id, "updated_fields": list(updates.keys())}
 
 
 async def timeline(

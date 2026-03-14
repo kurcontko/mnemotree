@@ -37,7 +37,7 @@ from ._internal.fact_decomposer import FactDecomposer
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
-from .models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
+from .models import LinkType, MemoryItem, MemoryLink, MemoryType, ObservationKind, ObservationStatus, coerce_datetime
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
 from .retrieval import Retriever
 from .retriever_factory import RetrieverFactory
@@ -193,6 +193,27 @@ class EngramConfig:
 
 
 @dataclass(frozen=True)
+class AgentLayerConfig:
+    """Configuration for the agent coordination layer (Phase 7).
+
+    Controls which agent-layer features are active. When profile="agent"
+    is set via MCP, these defaults are applied.
+    """
+
+    enable_agent_scoping: bool = True
+    enable_leases: bool = True
+    enable_summaries: bool = True
+    enable_observation_semantics: bool = True
+    enable_validation: bool = False
+    enable_freshness_scoring: bool = False
+    agent_recall_limit: int = 20
+    summary_compaction_interval: int = 3600  # seconds
+    freshness_staleness_hours: float = 168.0  # 7 days
+    freshness_penalty_factor: float = 0.3
+    exclude_refuted_by_default: bool = True
+
+
+@dataclass(frozen=True)
 class ModeConfig:
     analyze_default: bool
     summarize_default: bool
@@ -223,6 +244,9 @@ class RememberOptions:
     task_id: str | None = None
     agent_id: str | None = None
     run_id: str | None = None
+    observation_status: ObservationStatus | None = None
+    observation_kind: ObservationKind | None = None
+    evidence_refs: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -244,6 +268,9 @@ class RecallFilters:
     task_id: str | None = None
     agent_id: str | None = None
     run_id: str | None = None
+    observation_status: list[ObservationStatus] | None = None
+    observation_kind: list[ObservationKind] | None = None
+    exclude_refuted: bool = False
 
 
 @dataclass(frozen=True)
@@ -282,6 +309,7 @@ class MemoryCore:
         default_task_id: str | None = None,
         default_agent_id: str | None = None,
         default_run_id: str | None = None,
+        agent_layer_config: AgentLayerConfig | None = None,
     ):
         """
         Initializes the MemoryCore.
@@ -310,6 +338,7 @@ class MemoryCore:
         self.default_run_id = default_run_id
         self._local_model_config = local_model_config
         self._engram_config = engram_config or EngramConfig()
+        self._agent_layer_config = agent_layer_config or AgentLayerConfig()
 
         mode_defaults = mode_defaults or ModeDefaultsConfig()
         ner_config = ner_config or NerConfig()
@@ -1037,6 +1066,32 @@ class MemoryCore:
             data["agent_id"] = agent_id
         if run_id is not None:
             data["run_id"] = run_id
+        # Phase 2: observation semantics — propagate from metadata if set
+        md = metadata or {}
+        if "observation_status" in md:
+            raw_status = md.pop("observation_status", None)
+            if isinstance(raw_status, ObservationStatus):
+                data["observation_status"] = raw_status
+            elif isinstance(raw_status, str):
+                try:
+                    data["observation_status"] = ObservationStatus(raw_status)
+                except ValueError:
+                    pass
+        if "observation_kind" in md:
+            raw_kind = md.pop("observation_kind", None)
+            if raw_kind is None:
+                pass
+            elif isinstance(raw_kind, ObservationKind):
+                data["observation_kind"] = raw_kind
+            elif isinstance(raw_kind, str):
+                try:
+                    data["observation_kind"] = ObservationKind(raw_kind)
+                except ValueError:
+                    pass
+        if "evidence_refs" in md:
+            refs = md.pop("evidence_refs", None)
+            if isinstance(refs, list):
+                data["evidence_refs"] = [str(r) for r in refs]
         return data
 
     async def _apply_pre_remember_hooks(self, memory: MemoryItem) -> MemoryItem:
@@ -1806,6 +1861,15 @@ class MemoryCore:
                 continue
             if filters.run_id is not None and memory.run_id != filters.run_id:
                 continue
+            # Observation semantics filters (Phase 2)
+            if filters.observation_status is not None:
+                if memory.observation_status not in filters.observation_status:
+                    continue
+            if filters.observation_kind is not None:
+                if memory.observation_kind not in filters.observation_kind:
+                    continue
+            if filters.exclude_refuted and memory.observation_status == ObservationStatus.REFUTED:
+                continue
             if since is not None or until is not None:
                 memory_timestamp = coerce_datetime(memory.timestamp, default=None)
                 if memory_timestamp is None:
@@ -1816,6 +1880,89 @@ class MemoryCore:
                     continue
             filtered.append(memory)
         return filtered
+
+    def apply_freshness_scoring(
+        self,
+        memories: list[MemoryItem],
+        *,
+        staleness_hours: float | None = None,
+        penalty_factor: float | None = None,
+    ) -> list[MemoryItem]:
+        """Downrank stale observations based on age (Phase 6: validation & freshness).
+
+        Memories older than staleness_hours get their effective importance
+        reduced by penalty_factor for sorting purposes. The original
+        importance on the MemoryItem is not mutated.
+
+        Args:
+            memories: Memories to sort by freshness-adjusted score.
+            staleness_hours: Hours after which a memory is considered stale.
+            penalty_factor: Factor to reduce importance for stale memories (0-1).
+
+        Returns:
+            Memories sorted by freshness-adjusted importance (highest first).
+        """
+        cfg = self._agent_layer_config
+        staleness_hours = staleness_hours or cfg.freshness_staleness_hours
+        penalty_factor = penalty_factor or cfg.freshness_penalty_factor
+        now = datetime.now(timezone.utc)
+        staleness_seconds = staleness_hours * 3600.0
+
+        def freshness_score(mem: MemoryItem) -> float:
+            mem_time = coerce_datetime(
+                mem.observation_date or mem.event_time or mem.timestamp,
+                default=now,
+            )
+            age_seconds = max(0.0, (now - mem_time).total_seconds())
+            base = mem.importance
+
+            # Apply staleness penalty
+            if age_seconds > staleness_seconds:
+                staleness_ratio = min(1.0, (age_seconds - staleness_seconds) / staleness_seconds)
+                base *= (1.0 - penalty_factor * staleness_ratio)
+
+            # Refuted observations get heavy penalty
+            if mem.observation_status == ObservationStatus.REFUTED:
+                base *= 0.1
+
+            # Confirmed observations get a small boost
+            if mem.observation_status == ObservationStatus.CONFIRMED:
+                base *= 1.1
+
+            return min(1.0, base)
+
+        return sorted(memories, key=freshness_score, reverse=True)
+
+    def validate_evidence_refs(
+        self,
+        memory: MemoryItem,
+    ) -> dict[str, str]:
+        """Check if evidence references still exist (Phase 6: validation).
+
+        Returns a dict mapping each evidence_ref to its validation status:
+        'valid', 'invalid', or 'unverified'.
+        """
+        import os
+
+        results: dict[str, str] = {}
+        for ref in memory.evidence_refs:
+            ref_stripped = ref.strip()
+            if not ref_stripped:
+                continue
+
+            # File path check
+            if ref_stripped.startswith("/") or ref_stripped.startswith("./"):
+                results[ref_stripped] = "valid" if os.path.exists(ref_stripped) else "invalid"
+            # Git commit SHA (40 hex chars)
+            elif len(ref_stripped) >= 7 and all(c in "0123456789abcdef" for c in ref_stripped.lower()):
+                results[ref_stripped] = "unverified"  # Would need git access to verify
+            # URL
+            elif ref_stripped.startswith("http://") or ref_stripped.startswith("https://"):
+                results[ref_stripped] = "unverified"
+            else:
+                results[ref_stripped] = "unverified"
+
+        return results
 
     async def _update_access_metadata(self, memories: list[MemoryItem]) -> None:
         if not isinstance(self.store, SupportsMetadataUpdate):

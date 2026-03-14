@@ -67,6 +67,26 @@ class EmotionCategory(str, Enum):
     EXCITEMENT = "excitement"
 
 
+class ObservationStatus(str, Enum):
+    """Status of an agent observation, supporting evidence-backed memory."""
+
+    HYPOTHESIS = "hypothesis"  # Unverified guess
+    TENTATIVE = "tentative"  # Initial observation, not yet confirmed
+    CONFIRMED = "confirmed"  # Validated by evidence (test, commit, benchmark)
+    REFUTED = "refuted"  # Disproven by later evidence
+
+
+class ObservationKind(str, Enum):
+    """Kind of agent observation for structured recall."""
+
+    ATTEMPT = "attempt"  # Something the agent tried
+    RESULT = "result"  # Outcome of an attempt
+    DECISION = "decision"  # Architectural or design decision
+    HANDOFF = "handoff"  # Context for the next agent/session
+    WARNING = "warning"  # Pitfall or anti-pattern discovered
+    OBSERVATION = "observation"  # General observation
+
+
 class LinkType(str, Enum):
     """Semantic relationship types inspired by Zettelkasten."""
 
@@ -191,6 +211,11 @@ class MemoryItem(BaseModel):
     task_id: str | None = None
     agent_id: str | None = None
     run_id: str | None = None
+
+    # Observation semantics (Phase 2: agent layer)
+    observation_status: ObservationStatus | None = None
+    observation_kind: ObservationKind | None = None
+    evidence_refs: list[str] = Field(default_factory=list)  # commit SHAs, file paths, test names, issue URLs
 
     # Core Information
     content: str

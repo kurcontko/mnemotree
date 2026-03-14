@@ -767,7 +767,7 @@ async def test_agent_remember_observation_sets_agent_metadata(monkeypatch):
     assert kwargs["repo_id"] == "repo-1"
     assert kwargs["task_id"] == "task-1"
     assert kwargs["memory_type"] == MemoryType.SEMANTIC
-    assert kwargs["metadata"]["kind"] == "attempt"
+    assert kwargs["metadata"]["observation_kind"] == "attempt"
     assert kwargs["metadata"]["observation_status"] == "tentative"
     assert kwargs["metadata"]["agent_layer"] is True
     assert "attempt" in kwargs["tags"]

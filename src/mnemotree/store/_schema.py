@@ -103,7 +103,10 @@ def create_sqlite_schema(
             referenced_date TEXT,
             temporal_offset TEXT,
             contextual_intent TEXT,
-            is_hot INTEGER DEFAULT 0
+            is_hot INTEGER DEFAULT 0,
+            observation_status TEXT,
+            observation_kind TEXT,
+            evidence_refs TEXT
         )
         """
     )
@@ -215,6 +218,41 @@ def migrate_sqlite_agent_scope_fields(
     if added:
         conn.commit()
     else:
+        conn.commit()
+
+
+_OBSERVATION_COLUMNS: list[tuple[str, str]] = [
+    ("observation_status", "TEXT"),
+    ("observation_kind", "TEXT"),
+    ("evidence_refs", "TEXT"),
+]
+
+
+def migrate_sqlite_observation_fields(
+    conn: sqlite3.Connection,
+    collection_name: str,
+) -> None:
+    """Idempotent migration: add observation semantics columns (Phase 2)."""
+    cursor = conn.execute(f'PRAGMA table_info("{collection_name}")')
+    columns = {row[1] for row in cursor.fetchall()}
+    added = False
+    for col_name, col_type in _OBSERVATION_COLUMNS:
+        if col_name not in columns:
+            conn.execute(f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}')
+            added = True
+    if added:
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS "{collection_name}_observation_status_idx"
+            ON "{collection_name}" (observation_status)
+            """
+        )
+        conn.execute(
+            f"""
+            CREATE INDEX IF NOT EXISTS "{collection_name}_observation_kind_idx"
+            ON "{collection_name}" (observation_kind)
+            """
+        )
         conn.commit()
 
 

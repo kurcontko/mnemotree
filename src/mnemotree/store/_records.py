@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from ..core.models import MemoryItem, MemoryType
+from ..core.models import MemoryItem, MemoryType, ObservationKind, ObservationStatus
 from ..utils.serialization import json_dumps_safe, json_loads_dict
 from .serialization import safe_load_context, serialize_datetime, serialize_datetime_list
 
@@ -80,6 +80,9 @@ def build_neo4j_memory_payload(
         "temporal_offset": memory.temporal_offset,
         "contextual_intent": memory.contextual_intent,
         "is_hot": memory.is_hot,
+        "observation_status": memory.observation_status.value if memory.observation_status else None,
+        "observation_kind": memory.observation_kind.value if memory.observation_kind else None,
+        "evidence_refs": json.dumps(memory.evidence_refs) if memory.evidence_refs else None,
     }
     return payload, valid_entities
 
@@ -138,6 +141,9 @@ def chroma_metadata_from_memory(memory: MemoryItem) -> dict[str, str]:
         "temporal_offset": memory.temporal_offset or "",
         "contextual_intent": memory.contextual_intent or "",
         "is_hot": str(int(memory.is_hot)),
+        "observation_status": memory.observation_status.value if memory.observation_status else "",
+        "observation_kind": memory.observation_kind.value if memory.observation_kind else "",
+        "evidence_refs": json.dumps(memory.evidence_refs) if memory.evidence_refs else "",
     }
 
 
@@ -206,6 +212,19 @@ def chroma_memory_from_record(
     if _hot:
         with contextlib.suppress(ValueError, TypeError):
             memory_data["is_hot"] = bool(int(_hot))
+    # Observation semantics (Phase 2)
+    _obs_status = metadata.get("observation_status")
+    if _obs_status:
+        with contextlib.suppress(ValueError):
+            memory_data["observation_status"] = ObservationStatus(_obs_status)
+    _obs_kind = metadata.get("observation_kind")
+    if _obs_kind:
+        with contextlib.suppress(ValueError):
+            memory_data["observation_kind"] = ObservationKind(_obs_kind)
+    _evidence = metadata.get("evidence_refs")
+    if _evidence:
+        with contextlib.suppress(json.JSONDecodeError, TypeError):
+            memory_data["evidence_refs"] = json.loads(_evidence) if isinstance(_evidence, str) else _evidence
     return MemoryItem(**memory_data)
 
 
@@ -260,6 +279,9 @@ def sqlite_record_from_memory(memory: MemoryItem) -> dict[str, Any]:
         "temporal_offset": memory.temporal_offset,
         "contextual_intent": memory.contextual_intent,
         "is_hot": 1 if memory.is_hot else 0,
+        "observation_status": memory.observation_status.value if memory.observation_status else None,
+        "observation_kind": memory.observation_kind.value if memory.observation_kind else None,
+        "evidence_refs": json.dumps(memory.evidence_refs) if memory.evidence_refs else None,
     }
 
 
@@ -328,6 +350,19 @@ def sqlite_memory_from_row(row: sqlite3.Row) -> MemoryItem:
         memory_data["contextual_intent"] = row["contextual_intent"]
     with contextlib.suppress(IndexError, KeyError):
         memory_data["is_hot"] = bool(row["is_hot"])
+    # Observation semantics (Phase 2)
+    with contextlib.suppress(IndexError, KeyError):
+        val = row["observation_status"]
+        if val:
+            memory_data["observation_status"] = ObservationStatus(val)
+    with contextlib.suppress(IndexError, KeyError):
+        val = row["observation_kind"]
+        if val:
+            memory_data["observation_kind"] = ObservationKind(val)
+    with contextlib.suppress(IndexError, KeyError):
+        val = row["evidence_refs"]
+        if val:
+            memory_data["evidence_refs"] = json.loads(val)
     return MemoryItem(**memory_data)
 
 

@@ -30,6 +30,7 @@ from ._schema import (
     ensure_sqlite_vector_table,
     migrate_sqlite_add_stability,
     migrate_sqlite_agent_scope_fields,
+    migrate_sqlite_observation_fields,
     migrate_sqlite_phase1_fields,
 )
 from .base import BaseMemoryStore
@@ -157,6 +158,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         migrate_sqlite_add_stability(conn, self.collection_name)
         migrate_sqlite_phase1_fields(conn, self.collection_name)
         migrate_sqlite_agent_scope_fields(conn, self.collection_name)
+        migrate_sqlite_observation_fields(conn, self.collection_name)
         conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS "{self._entity_table}" (
