@@ -159,6 +159,12 @@ class RememberOptions:
     metadata: dict[str, Any] | None = None
     conversation_id: str | None = None
     user_id: str | None = None
+    # Agent scoping
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -175,6 +181,12 @@ class RecallFilters:
     author: str | None = None
     conversation_id: str | None = None
     user_id: str | None = None
+    # Agent scoping
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -713,6 +725,24 @@ class MemoryCore:
         if skip_store is None:
             skip_store = False
 
+        # Agent scoping: inject scope fields from options into metadata
+        if options:
+            scope_fields = {
+                k: v
+                for k, v in {
+                    "repo_id": options.repo_id,
+                    "worktree_id": options.worktree_id,
+                    "task_id": options.task_id,
+                    "agent_id": options.agent_id,
+                    "run_id": options.run_id,
+                }.items()
+                if v is not None
+            }
+            if scope_fields:
+                if metadata is None:
+                    metadata = {}
+                metadata.update(scope_fields)
+
         # Namespace isolation: auto-inject defaults
         if user_id is None and self.default_user_id is not None:
             user_id = self.default_user_id
@@ -822,6 +852,12 @@ class MemoryCore:
             data["conversation_id"] = conversation_id
         if user_id is not None:
             data["user_id"] = user_id
+        # Agent scoping — extract from metadata if present
+        _SCOPE_FIELDS = ("repo_id", "worktree_id", "task_id", "agent_id", "run_id")
+        if metadata:
+            for field in _SCOPE_FIELDS:
+                if field in metadata:
+                    data[field] = metadata.pop(field)
         return data
 
     async def _apply_pre_remember_hooks(self, memory: MemoryItem) -> MemoryItem:
@@ -1395,6 +1431,17 @@ class MemoryCore:
             ):
                 continue
             if filters.user_id is not None and memory.user_id != filters.user_id:
+                continue
+            # Agent scoping filters
+            if filters.repo_id is not None and memory.repo_id != filters.repo_id:
+                continue
+            if filters.worktree_id is not None and memory.worktree_id != filters.worktree_id:
+                continue
+            if filters.task_id is not None and memory.task_id != filters.task_id:
+                continue
+            if filters.agent_id is not None and memory.agent_id != filters.agent_id:
+                continue
+            if filters.run_id is not None and memory.run_id != filters.run_id:
                 continue
             if since is not None or until is not None:
                 memory_timestamp = coerce_datetime(memory.timestamp, default=None)

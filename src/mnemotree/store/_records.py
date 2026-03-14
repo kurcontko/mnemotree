@@ -246,6 +246,12 @@ def sqlite_record_from_memory(memory: MemoryItem) -> dict[str, Any]:
         "temporal_offset": memory.temporal_offset,
         "contextual_intent": memory.contextual_intent,
         "is_hot": 1 if memory.is_hot else 0,
+        # Agent scoping
+        "repo_id": memory.repo_id,
+        "worktree_id": memory.worktree_id,
+        "task_id": memory.task_id,
+        "agent_id": memory.agent_id,
+        "run_id": memory.run_id,
     }
 
 
@@ -309,6 +315,12 @@ def sqlite_memory_from_row(row: sqlite3.Row) -> MemoryItem:
         memory_data["contextual_intent"] = row["contextual_intent"]
     with contextlib.suppress(IndexError, KeyError):
         memory_data["is_hot"] = bool(row["is_hot"])
+    # Agent scoping — may not exist in old DBs
+    for scope_field in ("repo_id", "worktree_id", "task_id", "agent_id", "run_id"):
+        with contextlib.suppress(IndexError, KeyError):
+            val = row[scope_field]
+            if val is not None:
+                memory_data[scope_field] = val
     return MemoryItem(**memory_data)
 
 

@@ -179,8 +179,15 @@ class MemoryItem(BaseModel):
 
     # Core Identifiers
     memory_id: str = Field(default_factory=lambda: str(uuid4()))
-    conversation_id: str | None = None  # TODO: Handle this field in memory core
-    user_id: str | None = None  # TODO: Handle this field in memory core
+    conversation_id: str | None = None
+    user_id: str | None = None
+
+    # Agent scoping (Phase 1 — repo/worktree/task/agent isolation)
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
 
     # Core Information
     content: str

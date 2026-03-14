@@ -38,6 +38,12 @@ _SUPPORTED_FIELDS = {
     "conflicts_with",
     "previous_event_id",
     "next_event_id",
+    # Agent scoping
+    "repo_id",
+    "worktree_id",
+    "task_id",
+    "agent_id",
+    "run_id",
 }
 
 
