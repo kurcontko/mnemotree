@@ -3,6 +3,7 @@
 These tests verify the full pipeline: store memories → create links → run PPR / SCMRAG.
 They skip if sqlite_vec is unavailable (CI without the optional dep).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,16 +15,24 @@ from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
 
 pytest_plugins = ["anyio"]
 
-try:
-    import sqlite_vec  # noqa: F401
+def _sqlite_vec_loadable() -> bool:
+    try:
+        import sqlite3
 
-    _HAS_SQLITE_VEC = True
-except ImportError:
-    _HAS_SQLITE_VEC = False
+        import sqlite_vec
 
-pytestmark = pytest.mark.skipif(
-    not _HAS_SQLITE_VEC, reason="sqlite_vec not installed"
-)
+        conn = sqlite3.connect(":memory:")
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+_HAS_SQLITE_VEC = _sqlite_vec_loadable()
+
+pytestmark = pytest.mark.skipif(not _HAS_SQLITE_VEC, reason="sqlite-vec extension is not loadable")
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -90,9 +99,7 @@ async def test_get_neighborhood_links_link_type_filter(store):
     await store.create_link("A", "B", LinkType.CAUSES)
     await store.create_link("A", "C", LinkType.PART_OF)
 
-    links = await store.get_neighborhood_links(
-        ["A"], max_depth=1, link_types=[LinkType.CAUSES]
-    )
+    links = await store.get_neighborhood_links(["A"], max_depth=1, link_types=[LinkType.CAUSES])
     target_ids = {lk.target_id for lk in links}
     assert "B" in target_ids
     assert "C" not in target_ids
