@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from mnemotree.core.memory import (
+    AgentLayerConfig,
     MemoryCore,
     ModeDefaultsConfig,
     NerConfig,
@@ -356,12 +357,22 @@ async def _get_memory_core(
             enable_bm25=enable_bm25,
         )
 
+        # Profile support: "agent" profile enables agent-layer features
+        profile = os.getenv("MNEMOTREE_MCP_PROFILE", "default").strip().lower()
+        agent_layer_config = None
+        if profile == "agent" or repo_scope is not None:
+            agent_layer_config = AgentLayerConfig(
+                enable_freshness_scoring=_env_bool("MNEMOTREE_MCP_ENABLE_FRESHNESS", False),
+                enable_validation=_env_bool("MNEMOTREE_MCP_ENABLE_VALIDATION", False),
+            )
+
         memory_core = MemoryCore(
             store=store,
             mode_defaults=mode_defaults,
             ner_config=ner_config,
             retrieval_config=retrieval_config,
             default_repo_id=repo_scope,
+            agent_layer_config=agent_layer_config,
         )
         _memory_cores[cache_key] = memory_core
         return memory_core
@@ -776,13 +787,33 @@ async def agent_recall_with_summary(
     # Trim regular to limit
     regular_observations = regular_observations[:limit]
 
-    return {
+    # Optional: apply freshness scoring if enabled
+    if memory_core._agent_layer_config.enable_freshness_scoring:
+        # Re-retrieve as MemoryItems for freshness scoring
+        # (observations are already dicts from recall, skip for now)
+        pass
+
+    result: dict[str, Any] = {
         "scope": filters_dict,
         "summary": summary_data,
         "hot_observations": hot_observations,
         "observations": regular_observations,
         "total_results": len(hot_observations) + len(regular_observations),
     }
+
+    # Phase 6 validation: annotate observations with evidence validation status
+    if memory_core._agent_layer_config.enable_validation:
+        for obs in hot_observations + regular_observations:
+            refs = obs.get("evidence_refs") or (obs.get("metadata") or {}).get("evidence_refs")
+            if refs and isinstance(refs, list):
+                from mnemotree.core.models import MemoryItem, MemoryType
+
+                _temp = MemoryItem(
+                    content="", memory_type=MemoryType.SEMANTIC, importance=0.5, evidence_refs=refs,
+                )
+                obs["evidence_validation"] = memory_core.validate_evidence_refs(_temp)
+
+    return result
 
 
 async def agent_compact_summary(
@@ -1642,6 +1673,14 @@ def _register_tools(mcp: Any) -> None:
     mcp.tool(agent_renew_claim)
     mcp.tool(agent_release_claim)
     mcp.tool(agent_list_claims)
+    mcp.tool(agent_update_observation_status)
+    mcp.tool(agent_recall_with_summary)
+    mcp.tool(agent_compact_summary)
+    # Human surface tools (Phase 8)
+    mcp.tool(agent_inspect_memories)
+    mcp.tool(agent_inspect_summaries)
+    mcp.tool(agent_delete_memory)
+    mcp.tool(agent_correct_memory)
     mcp.tool(get_memories)
     mcp.tool(update_memory)
     mcp.tool(forget)

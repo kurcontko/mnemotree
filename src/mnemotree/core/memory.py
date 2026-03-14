@@ -1463,6 +1463,19 @@ class MemoryCore:
                 if updates:
                     filters = dataclasses.replace(filters, **updates)
 
+        # Agent layer: enforce config knobs when agent scoping is active
+        cfg = self._agent_layer_config
+        _has_agent_scope = (
+            self.default_repo_id is not None
+            or (filters is not None and filters.repo_id is not None)
+        )
+        if _has_agent_scope and cfg.enable_agent_scoping:
+            if cfg.exclude_refuted_by_default and cfg.enable_observation_semantics:
+                if filters is None:
+                    filters = RecallFilters(exclude_refuted=True)
+                elif not filters.exclude_refuted:
+                    filters = dataclasses.replace(filters, exclude_refuted=True)
+
         # ENGRAM: per-type retrieval (overrides normal path)
         if self._engram_config.enable_per_type_retrieval and isinstance(query, str):
             return await self.recall_per_type(query, limit=limit)
@@ -1530,18 +1543,31 @@ class MemoryCore:
                 update_access=False,
             )
             memories = self._apply_recall_filters(memories, filters)
+
+            # Agent layer: apply freshness scoring when enabled
+            if self._agent_layer_config.enable_freshness_scoring:
+                memories = self.apply_freshness_scoring(memories)
+
             if limit is not None:
                 memories = memories[:limit]
             if update_access:
                 await self._update_access_metadata(memories)
             return memories
 
-        return await self.retrieval.recall(
+        memories = await self.retrieval.recall(
             query=query,
             limit=limit,
             scoring=scoring,
             update_access=update_access,
         )
+
+        # Agent layer: apply freshness scoring when enabled (even without filters)
+        if self._agent_layer_config.enable_freshness_scoring:
+            memories = self.apply_freshness_scoring(memories)
+            if limit is not None:
+                memories = memories[:limit]
+
+        return memories
 
     async def recall_per_type(
         self,

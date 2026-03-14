@@ -312,3 +312,105 @@ class TestSQLiteObservationRoundTrip:
         assert record["observation_status"] is None
         assert record["observation_kind"] is None
         assert record["evidence_refs"] is None
+
+
+# ============================================================
+# Integration: Config enforcement in recall path
+# ============================================================
+
+
+class TestConfigEnforcementInRecall:
+    """Test that AgentLayerConfig knobs are actually enforced during recall."""
+
+    def _make_core(self, repo_id: str = "test-repo", **cfg_kwargs) -> MemoryCore:
+        store = MagicMock()
+        store.close = AsyncMock()
+        embeddings = MagicMock()
+        embeddings.embed_query = MagicMock(return_value=[0.0] * 384)
+        agent_config = AgentLayerConfig(**cfg_kwargs)
+        return MemoryCore(
+            store=store,
+            embeddings=embeddings,
+            agent_layer_config=agent_config,
+            default_repo_id=repo_id,
+        )
+
+    @pytest.mark.asyncio
+    async def test_exclude_refuted_by_default_applies_to_agent_scoped_recall(self):
+        """When repo_id is set and exclude_refuted_by_default=True, refuted memories are excluded."""
+        core = self._make_core(exclude_refuted_by_default=True, enable_observation_semantics=True)
+
+        # Create memories with different statuses — must match the repo_id scope
+        now = datetime.now(timezone.utc)
+        confirmed = _make_memory("m1", observation_status=ObservationStatus.CONFIRMED, timestamp=now, repo_id="test-repo")
+        refuted = _make_memory("m2", observation_status=ObservationStatus.REFUTED, timestamp=now, repo_id="test-repo")
+        tentative = _make_memory("m3", observation_status=ObservationStatus.TENTATIVE, timestamp=now, repo_id="test-repo")
+
+        # Mock the retrieval to return all three
+        core.retrieval = MagicMock()
+        core.retrieval.recall = AsyncMock(return_value=[confirmed, refuted, tentative])
+
+        result = await core.recall("test query", limit=10)
+
+        # Refuted should be filtered out
+        result_ids = {m.memory_id for m in result}
+        assert "m1" in result_ids
+        assert "m2" not in result_ids  # refuted excluded
+        assert "m3" in result_ids
+
+    @pytest.mark.asyncio
+    async def test_exclude_refuted_not_applied_without_agent_scope(self):
+        """Without repo_id, exclude_refuted_by_default is NOT auto-applied."""
+        store = MagicMock()
+        store.close = AsyncMock()
+        embeddings = MagicMock()
+        embeddings.embed_query = MagicMock(return_value=[0.0] * 384)
+        core = MemoryCore(
+            store=store,
+            embeddings=embeddings,
+            agent_layer_config=AgentLayerConfig(exclude_refuted_by_default=True),
+            # No default_repo_id!
+        )
+
+        now = datetime.now(timezone.utc)
+        refuted = _make_memory("m1", observation_status=ObservationStatus.REFUTED, timestamp=now)
+
+        core.retrieval = MagicMock()
+        core.retrieval.recall = AsyncMock(return_value=[refuted])
+
+        result = await core.recall("test query", limit=10)
+
+        # Without agent scope, refuted should NOT be auto-excluded
+        assert len(result) == 1
+        assert result[0].memory_id == "m1"
+
+
+# ============================================================
+# MCP: Tool registration count
+# ============================================================
+
+
+def test_all_agent_tools_exist_as_module_functions():
+    """Verify all expected agent MCP tool functions exist in the server module."""
+    from mnemotree.mcp import server
+
+    expected_tools = [
+        "agent_remember_observation",
+        "agent_recall_context",
+        "agent_upsert_summary",
+        "agent_get_summary",
+        "agent_claim_resource",
+        "agent_renew_claim",
+        "agent_release_claim",
+        "agent_list_claims",
+        "agent_update_observation_status",
+        "agent_recall_with_summary",
+        "agent_compact_summary",
+        "agent_inspect_memories",
+        "agent_inspect_summaries",
+        "agent_delete_memory",
+        "agent_correct_memory",
+    ]
+    for tool_name in expected_tools:
+        assert hasattr(server, tool_name), f"Missing MCP tool function: {tool_name}"
+        assert callable(getattr(server, tool_name)), f"{tool_name} is not callable"
