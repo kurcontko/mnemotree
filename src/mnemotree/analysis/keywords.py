@@ -5,7 +5,10 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol
 
-import spacy
+try:
+    import spacy
+except ImportError:
+    spacy = None
 
 
 class KeywordExtractor(Protocol):
@@ -19,6 +22,10 @@ class SpacyKeywordExtractor:
     min_length: int = 3
 
     def __post_init__(self) -> None:
+        if spacy is None:
+            raise ImportError(
+                "SpacyKeywordExtractor requires spacy. Install with `pip install spacy`."
+            )
         self.nlp = spacy.load(self.model, disable=["ner", "textcat"])
 
     async def extract(self, text: str) -> list[str]:

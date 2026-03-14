@@ -2286,8 +2286,8 @@ class MemoryCore:
             else:
                 try:
                     self.ner = SpacyNER()
-                except OSError:
-                    logger.debug("spaCy model not available, disabling NER")
+                except (OSError, ImportError):
+                    logger.debug("spaCy not available, disabling NER")
                     self.ner = None
         else:
             self.ner = None

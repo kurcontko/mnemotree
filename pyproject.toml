@@ -11,7 +11,6 @@ dependencies = [
     "numpy>=1.26.0,<3.0.0",
     "scikit-learn>=1.6.0,<2.0.0",
     "networkx>=3.4.0,<4.0.0",
-    "spacy>=3.8.0,<4.0.0",
     "urllib3>=2.6.0,<3.0.0",
     "filelock>=3.20.3,<4.0.0",
 
@@ -37,6 +36,7 @@ dev = [
 ]
 
 # NER backends
+ner_spacy = ["spacy>=3.8.0,<4.0.0"]
 ner_gliner = ["gliner>=0.2.0"]
 ner_hf = [
     "transformers>=4.38.0",
@@ -131,6 +131,7 @@ all = [
     "chromadb>=0.5.23",
     "pymilvus>=2.2.0",
     "sqlite-vec>=0.1.0",
+    "spacy>=3.8.0,<4.0.0",
     "sentence-transformers>=2.7.0",
     "yake>=0.4.8",
     "streamlit>=1.40.0",
