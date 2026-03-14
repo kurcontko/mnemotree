@@ -14,6 +14,8 @@ Memory module for LLMs and Agents with MCP
 
 Mnemotree gives LLM agents biologically-inspired memory. Store, retrieve, and analyze structured knowledge with hybrid retrieval (semantic + BM25 + entity + RRF fusion), importance scoring, and relationship tracking. Works standalone or via MCP, with optional integrations for LangChain, AutoGen, CrewAI, and LlamaIndex.
 
+**70.0% on LoCoMo** (long-term conversational memory benchmark) — outperforms Mem0 (66.9%).
+
 ## ⚡ MCP Quickstart
 
 Run mnemotree as an MCP server with zero setup:
