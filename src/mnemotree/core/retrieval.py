@@ -376,7 +376,7 @@ class HybridRetriever(BaseRetriever):
         rrf_k: int = 60,
         enable_rrf_signal_rerank: bool = False,
         reranker: BaseReranker | None = None,
-        rerank_candidates: int = 50,
+        rerank_candidates: int = 150,
         # Allow standalone mode (retrieve() only) without store/embedder.
         store: MemoryCRUDStore | None = None,
         embedder: EmbeddingModel | None = None,

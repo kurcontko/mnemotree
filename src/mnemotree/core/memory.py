@@ -132,7 +132,7 @@ class RetrievalConfig:
     enable_rrf_signal_rerank: bool = False
     reranker_backend: Literal["none", "flashrank", "cross_encoder"] = "none"
     reranker_model: str = "ms-marco-TinyBERT-L-2-v2"
-    rerank_candidates: int = 50
+    rerank_candidates: int = 150
     # SimpleMem: intent-aware type pre-filtering (arXiv:2601.02553)
     enable_intent_filter: bool = False
     intent_classifier_backend: Literal["keyword", "llm"] = "keyword"
@@ -189,7 +189,7 @@ class EngramConfig:
 
     enable_fact_memories: bool = False
     enable_per_type_retrieval: bool = False
-    per_type_k: int = 25
+    per_type_k: int = 30
 
 
 @dataclass(frozen=True)
