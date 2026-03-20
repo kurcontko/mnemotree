@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
@@ -79,6 +81,7 @@ class RetrievalStage(str, Enum):
     ENTITY = "entity"
     BM25 = "bm25"
     GRAPH = "graph"
+    TEMPORAL = "temporal"
     FUSION = "fusion"
     RERANK = "rerank"
 
@@ -372,6 +375,7 @@ class HybridRetriever(BaseRetriever):
         entity_weight: float = 0.10,
         bm25_weight: float = 0.30,
         graph_weight: float = 0.0,
+        temporal_weight: float = 0.0,
         fusion_strategy: FusionStrategy = FusionStrategy.RRF,
         rrf_k: int = 60,
         enable_rrf_signal_rerank: bool = False,
@@ -423,6 +427,7 @@ class HybridRetriever(BaseRetriever):
             RetrievalStage.ENTITY: entity_weight,
             RetrievalStage.BM25: bm25_weight,
             RetrievalStage.GRAPH: graph_weight,
+            RetrievalStage.TEMPORAL: temporal_weight,
         }
         self._normalize_weights()
         self.fusion_strategy = fusion_strategy
@@ -509,6 +514,12 @@ class HybridRetriever(BaseRetriever):
             if graph_candidates:
                 stage_candidates[RetrievalStage.GRAPH] = graph_candidates
 
+        # Temporal proximity channel (Phase E)
+        if self.weights.get(RetrievalStage.TEMPORAL, 0.0) > 0 and vector_memories:
+            temporal_scored = self._score_temporal_proximity(query, vector_memories)
+            if temporal_scored:
+                stage_candidates[RetrievalStage.TEMPORAL] = temporal_scored
+
         # Fuse using configured strategy
         results = self._fuse_candidates(stage_candidates)
 
@@ -547,6 +558,74 @@ class HybridRetriever(BaseRetriever):
             (time.perf_counter() - started) * 1000.0,
         )
         return memories
+
+    # ------------------------------------------------------------------
+    # Temporal proximity scoring (Phase E)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_time_reference(query: str) -> datetime | None:
+        """Extract a time reference from the query string (best-effort)."""
+        from .models import coerce_datetime
+
+        # Try ISO-8601 dates embedded in query
+        iso_match = re.search(r"\d{4}-\d{2}-\d{2}", query)
+        if iso_match:
+            dt = coerce_datetime(iso_match.group(0), default=None)
+            if dt is not None:
+                return dt
+
+        # Relative patterns
+        now = datetime.now(timezone.utc)
+        yesterday_pat = re.search(r"\byesterday\b", query, re.IGNORECASE)
+        if yesterday_pat:
+            from datetime import timedelta
+            return now - timedelta(days=1)
+
+        days_ago = re.search(r"\b(\d+)\s+days?\s+ago\b", query, re.IGNORECASE)
+        if days_ago:
+            from datetime import timedelta
+            return now - timedelta(days=int(days_ago.group(1)))
+
+        weeks_ago = re.search(r"\b(\d+)\s+weeks?\s+ago\b", query, re.IGNORECASE)
+        if weeks_ago:
+            from datetime import timedelta
+            return now - timedelta(weeks=int(weeks_ago.group(1)))
+
+        last_week = re.search(r"\blast\s+week\b", query, re.IGNORECASE)
+        if last_week:
+            from datetime import timedelta
+            return now - timedelta(weeks=1)
+
+        return None
+
+    def _score_temporal_proximity(
+        self,
+        query: str,
+        candidates: list[MemoryItem],
+    ) -> list[tuple[MemoryItem, float]]:
+        """Score candidates by temporal distance from a time reference in the query.
+
+        Score = 1 / (1 + abs_days_distance). Returns empty if no time ref found.
+        """
+        ref_time = self._extract_time_reference(query)
+        if ref_time is None:
+            return []
+
+        from .models import coerce_datetime
+
+        scored: list[tuple[MemoryItem, float]] = []
+        for mem in candidates:
+            mem_time = coerce_datetime(mem.timestamp, default=None)
+            if mem_time is None:
+                scored.append((mem, 0.0))
+                continue
+            days_distance = abs((ref_time - mem_time).total_seconds()) / 86400.0
+            score = 1.0 / (1.0 + days_distance)
+            scored.append((mem, score))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored
 
     # ------------------------------------------------------------------
     # retrieve() — standalone mode (explicit candidates)

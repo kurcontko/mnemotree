@@ -408,7 +408,7 @@ def test_get_mcp_registers_tools(monkeypatch):
     instance = server._get_mcp()
 
     assert isinstance(instance, DummyFastMCP)
-    assert len(instance.tools) == 31
+    assert len(instance.tools) == 32
 
 
 def test_memory_timestamp_fallbacks():

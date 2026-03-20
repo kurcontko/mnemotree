@@ -23,6 +23,7 @@ from mnemotree.core.models import (
     ObservationKind,
     ObservationStatus,
     coerce_datetime,
+    compute_observation_confidence,
 )
 from mnemotree.ner import create_ner
 from mnemotree.store.base import BaseMemoryStore
@@ -35,6 +36,29 @@ from mnemotree.store.protocols import (
 
 _memory_lock = asyncio.Lock()
 _memory_cores: dict[str, MemoryCore] = {}
+_observation_counters: dict[str, int] = {}
+
+
+async def _auto_compact(
+    *,
+    repo_id: str | None,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+) -> None:
+    """Fire-and-forget background compaction after observation threshold is reached."""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        scope_kind = "task" if task_id else ("worktree" if worktree_id else "repo")
+        await agent_compact_summary(
+            repo_id=repo_id or "",
+            scope_kind=scope_kind,
+            worktree_id=worktree_id,
+            task_id=task_id,
+        )
+        logger.debug("auto-compaction completed for scope=%s repo=%s", scope_kind, repo_id)
+    except Exception:
+        logger.debug("auto-compaction failed", exc_info=True)
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -364,6 +388,8 @@ async def _get_memory_core(
             agent_layer_config = AgentLayerConfig(
                 enable_freshness_scoring=_env_bool("MNEMOTREE_MCP_ENABLE_FRESHNESS", False),
                 enable_validation=_env_bool("MNEMOTREE_MCP_ENABLE_VALIDATION", False),
+                graph_weight=0.15,
+                temporal_weight=0.1,
             )
 
         memory_core = MemoryCore(
@@ -513,11 +539,20 @@ async def agent_remember_observation(
     if evidence_refs:
         merged_metadata["evidence_refs"] = evidence_refs
     merged_metadata.setdefault("agent_layer", True)
+
+    # Phase B: auto-compute confidence from observation status + evidence
+    try:
+        obs_enum = ObservationStatus(observation_status)
+    except ValueError:
+        obs_enum = ObservationStatus.TENTATIVE
+    computed_confidence = compute_observation_confidence(obs_enum, evidence_refs)
+    merged_metadata["confidence"] = computed_confidence
+
     merged_tags = list(tags or [])
     if kind not in merged_tags:
         merged_tags.append(kind)
 
-    return await remember(
+    result = await remember(
         content=content,
         memory_type=MemoryType.SEMANTIC.value,
         importance=importance,
@@ -530,6 +565,27 @@ async def agent_remember_observation(
         agent_id=agent_id,
         run_id=run_id,
     )
+
+    # Phase C: auto-compaction counter
+    try:
+        scope_key = f"{repo_id or ''}:{worktree_id or ''}:{task_id or ''}"
+        _observation_counters[scope_key] = _observation_counters.get(scope_key, 0) + 1
+        memory_core = await _get_memory_core(repo_id=repo_id)
+        cfg = memory_core._agent_layer_config
+        if (
+            getattr(cfg, "auto_compaction_enabled", False)
+            and _observation_counters[scope_key] >= getattr(cfg, "auto_compaction_threshold", 10)
+        ):
+            _observation_counters[scope_key] = 0
+            asyncio.create_task(_auto_compact(
+                repo_id=repo_id,
+                worktree_id=worktree_id,
+                task_id=task_id,
+            ))
+    except Exception:
+        pass  # Don't let compaction bookkeeping break observation storage
+
+    return result
 
 
 async def agent_recall_context(
@@ -560,6 +616,69 @@ async def agent_recall_context(
     return {
         "scope": filters,
         "results": memories,
+    }
+
+
+async def agent_recall_agentic(
+    repo_id: str,
+    query: str,
+    worktree_id: str | None = None,
+    task_id: str | None = None,
+    agent_id: str | None = None,
+    run_id: str | None = None,
+    limit: int = 8,
+) -> dict[str, Any]:
+    """Multi-round agentic recall with gap detection and RRF fusion.
+
+    Performs iterative retrieval: initial recall, then detects gaps in results
+    and issues refined sub-queries to fill them. Returns richer results than
+    single-pass agent_recall_context, especially for multi-hop queries.
+
+    Args:
+        repo_id: Repository scope identifier.
+        query: Search query text.
+        worktree_id: Optional worktree scope.
+        task_id: Optional task scope.
+        agent_id: Optional agent identity.
+        run_id: Optional run identifier.
+        limit: Maximum results to return (default: 8).
+
+    Returns:
+        Dict with scope, memories, rounds used, sub_queries generated, and counts.
+    """
+    memory_core = await _get_memory_core(repo_id=repo_id)
+
+    from mnemotree.core.memory import RecallFilters
+
+    scope = _scope_kwargs(
+        repo_id=repo_id,
+        worktree_id=worktree_id,
+        task_id=task_id,
+        agent_id=agent_id,
+        run_id=run_id,
+    )
+
+    filters = _parse_recall_filters(scope) if scope else None
+
+    result = await memory_core.recall_agentic(
+        query=query,
+        limit=limit,
+        filters=filters,
+    )
+
+    # Serialize memories for MCP transport
+    memories = result["memories"]
+    serialized = []
+    for rank, memory in enumerate(memories, start=1):
+        serialized.append(_serialize_memory_index(memory, rank))
+
+    return {
+        "scope": scope,
+        "results": serialized,
+        "rounds": result["rounds"],
+        "sub_queries": result["sub_queries"],
+        "initial_count": result["initial_count"],
+        "final_count": result["final_count"],
     }
 
 
@@ -706,10 +825,13 @@ async def agent_update_observation_status(
         )
 
     updates: dict[str, Any] = {"observation_status": new_status.value}
+    all_evidence = list(memory.evidence_refs or [])
     if evidence_refs:
-        existing = list(memory.evidence_refs or [])
-        existing.extend(evidence_refs)
-        updates["evidence_refs"] = existing
+        all_evidence.extend(evidence_refs)
+        updates["evidence_refs"] = all_evidence
+
+    # Phase B: auto-compute confidence from new status + all evidence
+    updates["confidence"] = compute_observation_confidence(new_status, all_evidence)
 
     from mnemotree.store.protocols import SupportsMetadataUpdate
 
@@ -1674,6 +1796,7 @@ def _register_tools(mcp: Any) -> None:
     mcp.tool(agent_release_claim)
     mcp.tool(agent_list_claims)
     mcp.tool(agent_update_observation_status)
+    mcp.tool(agent_recall_agentic)
     mcp.tool(agent_recall_with_summary)
     mcp.tool(agent_compact_summary)
     # Human surface tools (Phase 8)

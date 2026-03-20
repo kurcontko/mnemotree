@@ -87,6 +87,28 @@ class ObservationKind(str, Enum):
     OBSERVATION = "observation"  # General observation
 
 
+def compute_observation_confidence(
+    status: ObservationStatus,
+    evidence_refs: list[str] | None = None,
+) -> float:
+    """Compute confidence score from observation status and evidence references.
+
+    Base confidence by status:
+        hypothesis=0.3, tentative=0.5, confirmed=0.85, refuted=0.1
+    Boost: +0.05 per evidence_ref, capped at +0.15.
+    Final value clamped to [0.0, 1.0].
+    """
+    base_map = {
+        ObservationStatus.HYPOTHESIS: 0.3,
+        ObservationStatus.TENTATIVE: 0.5,
+        ObservationStatus.CONFIRMED: 0.85,
+        ObservationStatus.REFUTED: 0.1,
+    }
+    base = base_map.get(status, 0.5)
+    evidence_boost = min(0.15, len(evidence_refs or []) * 0.05)
+    return min(1.0, max(0.0, base + evidence_boost))
+
+
 class LinkType(str, Enum):
     """Semantic relationship types inspired by Zettelkasten."""
 

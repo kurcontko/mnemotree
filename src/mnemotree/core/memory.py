@@ -206,11 +206,20 @@ class AgentLayerConfig:
     enable_observation_semantics: bool = True
     enable_validation: bool = False
     enable_freshness_scoring: bool = False
+    graph_weight: float = 0.15
+    temporal_weight: float = 0.0
     agent_recall_limit: int = 20
     summary_compaction_interval: int = 3600  # seconds
     freshness_staleness_hours: float = 168.0  # 7 days
     freshness_penalty_factor: float = 0.3
     exclude_refuted_by_default: bool = True
+    # Auto-compaction (Phase C)
+    auto_compaction_enabled: bool = True
+    auto_compaction_threshold: int = 10
+    # Agentic retrieval (Phase D)
+    enable_agentic_retrieval: bool = True
+    agentic_max_rounds: int = 2
+    agentic_sufficiency_threshold: int = 3
 
 
 @dataclass(frozen=True)
@@ -1568,6 +1577,102 @@ class MemoryCore:
                 memories = memories[:limit]
 
         return memories
+
+    async def recall_agentic(
+        self,
+        query: str,
+        *,
+        limit: int | None = None,
+        scoring: bool = True,
+        update_access: bool = False,
+        filters: RecallFilters | None = None,
+    ) -> dict[str, Any]:
+        """Multi-round agentic retrieval with gap detection and RRF fusion.
+
+        1. Initial _recall_single() with full HybridRetriever
+        2. If results < sufficiency threshold, use HeuristicGapAnalyzer for refined queries
+        3. Parallel _recall_single() per refined query
+        4. rrf_merge() across all result sets
+        5. Return results + metadata (rounds, sub_queries, counts)
+        """
+        from .gap_detection import HeuristicGapAnalyzer
+        from .query_decomposition import rrf_merge
+
+        cfg = self._agent_layer_config
+        limit = limit or cfg.agent_recall_limit
+        sufficiency = cfg.agentic_sufficiency_threshold
+        max_rounds = cfg.agentic_max_rounds
+
+        # Round 1: initial retrieval
+        initial = await self._recall_single(
+            query, limit=limit, scoring=scoring, update_access=False, filters=filters,
+            candidate_limit=None,
+        )
+
+        all_result_sets: list[list[MemoryItem]] = [initial]
+        all_sub_queries: list[str] = []
+        rounds_used = 1
+
+        # Gap detection rounds
+        if len(initial) < sufficiency and max_rounds > 0:
+            gap_analyzer = HeuristicGapAnalyzer(max_gaps=3)
+
+            # Extract query entities (best-effort)
+            query_entities: dict[str, str] = {}
+            if self.ner:
+                try:
+                    ner_result = await self.ner.extract_entities(query)
+                    query_entities = ner_result.entities or {}
+                except Exception:
+                    logger.debug("NER extraction failed in recall_agentic", exc_info=True)
+
+            current_results = list(initial)
+            for _ in range(max_rounds):
+                sub_queries = await gap_analyzer.detect_gaps(query, current_results, query_entities)
+                if not sub_queries:
+                    break
+
+                all_sub_queries.extend(sub_queries)
+                rounds_used += 1
+
+                # Parallel retrieval for each sub-query
+                tasks = [
+                    self._recall_single(
+                        sq, limit=limit, scoring=scoring, update_access=False,
+                        filters=filters, candidate_limit=None,
+                    )
+                    for sq in sub_queries
+                ]
+                batches = await asyncio.gather(*tasks)
+                for batch in batches:
+                    all_result_sets.append(batch)
+                    current_results.extend(batch)
+
+                # Check sufficiency
+                # Deduplicate for counting
+                seen = set()
+                unique_count = 0
+                for rs in all_result_sets:
+                    for m in rs:
+                        if m.memory_id not in seen:
+                            seen.add(m.memory_id)
+                            unique_count += 1
+                if unique_count >= sufficiency:
+                    break
+
+        # RRF merge across all result sets
+        merged = rrf_merge(all_result_sets, limit=limit)
+
+        if update_access and merged:
+            await self._update_access_metadata(merged)
+
+        return {
+            "memories": merged,
+            "rounds": rounds_used,
+            "sub_queries": all_sub_queries,
+            "initial_count": len(initial),
+            "final_count": len(merged),
+        }
 
     async def recall_per_type(
         self,
@@ -3087,6 +3192,8 @@ class MemoryCore:
                 enable_rrf_signal_rerank=enable_rrf_signal_rerank,
                 reranker=self._reranker,
                 rerank_candidates=rerank_candidates,
+                graph_weight=self._agent_layer_config.graph_weight,
+                temporal_weight=self._agent_layer_config.temporal_weight,
             )
         return RetrieverFactory.create_basic(**common_retrieval_args)
 
