@@ -2,61 +2,77 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
   workflow_dispatch:
 
 jobs:
-  lint-typecheck-test:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Lint
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+      - name: Typecheck
+        run: mypy src
+
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        extras: ["dev", "dev,ner_spacy"]
+        exclude:
+          # Only test with spacy on 3.12 to save CI minutes
+          - python-version: "3.10"
+            extras: "dev,ner_spacy"
+          - python-version: "3.11"
+            extras: "dev,ner_spacy"
+          - python-version: "3.13"
+            extras: "dev,ner_spacy"
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Install project with dev dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[${{ matrix.extras }}]"
 
-      - name: Run lint
-        run: |
-          ruff check src tests
-          ruff format --check src tests
-
-      - name: Run typecheck
-        run: |
-          mypy src
+      - name: Install spacy model
+        if: contains(matrix.extras, 'ner_spacy')
+        run: python -m spacy download en_core_web_sm
 
       - name: Run tests
-        run: |
-          pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
+        run: pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
 
-      - name: Upload coverage artifact
+      - name: Upload coverage
         uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: coverage-report-${{ matrix.python-version }}
+          name: coverage-${{ matrix.python-version }}-${{ matrix.extras }}
           path: coverage.xml
           if-no-files-found: warn
 
-      - name: Upload test report artifact
+      - name: Upload test report
         uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: junit-report-${{ matrix.python-version }}
+          name: junit-${{ matrix.python-version }}-${{ matrix.extras }}
           path: pytest-report.xml
           if-no-files-found: warn

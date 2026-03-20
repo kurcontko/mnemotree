@@ -179,8 +179,15 @@ class MemoryItem(BaseModel):
 
     # Core Identifiers
     memory_id: str = Field(default_factory=lambda: str(uuid4()))
-    conversation_id: str | None = None  # TODO: Handle this field in memory core
-    user_id: str | None = None  # TODO: Handle this field in memory core
+    conversation_id: str | None = None
+    user_id: str | None = None
+
+    # Agent scoping (Phase 1 — repo/worktree/task/agent isolation)
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
 
     # Core Information
     content: str
@@ -196,7 +203,9 @@ class MemoryItem(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Bi-temporal fields (TSM / Mastra OM 3-date anchoring)
-    event_time: datetime | None = None  # When the event actually happened (vs timestamp = storage time)
+    event_time: datetime | None = (
+        None  # When the event actually happened (vs timestamp = storage time)
+    )
     valid_from: datetime | None = None  # Temporal validity start
     valid_until: datetime | None = None  # Temporal validity end (None = still valid)
     observation_date: datetime | None = None  # Mastra-style: when the observation was made
@@ -204,7 +213,9 @@ class MemoryItem(BaseModel):
     temporal_offset: str | None = None  # Relative offset hint ("2 days ago", "last week")
 
     # Retrieval hints
-    contextual_intent: str | None = None  # STITCH: inferred intent at ingest time (+35.6% retrieval)
+    contextual_intent: str | None = (
+        None  # STITCH: inferred intent at ingest time (+35.6% retrieval)
+    )
     is_hot: bool = False  # Codified Context: HOT memories always included, COLD retrieved on-demand
 
     # Access information

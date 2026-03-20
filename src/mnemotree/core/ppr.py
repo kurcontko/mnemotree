@@ -4,6 +4,7 @@ Based on HippoRAG 2 (ICML 2025): seed retrieval results are used to initialize
 a personalized restart distribution, then PPR propagates activation through the
 knowledge-graph link structure to surface multi-hop relevant memories.
 """
+
 from __future__ import annotations
 
 import math

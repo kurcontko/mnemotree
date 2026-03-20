@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from .._protocols import AsyncEmbeddingModel as Embeddings
 from ..core.models import MemoryType
+from ..core.protocols import EmbeddingModel as Embeddings
 from ..utils.serialization import json_dumps_safe
 from .analyzers import ConceptAnalyzer, EmotionAnalyzer, MemoryClassifierAnalyzer, PatternAnalyzer
 from .models import (
@@ -18,7 +18,9 @@ from .models import (
 class MemoryAnalyzer:
     """Orchestrates different types of memory analysis."""
 
-    def __init__(self, model: str | Any = "openai:gpt-4o-mini", embeddings: Embeddings | None = None):
+    def __init__(
+        self, model: str | Any = "openai:gpt-4o-mini", embeddings: Embeddings | None = None
+    ):
         self.model = model
         self.embeddings = embeddings
         self._init_analyzers()
@@ -66,6 +68,8 @@ class MemoryAnalyzer:
 
     async def get_embedding(self, text: str) -> list[float]:
         """Get embedding for text."""
+        if self.embeddings is None:
+            raise RuntimeError("No embedding model configured")
         return await self.embeddings.aembed_query(text)
 
     async def analyze_patterns(self, content: str, context: str = "") -> dict[str, Any]:

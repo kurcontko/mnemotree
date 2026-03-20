@@ -15,6 +15,7 @@ _SQLITE_LIST_FIELDS = {
     "conflicts_with",
 }
 
+
 def _escape_like(value: str) -> str:
     """Escape special LIKE characters so they match literally."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -37,6 +38,12 @@ _SUPPORTED_FIELDS = {
     "conflicts_with",
     "previous_event_id",
     "next_event_id",
+    # Agent scoping
+    "repo_id",
+    "worktree_id",
+    "task_id",
+    "agent_id",
+    "run_id",
 }
 
 

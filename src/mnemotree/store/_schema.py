@@ -98,7 +98,12 @@ def create_sqlite_schema(
             referenced_date TEXT,
             temporal_offset TEXT,
             contextual_intent TEXT,
-            is_hot INTEGER DEFAULT 0
+            is_hot INTEGER DEFAULT 0,
+            repo_id TEXT,
+            worktree_id TEXT,
+            task_id TEXT,
+            agent_id TEXT,
+            run_id TEXT
         )
         """
     )
@@ -171,11 +176,39 @@ def migrate_sqlite_phase1_fields(
     added = False
     for col_name, col_type in _PHASE1_COLUMNS:
         if col_name not in columns:
-            conn.execute(
-                f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}'
-            )
+            conn.execute(f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}')
             added = True
     if added:
+        conn.commit()
+
+
+_AGENT_SCOPE_COLUMNS: list[tuple[str, str]] = [
+    ("repo_id", "TEXT"),
+    ("worktree_id", "TEXT"),
+    ("task_id", "TEXT"),
+    ("agent_id", "TEXT"),
+    ("run_id", "TEXT"),
+]
+
+
+def migrate_sqlite_agent_scope(
+    conn: sqlite3.Connection,
+    collection_name: str,
+) -> None:
+    """Idempotent migration: add agent scoping fields (repo, worktree, task, agent, run)."""
+    cursor = conn.execute(f'PRAGMA table_info("{collection_name}")')
+    columns = {row[1] for row in cursor.fetchall()}
+    added = False
+    for col_name, col_type in _AGENT_SCOPE_COLUMNS:
+        if col_name not in columns:
+            conn.execute(f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}')
+            added = True
+    if added:
+        # Index repo_id for common filtering
+        conn.execute(
+            f'CREATE INDEX IF NOT EXISTS "{collection_name}_repo_id_idx" '
+            f'ON "{collection_name}" (repo_id)'
+        )
         conn.commit()
 
 

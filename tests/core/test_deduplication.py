@@ -1,4 +1,5 @@
 """Tests for DedupChecker."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

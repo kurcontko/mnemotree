@@ -4,14 +4,15 @@
 
 | Feature | Mnemotree | mem0 | Memary | A-Mem | MemOS |
 |---------|-----------|------|---------|-------|-------|
+| **LoCoMo Benchmark** | ✅ 70.0% partial credit | 66.9% | — | — | — |
 | **FSRS-4.5 Decay** | ✅ Scientifically-validated power-law forgetting | ❌ | ❌ | ❌ | ❌ |
 | **MCP Protocol** | ✅ Native MCP server | ❌ | ❌ | ❌ | ❌ |
+| **Hybrid Retrieval** | ✅ Semantic + BM25 + entity + RRF + reranking | ⚠️ Basic | ⚠️ Basic | ❌ | ❌ |
 | **Multi-Store Backend** | ✅ Neo4j, SQLite, ChromaDB | ⚠️ Limited | ⚠️ Limited | ❌ | ❌ |
 | **Memory Type Taxonomy** | ✅ 9 types + categories | ⚠️ Basic | ⚠️ Basic | ✅ | ❌ |
-| **Graph Relationships** | ✅ Neo4j native | ❌ | ⚠️ Basic | ✅ Zettelkasten | ❌ |
-| **Lite Mode (CPU-only)** | ✅ No API costs | ❌ | ❌ | ❌ | ❌ |
-| **LangChain Integration** | ✅ Native | ✅ | ✅ | ⚠️ | ⚠️ |
-| **Framework Agnostic** | ✅ | ✅ | ⚠️ | ❌ | ❌ |
+| **Graph Relationships** | ✅ Neo4j + SQLite graphs | ❌ | ⚠️ Basic | ✅ Zettelkasten | ❌ |
+| **Lite Mode (CPU-only)** | ✅ No API costs (~65MB install) | ❌ | ❌ | ❌ | ❌ |
+| **Framework Agnostic** | ✅ PydanticAI core + optional adapters | ✅ | ⚠️ | ❌ | ❌ |
 | **Open Source** | ✅ MIT | ✅ | ✅ | ✅ | ✅ |
 
 ## Unique Advantages

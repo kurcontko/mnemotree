@@ -42,7 +42,9 @@ def _install_langchain_core_stubs() -> None:
 
     class BaseRetriever:
         def __init__(self, *args, **kwargs) -> None:
-            """Mock implementation for testing."""
+            """Mock implementation that stores kwargs as attributes."""
+            for key, value in kwargs.items():
+                object.__setattr__(self, key, value)
 
     retrievers.BaseRetriever = BaseRetriever
 
