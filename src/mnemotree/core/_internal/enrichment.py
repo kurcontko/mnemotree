@@ -10,8 +10,7 @@ from ...analysis.keywords import KeywordExtractor
 from ...analysis.memory_analyzer import MemoryAnalyzer
 from ...analysis.models import MemoryAnalysisResult
 from ...analysis.summarizer import Summarizer
-from ...ner.base import BaseNER
-from ...ner.spacy import NERResult
+from ...ner.base import BaseNER, NERResult
 
 logger = logging.getLogger(__name__)
 

@@ -83,8 +83,8 @@ except ImportError:  # pragma: no cover — tested via mock
         def create_counter(self, name: str, **kwargs: Any) -> _NoOpHistogram:
             return _NoOpHistogram()
 
-    tracer = _NoOpTracer()  # type: ignore[assignment]
-    meter = _NoOpMeter()  # type: ignore[assignment]
+    tracer = _NoOpTracer()
+    meter = _NoOpMeter()
 
 
 # ---------------------------------------------------------------------------

@@ -182,15 +182,15 @@ class TestPreConfiguredSetups:
 class TestBuildMemorySystem:
     """Tests for MemorySystemConfig.build_memory_system()."""
 
-    @patch("langchain_openai.ChatOpenAI")
-    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
-    def test_build_creates_memory_core(self, mock_core_cls, mock_embeddings_cls, mock_llm_cls):
+    def test_build_creates_memory_core(self, mock_core_cls):
         """build_memory_system creates MemoryCore with provided store."""
         mock_store = MagicMock()
         mock_core_cls.return_value = MagicMock()
 
         config = MemorySystemConfig(
+            llm="test:model",
+            embeddings=MagicMock(),
             enable_consolidation=False,
             enable_truth_maintenance=False,
             enable_adaptive_decay=False,
@@ -203,19 +203,17 @@ class TestBuildMemorySystem:
         call_kwargs = mock_core_cls.call_args[1]
         assert call_kwargs["store"] is mock_store
 
-    @patch("langchain_openai.ChatOpenAI")
-    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
     @patch("mnemotree.configs.RetrieverFactory.create_hybrid")
-    def test_build_creates_hybrid_retriever(
-        self, mock_create_hybrid, mock_core_cls, mock_embeddings_cls, mock_llm_cls
-    ):
+    def test_build_creates_hybrid_retriever(self, mock_create_hybrid, mock_core_cls):
         """build_memory_system creates HybridRetriever when enabled."""
         mock_store = MagicMock()
         mock_core_cls.return_value = MagicMock()
         mock_create_hybrid.return_value = MagicMock()
 
         config = MemorySystemConfig(
+            llm="test:model",
+            embeddings=MagicMock(),
             use_hybrid_retrieval=True,
             enable_consolidation=False,
             enable_truth_maintenance=False,
@@ -227,17 +225,15 @@ class TestBuildMemorySystem:
         mock_create_hybrid.assert_called_once()
         assert system.retriever is not None
 
-    @patch("langchain_openai.ChatOpenAI")
-    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
-    def test_build_skips_hybrid_retriever_when_disabled(
-        self, mock_core_cls, mock_embeddings_cls, mock_llm_cls
-    ):
+    def test_build_skips_hybrid_retriever_when_disabled(self, mock_core_cls):
         """build_memory_system skips HybridRetriever when disabled."""
         mock_store = MagicMock()
         mock_core_cls.return_value = MagicMock()
 
         config = MemorySystemConfig(
+            llm="test:model",
+            embeddings=MagicMock(),
             use_hybrid_retrieval=False,
             enable_consolidation=False,
             enable_truth_maintenance=False,
@@ -248,12 +244,8 @@ class TestBuildMemorySystem:
 
         assert system.retriever is None
 
-    @patch("langchain_openai.ChatOpenAI")
-    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
-    def test_build_uses_provided_llm_and_embeddings(
-        self, mock_core_cls, mock_embeddings_cls, mock_llm_cls
-    ):
+    def test_build_uses_provided_llm_and_embeddings(self, mock_core_cls):
         """build_memory_system uses provided LLM and embeddings."""
         mock_store = MagicMock()
         mock_llm = MagicMock()
@@ -269,10 +261,6 @@ class TestBuildMemorySystem:
             enable_write_gate=False,
         )
         config.build_memory_system(mock_store)
-
-        # Should not create new instances
-        mock_llm_cls.assert_not_called()
-        mock_embeddings_cls.assert_not_called()
 
         # Should use provided instances
         call_kwargs = mock_core_cls.call_args[1]

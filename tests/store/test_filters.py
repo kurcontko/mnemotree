@@ -265,24 +265,18 @@ class TestBuildSqliteFilterClauses:
 
     def test_contains_escapes_percent(self):
         """CONTAINS escapes % wildcards in content search."""
-        filters = [
-            MemoryFilter(field="content", operator=FilterOperator.CONTAINS, value="100%")
-        ]
+        filters = [MemoryFilter(field="content", operator=FilterOperator.CONTAINS, value="100%")]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert params == ["%100\\%%"]
 
     def test_contains_escapes_underscore(self):
         """CONTAINS escapes _ wildcards in tag search."""
-        filters = [
-            MemoryFilter(field="tags", operator=FilterOperator.CONTAINS, value="my_tag")
-        ]
+        filters = [MemoryFilter(field="tags", operator=FilterOperator.CONTAINS, value="my_tag")]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert params == ["%,my\\_tag,%"]
 
     def test_contains_escapes_backslash(self):
         """CONTAINS escapes backslash in content search."""
-        filters = [
-            MemoryFilter(field="content", operator=FilterOperator.CONTAINS, value="a\\b")
-        ]
+        filters = [MemoryFilter(field="content", operator=FilterOperator.CONTAINS, value="a\\b")]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert params == ["%a\\\\b%"]

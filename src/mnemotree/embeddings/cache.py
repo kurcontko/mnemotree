@@ -9,7 +9,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
-from .._protocols import AsyncEmbeddingModel
+from ..core.protocols import EmbeddingModel as AsyncEmbeddingModel
 
 
 @dataclass

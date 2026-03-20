@@ -451,8 +451,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 )
                 if cascade:
                     conn.execute(
-                        f'DELETE FROM "{self._link_table}" '
-                        "WHERE source_id = ? OR target_id = ?",
+                        f'DELETE FROM "{self._link_table}" WHERE source_id = ? OR target_id = ?',
                         (memory_id, memory_id),
                     )
                 conn.commit()
@@ -605,7 +604,9 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                         "ORDER BY v.distance "
                         "LIMIT ? OFFSET ?"
                     )
-                    rows = conn.execute(sql, [vector_blob, fetch_k, *params, limit, offset]).fetchall()
+                    rows = conn.execute(
+                        sql, [vector_blob, fetch_k, *params, limit, offset]
+                    ).fetchall()
                 else:
                     sql = (
                         f'SELECT * FROM "{self.collection_name}" '

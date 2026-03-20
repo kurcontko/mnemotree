@@ -1,4 +1,5 @@
 """Unit tests for gap detection (src/mnemotree/core/gap_detection.py)."""
+
 from __future__ import annotations
 
 import pytest

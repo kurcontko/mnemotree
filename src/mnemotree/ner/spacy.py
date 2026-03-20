@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
-import spacy
+try:
+    import spacy
+except ImportError:
+    spacy = None
 
 from .base import BaseNER, NERResult
 
@@ -17,6 +20,8 @@ class SpacyNER(BaseNER):
         Args:
             model: Name of spaCy model to use
         """
+        if spacy is None:
+            raise ImportError("SpacyNER requires spacy. Install with `pip install spacy`.")
         self.nlp = spacy.load(model)
 
     async def extract_entities(self, text: str) -> NERResult:

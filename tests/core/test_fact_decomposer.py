@@ -1,4 +1,5 @@
 """Tests for FactDecomposer."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

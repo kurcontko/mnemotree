@@ -133,7 +133,9 @@ class MnemotreeHaystackMemory:
             {
                 "role": (mem.metadata or {}).get("role", "user"),
                 "content": mem.content,
-                "timestamp": mem.timestamp.isoformat() if hasattr(mem.timestamp, "isoformat") else str(mem.timestamp or ""),
+                "timestamp": mem.timestamp.isoformat()
+                if hasattr(mem.timestamp, "isoformat")
+                else str(mem.timestamp or ""),
                 "importance": mem.importance,
             }
             for mem in memories

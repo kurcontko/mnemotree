@@ -181,25 +181,19 @@ class ClaimsRegistry:
             ]
 
         # Use LLM to extract structured claims
-        from langchain.prompts import PromptTemplate
-
-        prompt = PromptTemplate.from_template(
-            """Extract atomic, verifiable claims from the following text.
-For each claim, provide:
-- Subject (what the claim is about)
-- Predicate (the relationship or property)
-- Object (the value or target)
-- Statement (natural language form)
-
-Text: {content}
-
-Format each claim as: SUBJECT | PREDICATE | OBJECT | STATEMENT
-
-Claims:"""
+        prompt = (
+            "Extract atomic, verifiable claims from the following text.\n"
+            "For each claim, provide:\n"
+            "- Subject (what the claim is about)\n"
+            "- Predicate (the relationship or property)\n"
+            "- Object (the value or target)\n"
+            "- Statement (natural language form)\n\n"
+            f"Text: {memory.content}\n\n"
+            "Format each claim as: SUBJECT | PREDICATE | OBJECT | STATEMENT\n\n"
+            "Claims:"
         )
 
-        chain = prompt | self.llm
-        result = await chain.ainvoke({"content": memory.content})
+        result = await self.llm.ainvoke(prompt)
         text = (result.content if hasattr(result, "content") else str(result)) or ""
 
         # Parse claims from LLM output
@@ -328,30 +322,21 @@ Claims:"""
 
     async def _assess_conflict_severity(self, claim1: Claim, claim2: Claim) -> ConflictSeverity:
         """Use LLM to assess conflict severity."""
-        from langchain.prompts import PromptTemplate
-
-        prompt = PromptTemplate.from_template(
-            """Assess the severity of the conflict between these two claims:
-
-Claim 1: {statement1}
-Claim 2: {statement2}
-
-Are these claims:
-- CRITICAL: Directly contradictory facts
-- HIGH: Strong contradiction
-- MEDIUM: Moderate inconsistency
-- LOW: Minor difference or contextual variation
-
-Severity:"""
+        if not self.llm:
+            return ConflictSeverity.MEDIUM
+        prompt = (
+            "Assess the severity of the conflict between these two claims:\n\n"
+            f"Claim 1: {claim1.statement}\n"
+            f"Claim 2: {claim2.statement}\n\n"
+            "Are these claims:\n"
+            "- CRITICAL: Directly contradictory facts\n"
+            "- HIGH: Strong contradiction\n"
+            "- MEDIUM: Moderate inconsistency\n"
+            "- LOW: Minor difference or contextual variation\n\n"
+            "Severity:"
         )
 
-        chain = prompt | self.llm
-        result = await chain.ainvoke(
-            {
-                "statement1": claim1.statement,
-                "statement2": claim2.statement,
-            }
-        )
+        result = await self.llm.ainvoke(prompt)
 
         if hasattr(result, "content"):
             text = (result.content or "").strip().upper()

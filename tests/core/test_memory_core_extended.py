@@ -841,20 +841,18 @@ class TestModeConfiguration:
         assert memory_core.default_analyze is True
         assert memory_core.default_summarize is True
 
-    @pytest.mark.asyncio
-    async def test_pro_mode_with_env_vars_creates_llm(self, mock_embeddings):
-        """Test pro mode creates LLM from environment variables."""
-        # TODO: Mock LLM creation to avoid external dependencies
+    def test_pro_mode_with_explicit_llm_creates_analyzer(self, mock_llm, mock_embeddings):
+        """Test pro mode creates analyzer and summarizer when LLM is provided."""
         store = MockVectorStore()
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
-            memory_core = MemoryCore(
-                store=store,
-                embeddings=mock_embeddings,
-                mode_defaults=ModeDefaultsConfig(mode="pro", enable_keywords=False),
-                ner_config=NerConfig(enable_ner=False),
-            )
+        memory_core = MemoryCore(
+            store=store,
+            llm=mock_llm,
+            embeddings=mock_embeddings,
+            mode_defaults=ModeDefaultsConfig(mode="pro", enable_keywords=False),
+            ner_config=NerConfig(enable_ner=False),
+        )
 
-            # Should have created analyzer and summarizer
-            assert memory_core.analyzer is not None
-            assert memory_core.summarizer is not None
+        # Should have created analyzer and summarizer
+        assert memory_core.analyzer is not None
+        assert memory_core.summarizer is not None

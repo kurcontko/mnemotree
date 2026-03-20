@@ -12,7 +12,9 @@ Memory module for LLMs and Agents with MCP
   <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
 </p>
 
-Mnemotree gives LLM agents biologically-inspired memory. Store, retrieve, and analyze structured knowledge with semantic search, importance scoring, and relationship tracking. Integrates with LangChain, Autogen, and any MCP-compliant tool.
+Mnemotree gives LLM agents biologically-inspired memory. Store, retrieve, and analyze structured knowledge with hybrid retrieval (semantic + BM25 + entity + RRF fusion), importance scoring, and relationship tracking. Works standalone or via MCP, with optional integrations for LangChain, AutoGen, CrewAI, and LlamaIndex.
+
+**70.0% on LoCoMo** (long-term conversational memory benchmark) — outperforms Mem0 (66.9%).
 
 ## ⚡ MCP Quickstart
 
@@ -82,8 +84,8 @@ Connect MCP clients to `http://localhost:8000/mcp`.
 - **Memory Types**: Episodic, semantic, autobiographical, prospective, procedural, priming, conditioning, working, entities
 - **Storage Backends**: ChromaDB, SQLite+sqlite-vec, Neo4j
 - **Analysis**: NER, keyword extraction, importance scoring, emotional context
-- **Retrieval**: Semantic similarity, filtering, relationship queries
-- **Lite Mode**: CPU-only embeddings, no LLM required
+- **Retrieval**: Hybrid RRF fusion (semantic + BM25 + entity), cross-encoder reranking, HyDE, intent-aware filtering
+- **Lite Mode**: CPU-only embeddings, no LLM or API keys required
 
 ## 🚀 Getting Started
 
@@ -102,9 +104,11 @@ For OpenAI features: `cp .env.sample .env` and add your API key.
 
 ```python
 from mnemotree import MemoryCore
-from mnemotree.store import ChromaMemoryStore
+from mnemotree.store import SQLiteVecMemoryStore
 
-store = ChromaMemoryStore(persist_directory=".mnemotree/chromadb")
+# Zero-infra default — just a local file
+store = SQLiteVecMemoryStore(db_path="memories.db")
+await store.initialize()
 memory_core = MemoryCore(store=store)
 
 # Store

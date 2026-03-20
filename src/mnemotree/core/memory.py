@@ -558,7 +558,10 @@ class MemoryCore:
                     importance=importance or 0.0,
                     tags=tags or [],
                     embedding=enrichment.embedding,
-                    metadata={"write_gate_rejected": True, "rejection_reason": str(gate_result.reason)},
+                    metadata={
+                        "write_gate_rejected": True,
+                        "rejection_reason": str(gate_result.reason),
+                    },
                 )
 
         # --- Fact decomposition gate (before dedup, to operate on atomic units) ---
@@ -918,9 +921,7 @@ class MemoryCore:
                     context=f"auto-linked score={score:.3f}",
                 )
         except Exception:
-            _log.warning(
-                "Background auto-linking failed for %s", memory_id, exc_info=True
-            )
+            _log.warning("Background auto-linking failed for %s", memory_id, exc_info=True)
 
     async def _detect_and_link_conflicts(self, memory: MemoryItem) -> None:
         """Fire-and-forget: detect contradictions and create CONTRADICTS links."""
@@ -1295,7 +1296,9 @@ class MemoryCore:
         if self.llm is None:
             raise RuntimeError("consolidate() requires an LLM. Pass llm= to MemoryCore.")
 
-        consolidation_cfg = config if isinstance(config, ConsolidationConfig) else ConsolidationConfig()
+        consolidation_cfg = (
+            config if isinstance(config, ConsolidationConfig) else ConsolidationConfig()
+        )
 
         consolidator = MemoryConsolidator(llm=self.llm, config=consolidation_cfg)
 
@@ -1307,7 +1310,8 @@ class MemoryCore:
             update_access=False,
         )
         memories = [
-            m for m in all_results
+            m
+            for m in all_results
             if m.memory_type in (MemoryType.EPISODIC, MemoryType.AUTOBIOGRAPHICAL)
             and (user_id is None or m.user_id == user_id)
         ]
@@ -1520,9 +1524,7 @@ class MemoryCore:
         """
         from ._internal.conflict_judge import ConflictJudge, ConflictJudgeConfig
 
-        judge = ConflictJudge(
-            config=ConflictJudgeConfig(similarity_threshold=similarity_threshold)
-        )
+        judge = ConflictJudge(config=ConflictJudgeConfig(similarity_threshold=similarity_threshold))
         annotations = judge.detect_conflicts(memories)
         return {
             mid: {
@@ -1558,9 +1560,7 @@ class MemoryCore:
         from .observer import MemoryObserver
 
         observer = MemoryObserver(llm=self.llm)
-        observations = await observer.observe(
-            content, context=context, user_id=user_id
-        )
+        observations = await observer.observe(content, context=context, user_id=user_id)
 
         memory_ids: list[str] = []
         uid = user_id or self.default_user_id
@@ -2402,8 +2402,8 @@ class MemoryCore:
             else:
                 try:
                     self.ner = SpacyNER()
-                except OSError:
-                    logger.debug("spaCy model not available, disabling NER")
+                except (OSError, ImportError):
+                    logger.debug("spaCy not available, disabling NER")
                     self.ner = None
         else:
             self.ner = None
@@ -2492,9 +2492,7 @@ class MemoryCore:
         hyde_embedder = None
         if enable_hyde:
             if self.llm is None:
-                raise ValueError(
-                    "enable_hyde=True requires an LLM. Pass llm= to MemoryCore."
-                )
+                raise ValueError("enable_hyde=True requires an LLM. Pass llm= to MemoryCore.")
             from .hyde import HyDEEmbedder
 
             hyde_embedder = HyDEEmbedder(llm=self.llm, embedder=self.embedder)
@@ -2512,9 +2510,7 @@ class MemoryCore:
         self._query_decomposer: QueryDecomposer | None = None
         if enable_ms_rag:
             if self.llm is None:
-                raise ValueError(
-                    "enable_ms_rag=True requires an LLM. Pass llm= to MemoryCore."
-                )
+                raise ValueError("enable_ms_rag=True requires an LLM. Pass llm= to MemoryCore.")
             from .query_decomposition import QueryDecomposer
 
             self._query_decomposer = QueryDecomposer(
@@ -2584,14 +2580,13 @@ class MemoryCore:
             )
             return LocalSentenceTransformerEmbeddings(model_name=lite_model)
 
-        from langchain_openai import OpenAIEmbeddings
-
-        openai_base_url = os.getenv("OPENAI_BASE_URL")
-        openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-        openai_client_kwargs: dict[str, Any] = (
-            {"base_url": openai_base_url} if openai_base_url else {}
+        # Pro mode: return a PydanticAI-compatible model string.
+        # Users who need LangChain embeddings can pass them explicitly.
+        return (
+            os.getenv("MNEMOTREE_EMBEDDING_MODEL")
+            or os.getenv("OPENAI_EMBEDDING_MODEL")
+            or "openai:text-embedding-3-small"
         )
-        return OpenAIEmbeddings(model=openai_embedding_model, **openai_client_kwargs)
 
     def _resolve_analyzer_and_summarizer(
         self,
@@ -2601,17 +2596,13 @@ class MemoryCore:
         should_enable_llm_defaults = self.default_analyze or self.default_summarize
 
         if self.mode == "pro" and llm is None and should_enable_llm_defaults:
-            try:
-                from langchain_openai import ChatOpenAI
-
-                openai_base_url = os.getenv("OPENAI_BASE_URL")
-                openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-                openai_client_kwargs: dict[str, Any] = (
-                    {"base_url": openai_base_url} if openai_base_url else {}
-                )
-                llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
-            except ImportError:
-                pass
+            # Default to a PydanticAI-compatible model string.
+            # Users who need LangChain LLMs can pass them explicitly.
+            llm = (
+                os.getenv("MNEMOTREE_LLM_MODEL")
+                or os.getenv("OPENAI_MODEL")
+                or "openai:gpt-4.1-mini"
+            )
         if llm is None:
             return None, None
         return (

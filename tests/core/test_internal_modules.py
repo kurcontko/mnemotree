@@ -56,12 +56,18 @@ class TestConflictDetector:
         detector = ConflictDetector()
         # Simulate corrupt data from DB deserialization
         a = MemoryItem.model_construct(
-            memory_id="a", content="X is not good", entities=None,
-            memory_type=MemoryType.EPISODIC, importance=0.5,
+            memory_id="a",
+            content="X is not good",
+            entities=None,
+            memory_type=MemoryType.EPISODIC,
+            importance=0.5,
         )
         b = MemoryItem.model_construct(
-            memory_id="b", content="X is good", entities=None,
-            memory_type=MemoryType.EPISODIC, importance=0.5,
+            memory_id="b",
+            content="X is good",
+            entities=None,
+            memory_type=MemoryType.EPISODIC,
+            importance=0.5,
         )
         # Should not crash
         assert detector._heuristic_conflict(a, b) is False

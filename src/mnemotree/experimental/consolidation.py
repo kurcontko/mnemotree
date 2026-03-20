@@ -277,31 +277,19 @@ class MemoryConsolidator:
         combined = "\n\n".join(contents)
 
         # Prompt for summarization
-        from langchain.prompts import PromptTemplate
-
-        prompt = PromptTemplate.from_template(
-            """You are a memory consolidation system. Given a cluster of related episodic memories,
-create a concise semantic summary that captures the key facts, patterns, and insights.
-
-Episodic Memories:
-{memories}
-
-Generate a clear, factual summary (max {max_length} chars) that:
-1. Identifies common themes and patterns
-2. Extracts key facts and insights
-3. Notes important relationships or sequences
-4. Maintains factual accuracy
-
-Summary:"""
+        prompt = (
+            "You are a memory consolidation system. Given a cluster of related episodic memories,\n"
+            "create a concise semantic summary that captures the key facts, patterns, and insights.\n\n"
+            f"Episodic Memories:\n{combined[:4000]}\n\n"
+            f"Generate a clear, factual summary (max {self.config.max_cluster_summary_length} chars) that:\n"
+            "1. Identifies common themes and patterns\n"
+            "2. Extracts key facts and insights\n"
+            "3. Notes important relationships or sequences\n"
+            "4. Maintains factual accuracy\n\n"
+            "Summary:"
         )
 
-        chain = prompt | self.llm
-        result = await chain.ainvoke(
-            {
-                "memories": combined[:4000],  # Limit input length
-                "max_length": self.config.max_cluster_summary_length,
-            }
-        )
+        result = await self.llm.ainvoke(prompt)
 
         if hasattr(result, "content") and result.content:
             return result.content.strip()

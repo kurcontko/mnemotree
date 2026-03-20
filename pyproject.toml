@@ -1,6 +1,6 @@
 [project]
 name = "mnemotree"
-version = "0.3.0"
+version = "0.4.0"
 description = "Advanced memory management and retrieval system for AI Agents"
 authors = [
     { name = "kurcontko", email = "mikeqrc@gmail.com" }
@@ -11,7 +11,6 @@ dependencies = [
     "numpy>=1.26.0,<3.0.0",
     "scikit-learn>=1.6.0,<2.0.0",
     "networkx>=3.4.0,<4.0.0",
-    "spacy>=3.8.0,<4.0.0",
     "urllib3>=2.6.0,<3.0.0",
     "filelock>=3.20.3,<4.0.0",
 
@@ -27,6 +26,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
+    "anyio>=4.0.0",
     "aiofiles>=24.1.0",
     "mypy>=1.10.0",
     "ruff>=0.5.0",
@@ -36,6 +36,7 @@ dev = [
 ]
 
 # NER backends
+ner_spacy = ["spacy>=3.8.0,<4.0.0"]
 ner_gliner = ["gliner>=0.2.0"]
 ner_hf = [
     "transformers>=4.38.0",
@@ -130,6 +131,7 @@ all = [
     "chromadb>=0.5.23",
     "pymilvus>=2.2.0",
     "sqlite-vec>=0.1.0",
+    "spacy>=3.8.0,<4.0.0",
     "sentence-transformers>=2.7.0",
     "yake>=0.4.8",
     "streamlit>=1.40.0",
@@ -159,7 +161,13 @@ include = ["src/mnemotree/py.typed"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -W error --cov=mnemotree --cov-report=term-missing"
+addopts = "-ra --cov=mnemotree --cov-report=term-missing"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pkg_resources",
+    "ignore::DeprecationWarning:google",
+    "ignore::DeprecationWarning:importlib",
+]
 testpaths = [
     "tests",
 ]
