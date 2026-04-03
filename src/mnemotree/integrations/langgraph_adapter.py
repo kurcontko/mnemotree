@@ -190,7 +190,7 @@ class MnemotreeLangGraphMemory:
             {
                 "content": mem.content,
                 "timestamp": mem.timestamp,
-                "node": mem.metadata.get("node"),
+                "node": (mem.metadata or {}).get("node"),
                 "importance": mem.importance,
             }
             for mem in memories
