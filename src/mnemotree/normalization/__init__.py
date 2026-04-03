@@ -15,8 +15,8 @@ from .temporal import TemporalNormalizer
 
 def create_normalization_pipeline(
     *,
-    enable_coref: bool = False,
-    enable_temporal: bool = False,
+    enable_coref: bool = True,
+    enable_temporal: bool = True,
     coref_backend: str = "heuristic",
 ) -> NormalizationPipeline | None:
     """Create a normalization pipeline based on configuration.

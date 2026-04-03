@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .base import BaseNormalizer
+
+logger = logging.getLogger(__name__)
 
 
 class NormalizationPipeline:
@@ -28,7 +31,14 @@ class NormalizationPipeline:
             Normalized content after all normalizers have been applied.
         """
         for normalizer in self.normalizers:
-            content = await normalizer.normalize(content, context)
+            try:
+                content = await normalizer.normalize(content, context)
+            except Exception:
+                logger.debug(
+                    "Normalizer %s failed, skipping",
+                    type(normalizer).__name__,
+                    exc_info=True,
+                )
         return content
 
     def __len__(self) -> int:

@@ -397,7 +397,7 @@ class MemoryEvaluator:
             if days_since_access > staleness_threshold_days:
                 stale_count += 1
 
-        return stale_count / len(memories)
+        return stale_count / len(memories) if memories else 0.0
 
     def calculate_diversity(self, memories: list[MemoryItem]) -> float:
         """
