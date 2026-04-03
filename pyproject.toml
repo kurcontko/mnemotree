@@ -17,18 +17,6 @@ dependencies = [
 
     # Default store — SQLite with vector search (zero-infra)
     "sqlite-vec>=0.1.0",
-
-    # Langchain
-    "langchain>=0.3.7,<0.4.0",
-    "langchain-openai>=0.2.14,<0.3.0",
-    "langchain-community>=0.3.7,<0.4.0",
-    "langchain-core>=0.3.19,<0.4.0",
-
-    # Llama-index
-    #"llama-index>=0.12.0,<0.13.0",
-
-    # LLMs
-    "openai>=1.0.0",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -72,9 +60,20 @@ vectors = [
     "sqlite-vec>=0.1.0",
 ]
 
+# LLM analysis backend (PydanticAI + OpenAI)
+analysis = [
+    "pydantic-ai-slim[openai]>=0.0.14",
+]
+
+# Full PydanticAI with all built-in providers
+analysis-full = [
+    "pydantic-ai>=0.0.14",
+]
+
 # Local embeddings
 lite = [
-    "sentence-transformers>=2.7.0"
+    "sentence-transformers>=2.7.0",
+    "pydantic-ai-slim[sentence-transformers]>=0.0.14",
 ]
 
 # Rerankers
@@ -101,20 +100,29 @@ mcp_server = [
     "chromadb>=0.5.23",
     "fastmcp<4",
     "sentence-transformers>=2.7.0",
+    "pydantic-ai-slim[openai]>=0.0.14",
 ]
 
-# Other llms providers
+# LangChain compatibility — for users who already use LangChain
+integrations = [
+    "langchain>=0.3.7,<0.4.0",
+    "langchain-core>=0.3.19,<0.4.0",
+    "langchain-openai>=0.2.14,<0.3.0",
+    "langchain-community>=0.3.7,<0.4.0",
+]
+
+# Provider extras (via PydanticAI)
 google = [
-    "langchain-google-genai>=2.0.7"
+    "pydantic-ai-slim[google]>=0.0.14",
 ]
 anthropic = [
-    "langchain-anthropic>=0.3.0"
+    "pydantic-ai-slim[anthropic]>=0.0.14",
 ]
 aws = [
-    "langchain-aws>=0.2.0"
+    "pydantic-ai-slim[bedrock]>=0.0.14",
 ]
 huggingface = [
-    "langchain-huggingface>=0.1.0"
+    "pydantic-ai-slim[huggingface]>=0.0.14",
 ]
 
 all = [
@@ -126,10 +134,7 @@ all = [
     "yake>=0.4.8",
     "streamlit>=1.40.0",
     "fastmcp<4",
-    "langchain-google-genai>=2.0.7",
-    "langchain-anthropic>=0.3.0",
-    "langchain-aws>=0.2.0",
-    "langchain-huggingface>=0.1.0"
+    "pydantic-ai>=0.0.14",
 ]
 
 [tool.uv]
