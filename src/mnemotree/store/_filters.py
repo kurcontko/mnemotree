@@ -15,6 +15,11 @@ _SQLITE_LIST_FIELDS = {
     "conflicts_with",
 }
 
+def _escape_like(value: str) -> str:
+    """Escape special LIKE characters so they match literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 _SQL_FALSE = "1 = 0"
 _SQL_TRUE = "1 = 1"
 _SUPPORTED_FIELDS = {
@@ -25,6 +30,11 @@ _SUPPORTED_FIELDS = {
     "importance",
     "confidence",
     "source",
+    "repo_id",
+    "worktree_id",
+    "task_id",
+    "agent_id",
+    "run_id",
     "tags",
     "emotions",
     "associations",
@@ -112,15 +122,15 @@ def _build_contains_clause(
     if field == "content":
         sub_clauses = []
         for item in values:
-            sub_clauses.append("content LIKE ?")
-            params.append(f"%{item}%")
+            sub_clauses.append("content LIKE ? ESCAPE '\\'")
+            params.append(f"%{_escape_like(str(item))}%")
         joined = " OR ".join(sub_clauses) if sub_clauses else _SQL_FALSE
         return _wrap_contains_clause(joined, operator)
     if field in _SQLITE_LIST_FIELDS:
         sub_clauses = []
         for item in values:
-            sub_clauses.append(f"(',' || {column} || ',') LIKE ?")
-            params.append(f"%,{item},%")
+            sub_clauses.append(f"(',' || {column} || ',') LIKE ? ESCAPE '\\'")
+            params.append(f"%,{_escape_like(str(item))},%")
         joined = " OR ".join(sub_clauses) if sub_clauses else _SQL_FALSE
         return _wrap_contains_clause(joined, operator)
     return None

@@ -13,7 +13,7 @@ class CrossEncoderReranker(BaseReranker):
     """
     Cross-encoder reranker for high-quality semantic precision.
 
-    Uses a cross-encoder model (e.g., ms-marco-MiniLM-L-6-v2) to compute
+    Uses a cross-encoder model (e.g., ms-marco-MiniLM-L-12-v2) to compute
     semantic similarity between query and candidate pairs. Cross-encoders
     process query-document pairs jointly, providing more accurate relevance
     scores than bi-encoders at the cost of speed.
@@ -21,7 +21,7 @@ class CrossEncoderReranker(BaseReranker):
     Requires: sentence-transformers (pip install sentence-transformers)
     """
 
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> None:
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-12-v2") -> None:
         """
         Initialize cross-encoder reranker.
 
@@ -76,7 +76,8 @@ class CrossEncoderReranker(BaseReranker):
     ) -> list[tuple[MemoryItem, float]]:
         """Synchronous reranking logic."""
         self._load_model()
-        assert self._model is not None
+        if self._model is None:
+            raise RuntimeError("CrossEncoder model failed to load")
 
         # Prepare query-candidate pairs
         pairs = [(query, mem.content) for mem in candidates]

@@ -5,14 +5,13 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal  # noqa: F401 — Any used for adaptive_decay type
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
-
 from ..analysis.keywords import KeywordExtractor
 from ..ner.base import BaseNER
 from ..store.protocols import MemoryCRUDStore
 from .memory import (
+    EngramConfig,
     IngestionConfig,
+    LocalModelConfig,
     MemoryCore,
     MemoryMode,
     ModeDefaultsConfig,
@@ -23,6 +22,7 @@ from .memory import (
     ScoringConfig,
 )
 from .models import MemoryItem
+from .protocols import EmbeddingModel, LLMBackend
 from .scoring import MemoryScoring
 
 _DEFAULT_DB_PATH = ".mnemotree/mnemotree.sqlite"
@@ -33,14 +33,16 @@ class MemoryCoreBuilder:
 
     def __init__(self, store: MemoryCRUDStore) -> None:
         self._store = store
-        self._llm: BaseLanguageModel | None = None
-        self._embeddings: Embeddings | None = None
+        self._llm: LLMBackend | None = None
+        self._embeddings: EmbeddingModel | None = None
         self._mode_defaults = ModeDefaultsConfig()
         self._ner_config = NerConfig()
         self._scoring_config = ScoringConfig()
         self._retrieval_config = RetrievalConfig()
         self._ingestion_config = IngestionConfig()
         self._normalization_config = NormalizationConfig()
+        self._local_model_config: LocalModelConfig | None = None
+        self._engram_config: EngramConfig | None = None
 
     @classmethod
     def default(
@@ -83,12 +85,46 @@ class MemoryCoreBuilder:
         self._mode_defaults = replace(self._mode_defaults, mode=mode)
         return self
 
-    def with_llm(self, llm: BaseLanguageModel | None) -> MemoryCoreBuilder:
+    def with_llm(self, llm: LLMBackend | None) -> MemoryCoreBuilder:
         self._llm = llm
         return self
 
-    def with_embeddings(self, embeddings: Embeddings | None) -> MemoryCoreBuilder:
+    def with_embeddings(self, embeddings: EmbeddingModel | None) -> MemoryCoreBuilder:
         self._embeddings = embeddings
+        return self
+
+    def with_local_models(
+        self,
+        router_path: str | None = None,
+        extractor_path: str | None = None,
+        *,
+        device: str = "cpu",
+        router_threshold: float = 0.55,
+        extractor_max_tokens: int = 512,
+    ) -> MemoryCoreBuilder:
+        """Configure local router + extractor models for analysis."""
+        self._local_model_config = LocalModelConfig(
+            router_path=router_path,
+            extractor_path=extractor_path,
+            device=device,
+            router_threshold=router_threshold,
+            extractor_max_tokens=extractor_max_tokens,
+        )
+        return self
+
+    def with_engram(
+        self,
+        *,
+        enable_fact_memories: bool = True,
+        enable_per_type_retrieval: bool = True,
+        per_type_k: int = 25,
+    ) -> MemoryCoreBuilder:
+        """Enable ENGRAM-style fact-as-memory architecture."""
+        self._engram_config = EngramConfig(
+            enable_fact_memories=enable_fact_memories,
+            enable_per_type_retrieval=enable_per_type_retrieval,
+            per_type_k=per_type_k,
+        )
         return self
 
     def with_default_importance(self, default_importance: float) -> MemoryCoreBuilder:
@@ -242,11 +278,108 @@ class MemoryCoreBuilder:
         enable_temporal: bool = True,
         coref_backend: str = "heuristic",
     ) -> MemoryCoreBuilder:
-        """Enable content normalization (coreference resolution + temporal anchoring)."""
+        """Enable content normalization (coreference resolution + temporal anchoring).
+
+        Normalization is enabled by default.  The ``context`` dict passed to
+        :meth:`~MemoryCore.remember` controls normalization behaviour:
+
+        - ``speaker`` (str): Current speaker name — first-person pronouns
+          ("I", "me", "my") are replaced with this name.
+        - ``other_speaker`` (str | None): The other participant — third-person
+          pronouns ("he", "she") are replaced when unambiguous.
+        - ``reference_date`` (str | datetime): Anchor date for resolving
+          relative temporal expressions ("yesterday", "3 days ago").
+        - ``recent_entities`` (list[str]): Recently mentioned entity names —
+          used to detect ambiguity in third-person pronoun resolution.
+        """
         self._normalization_config = NormalizationConfig(
             enable_coref=enable_coref,
             enable_temporal=enable_temporal,
             coref_backend=coref_backend,
+        )
+        return self
+
+    def disable_normalization(self) -> MemoryCoreBuilder:
+        """Disable content normalization (coreference + temporal)."""
+        self._normalization_config = NormalizationConfig(
+            enable_coref=False,
+            enable_temporal=False,
+        )
+        return self
+
+    def enable_dedup(
+        self, *, threshold: float = 0.88
+    ) -> MemoryCoreBuilder:
+        """Enable deduplication during ingestion."""
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            dedup_enabled=True,
+            dedup_threshold=threshold,
+        )
+        return self
+
+    def disable_dedup(self) -> MemoryCoreBuilder:
+        """Disable deduplication during ingestion."""
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            dedup_enabled=False,
+        )
+        return self
+
+    def enable_intent_filter(
+        self, *, backend: str = "keyword"
+    ) -> MemoryCoreBuilder:
+        """Enable intent-aware type pre-filtering during recall."""
+        self._retrieval_config = replace(
+            self._retrieval_config,
+            enable_intent_filter=True,
+            intent_classifier_backend=backend,
+        )
+        return self
+
+    def disable_intent_filter(self) -> MemoryCoreBuilder:
+        """Disable intent-aware type pre-filtering during recall."""
+        self._retrieval_config = replace(
+            self._retrieval_config,
+            enable_intent_filter=False,
+        )
+        return self
+
+    def enable_conflict_detection(
+        self, *, similarity_min: float = 0.55
+    ) -> MemoryCoreBuilder:
+        """Enable background conflict detection during ingestion."""
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            conflict_detection_enabled=True,
+            conflict_similarity_min=similarity_min,
+        )
+        return self
+
+    def disable_conflict_detection(self) -> MemoryCoreBuilder:
+        """Disable background conflict detection during ingestion."""
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            conflict_detection_enabled=False,
+        )
+        return self
+
+    def enable_auto_link(
+        self, *, threshold: float = 0.80
+    ) -> MemoryCoreBuilder:
+        """Enable automatic SIMILAR_TO linking after each remember."""
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            auto_link_enabled=True,
+            auto_link_threshold=threshold,
+        )
+        return self
+
+    def disable_auto_link(self) -> MemoryCoreBuilder:
+        """Disable automatic SIMILAR_TO linking after each remember."""
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            auto_link_enabled=False,
         )
         return self
 
@@ -261,6 +394,60 @@ class MemoryCoreBuilder:
             default_analyze=default_analyze,
             default_summarize=default_summarize,
         )
+        return self
+
+    def from_config(self, config: dict[str, Any]) -> MemoryCoreBuilder:
+        """Apply multiple configuration options from a dictionary.
+
+        Supported keys match :meth:`with_option` names plus convenience keys:
+
+        - ``enable_dedup`` / ``dedup_threshold``
+        - ``enable_intent_filter`` / ``intent_classifier_backend``
+        - ``enable_conflict_detection`` / ``conflict_similarity_min``
+        - ``enable_auto_link`` / ``auto_link_threshold``
+        - ``enable_coref`` / ``enable_temporal`` / ``coref_backend``
+
+        Example::
+
+            builder.from_config({
+                "retrieval_mode": "hybrid",
+                "enable_dedup": False,
+                "enable_intent_filter": False,
+                "enable_coref": True,
+                "enable_temporal": True,
+            })
+        """
+        # Normalization shorthand
+        norm_keys = {"enable_coref", "enable_temporal", "coref_backend"}
+        if norm_keys & config.keys():
+            self.with_normalization(
+                enable_coref=config.get("enable_coref", self._normalization_config.enable_coref),
+                enable_temporal=config.get("enable_temporal", self._normalization_config.enable_temporal),
+                coref_backend=config.get("coref_backend", self._normalization_config.coref_backend),
+            )
+
+        # Ingestion shorthand
+        ingestion_direct = {
+            "dedup_enabled", "dedup_threshold",
+            "auto_link_enabled", "auto_link_threshold",
+            "conflict_detection_enabled", "conflict_similarity_min",
+            "fact_decomposition_enabled", "fact_decomposition_min_length",
+            "fact_decomposition_max_facts",
+            "write_gate_enabled", "write_gate_policy",
+            "async_ingest", "ingestion_queue_size",
+        }
+        ingestion_updates = {k: v for k, v in config.items() if k in ingestion_direct}
+        if ingestion_updates:
+            self._ingestion_config = replace(self._ingestion_config, **ingestion_updates)
+
+        # Remaining keys go through with_option
+        handled = norm_keys | ingestion_direct
+        for key, value in config.items():
+            if key not in handled:
+                try:
+                    self.with_option(key, value)
+                except ValueError:
+                    pass  # skip unknown keys silently
         return self
 
     def with_option(self, name: str, value: Any) -> MemoryCoreBuilder:
@@ -346,6 +533,15 @@ class MemoryCoreBuilder:
         ingestion_fields = {
             "async_ingest": "async_ingest",
             "ingestion_queue_size": "ingestion_queue_size",
+            "dedup_enabled": "dedup_enabled",
+            "dedup_threshold": "dedup_threshold",
+            "auto_link_enabled": "auto_link_enabled",
+            "auto_link_threshold": "auto_link_threshold",
+            "conflict_detection_enabled": "conflict_detection_enabled",
+            "conflict_similarity_min": "conflict_similarity_min",
+            "fact_decomposition_enabled": "fact_decomposition_enabled",
+            "write_gate_enabled": "write_gate_enabled",
+            "write_gate_policy": "write_gate_policy",
         }
         ingestion_field = ingestion_fields.get(name)
         if ingestion_field:
@@ -364,4 +560,6 @@ class MemoryCoreBuilder:
             retrieval_config=self._retrieval_config,
             ingestion_config=self._ingestion_config,
             normalization_config=self._normalization_config,
+            local_model_config=self._local_model_config,
+            engram_config=self._engram_config,
         )
