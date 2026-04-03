@@ -11,6 +11,8 @@ def keyword_overlap_score(tags: list[str] | None, keywords: list[str] | None) ->
         return 0.0
     tag_tokens: set[str] = set()
     for tag in tags:
+        if not tag or not isinstance(tag, str):
+            continue
         lowered = tag.lower()
         tag_tokens.add(lowered)
         tag_tokens.update(lowered.replace("-", " ").split())
@@ -52,7 +54,7 @@ class SignalRanker:
     """Ranks memories based on composite signals (RRF, Entity, Keywords)."""
 
     def __init__(
-        self, rrf_weight: float = 0.20, entity_boost: float = 0.10, keyword_boost: float = 0.10
+        self, rrf_weight: float = 0.15, entity_boost: float = 0.05, keyword_boost: float = 0.10
     ):
         self.rrf_weight = rrf_weight
         self.entity_boost = entity_boost

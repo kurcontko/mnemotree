@@ -88,19 +88,24 @@ class StandardEnrichmentPipeline:
             tasks["ner"] = asyncio.create_task(self.ner.extract_entities(content))
         if self.keyword_extractor:
             tasks["keywords"] = asyncio.create_task(self.keyword_extractor.extract(content))
-        if summarize:
-            assert self.summarizer is not None
+        if summarize and self.summarizer is not None:
             tasks["summary"] = asyncio.create_task(self.summarizer.summarize(content))
-        if analyze:
-            assert self.analyzer is not None
+        if analyze and self.analyzer is not None:
             tasks["analysis"] = asyncio.create_task(self.analyzer.analyze(content, context))
 
-        # Execute
+        # Execute — use return_exceptions so a single task failure
+        # (e.g. NER model not loaded) doesn't crash the entire pipeline
         task_items = list(tasks.items())
-        task_results = await asyncio.gather(*(task for _, task in task_items))
-        results_by_key = {
-            name: result for (name, _), result in zip(task_items, task_results, strict=True)
-        }
+        task_results = await asyncio.gather(
+            *(task for _, task in task_items), return_exceptions=True
+        )
+        results_by_key: dict[str, Any] = {}
+        for (name, _), result in zip(task_items, task_results, strict=True):
+            if isinstance(result, BaseException):
+                logger.debug("Enrichment task %s failed", name, exc_info=result)
+                results_by_key[name] = None
+            else:
+                results_by_key[name] = result
 
         logger.debug(
             "enrich done duration_ms=%.2f produced=%s",
@@ -109,7 +114,7 @@ class StandardEnrichmentPipeline:
         )
 
         # Process results
-        embedding = results_by_key["embedding"]
+        embedding = results_by_key["embedding"] or []
         ner_result = results_by_key.get("ner")
         entities, entity_mentions = self._resolve_entities(ner_result, text=content)
 

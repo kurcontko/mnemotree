@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from ..core.models import EmotionCategory, MemoryType
+from ..core.models import EmotionCategory, LinkType, MemoryType
 
 
 class FilterOperator(str, Enum):
@@ -235,3 +235,42 @@ class MemoryQueryBuilder:
         for hook in self._pre_build_hooks:
             await hook(query)
         return query
+
+
+@dataclass
+class TypedPathQuery:
+    """Query DSL for Semantic GraphRAG-style typed-path traversal.
+
+    Describes a sequence of typed link hops to traverse from seed memories.
+    When `start_ids` is empty, seeds are found via vector search on `seed_query`.
+
+    Examples::
+
+        # Two-hop: CAUSES → PART_OF
+        q = TypedPathQuery(
+            start_ids=[],
+            path_pattern=[LinkType.CAUSES, LinkType.PART_OF],
+        )
+
+        # Start from specific memories, traverse SUPPORTS links
+        q = TypedPathQuery(
+            start_ids=["mem-123", "mem-456"],
+            path_pattern=[LinkType.SUPPORTS],
+            min_strength=0.5,
+        )
+    """
+
+    start_ids: list[str] = field(default_factory=list)
+    """Seed memory IDs. If empty, vector search is used to find seeds."""
+
+    path_pattern: list[LinkType] = field(default_factory=list)
+    """Ordered sequence of LinkType values — one per hop."""
+
+    min_strength: float = 0.0
+    """Minimum link strength to traverse (0.0 = no filtering)."""
+
+    seed_query: str | None = None
+    """Fallback text query for seeding when start_ids is empty."""
+
+    limit: int = 10
+    """Maximum number of end-node memories to return."""

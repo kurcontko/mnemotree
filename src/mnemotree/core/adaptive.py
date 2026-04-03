@@ -203,7 +203,7 @@ class AdaptiveDecaySystem:
 
     def _recency_multiplier(self, memory: MemoryItem, current_time: datetime) -> float:
         last_accessed = coerce_datetime(memory.last_accessed, default=current_time)
-        days = (current_time - last_accessed).total_seconds() / 86400.0
+        days = max(0.0, (current_time - last_accessed).total_seconds() / 86400.0)
         if days < 1:
             return 2.0
         elif days < 7:
@@ -242,6 +242,10 @@ class AdaptiveDecaySystem:
         self._recent_embeddings = [
             (mid, ts, emb) for mid, ts, emb in self._recent_embeddings if ts > cutoff
         ]
+        # Cap list size to prevent unbounded growth
+        _MAX_RECENT_EMBEDDINGS = 10000
+        if len(self._recent_embeddings) > _MAX_RECENT_EMBEDDINGS:
+            self._recent_embeddings = self._recent_embeddings[-_MAX_RECENT_EMBEDDINGS:]
 
         if memory.embedding is not None and memory.embedding:
             similar_count = sum(

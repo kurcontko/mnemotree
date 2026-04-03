@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Any, Literal, overload
 from uuid import uuid4
 
-from langchain.schema import Document
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -68,6 +67,48 @@ class EmotionCategory(str, Enum):
     EXCITEMENT = "excitement"
 
 
+class ObservationStatus(str, Enum):
+    """Status of an agent observation, supporting evidence-backed memory."""
+
+    HYPOTHESIS = "hypothesis"  # Unverified guess
+    TENTATIVE = "tentative"  # Initial observation, not yet confirmed
+    CONFIRMED = "confirmed"  # Validated by evidence (test, commit, benchmark)
+    REFUTED = "refuted"  # Disproven by later evidence
+
+
+class ObservationKind(str, Enum):
+    """Kind of agent observation for structured recall."""
+
+    ATTEMPT = "attempt"  # Something the agent tried
+    RESULT = "result"  # Outcome of an attempt
+    DECISION = "decision"  # Architectural or design decision
+    HANDOFF = "handoff"  # Context for the next agent/session
+    WARNING = "warning"  # Pitfall or anti-pattern discovered
+    OBSERVATION = "observation"  # General observation
+
+
+def compute_observation_confidence(
+    status: ObservationStatus,
+    evidence_refs: list[str] | None = None,
+) -> float:
+    """Compute confidence score from observation status and evidence references.
+
+    Base confidence by status:
+        hypothesis=0.3, tentative=0.5, confirmed=0.85, refuted=0.1
+    Boost: +0.05 per evidence_ref, capped at +0.15.
+    Final value clamped to [0.0, 1.0].
+    """
+    base_map = {
+        ObservationStatus.HYPOTHESIS: 0.3,
+        ObservationStatus.TENTATIVE: 0.5,
+        ObservationStatus.CONFIRMED: 0.85,
+        ObservationStatus.REFUTED: 0.1,
+    }
+    base = base_map.get(status, 0.5)
+    evidence_boost = min(0.15, len(evidence_refs or []) * 0.05)
+    return min(1.0, max(0.0, base + evidence_boost))
+
+
 class LinkType(str, Enum):
     """Semantic relationship types inspired by Zettelkasten."""
 
@@ -82,6 +123,9 @@ class LinkType(str, Enum):
     FOLLOWS = "follows"  # Sequence
     PART_OF = "part_of"  # Component
     DERIVES_FROM = "derives_from"  # Intellectual lineage
+    SUPERSEDES = "supersedes"  # Replaces an older memory (A-MEM evolution)
+    UPDATES = "updates"  # Partial update of an older memory
+    SEQUENCE = "sequence"  # Temporal ordering (MAGMA four-graph)
 
 
 @overload
@@ -136,57 +180,64 @@ class MemoryItem(BaseModel):
     - Lists of references (e.g., linked_concepts as string IDs)
 
     Attributes:
-        memory_id (str): Unique identifier for the memory
-        conversation_id (Optional[str]): Reference to parent conversation
-        user_id (Optional[str]): Reference to owner/creator
-
-        # Core Information
-        content (str): Main content of the memory
-        summary (Optional[str]): Condensed version of content
-        tags (List[str]): Categorization labels
-        author (Optional[str]): Creator of the memory
-        memory_type (MemoryType): Type classification (episodic, semantic, etc.)
-        timestamp (datetime): Creation time in UTC
-
-        # Access Tracking
-        last_accessed (datetime): Last retrieval time in UTC
-        access_count (int): Number of times retrieved
-        access_history (List[datetime]): Timestamp history of accesses
-
-        # Quality Metrics
-        importance (float): Relevance score (0-1)
-        decay_rate (float): Memory degradation rate
-        confidence (float): Certainty level (0-1)
-        fidelity (float): Quality/accuracy score (0-1)
-
-        # Emotional Components (flattened from EmotionalContext)
-        emotional_valence (Optional[float]): Negative to positive (-1 to 1)
-        emotional_arousal (Optional[float]): Intensity level (0-1)
-        emotions (List[Union[EmotionCategory, str]]): Identified emotions
-
-        # Relationships (flattened from Connections)
-        linked_concepts (List[str]): Related concept IDs
-        associations (List[str]): Positively related memory IDs
-        conflicts_with (List[str]): Negatively related memory IDs
-        previous_event_id (Optional[str]): Temporal predecessor
-        next_event_id (Optional[str]): Temporal successor
-
-        # Source Attribution (flattened from SourceInfo)
-        source (Optional[str]): Origin reference
-        credibility (Optional[float]): Source reliability (0-1)
-
-        # Vector Representation
-        embedding (Optional[List[float]]): Vector embedding for similarity search
-
-        # Additional Data
-        context (Optional[Union[Dict[str, Any], str]]): Contextual information
-        metadata (Dict[str, Any]): Flexible additional attributes
+        memory_id: Unique identifier for the memory
+        conversation_id: Reference to parent conversation
+        user_id: Reference to owner/creator
+        repo_id: Repository scope identifier for shared agent memory
+        worktree_id: Worktree scope identifier within a repository
+        task_id: Task scope identifier within a repository/worktree
+        agent_id: Agent identity for shared memory and coordination
+        run_id: Specific run/session identifier for an agent
+        content: Main content of the memory
+        summary: Condensed version of content
+        tags: Categorization labels
+        author: Creator of the memory
+        memory_type: Type classification (episodic, semantic, etc.)
+        timestamp: Creation time in UTC (storage time)
+        event_time: When the event actually happened (vs timestamp = storage time)
+        valid_from: Temporal validity start (bi-temporal)
+        valid_until: Temporal validity end (None = still valid)
+        observation_date: Mastra-style 3-date anchoring — when the observation was made
+        referenced_date: Date the memory refers to
+        temporal_offset: Relative offset hint ("2 days ago")
+        contextual_intent: STITCH inferred intent at ingest time
+        is_hot: Codified Context — HOT memories always included, COLD retrieved on-demand
+        last_accessed: Last retrieval time in UTC
+        access_count: Number of times retrieved
+        access_history: Timestamp history of accesses
+        importance: Relevance score (0-1)
+        decay_rate: Memory degradation rate (deprecated, kept for compat)
+        confidence: Certainty level (0-1)
+        fidelity: Quality/accuracy score (0-1)
+        emotional_valence: Negative to positive (-1 to 1)
+        emotional_arousal: Intensity level (0-1)
+        emotions: Identified emotions
+        linked_concepts: Related concept IDs
+        associations: Positively related memory IDs
+        conflicts_with: Negatively related memory IDs (auto-populated by conflict detection)
+        previous_event_id: Temporal predecessor
+        next_event_id: Temporal successor
+        source: Origin reference
+        credibility: Source reliability (0-1)
+        embedding: Vector embedding for similarity search
+        context: Contextual information
+        metadata: Flexible additional attributes
     """
 
     # Core Identifiers
     memory_id: str = Field(default_factory=lambda: str(uuid4()))
     conversation_id: str | None = None  # TODO: Handle this field in memory core
     user_id: str | None = None  # TODO: Handle this field in memory core
+    repo_id: str | None = None
+    worktree_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    run_id: str | None = None
+
+    # Observation semantics (Phase 2: agent layer)
+    observation_status: ObservationStatus | None = None
+    observation_kind: ObservationKind | None = None
+    evidence_refs: list[str] = Field(default_factory=list)  # commit SHAs, file paths, test names, issue URLs
 
     # Core Information
     content: str
@@ -200,6 +251,18 @@ class MemoryItem(BaseModel):
     author: str | None = None
     memory_type: MemoryType
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Bi-temporal fields (TSM / Mastra OM 3-date anchoring)
+    event_time: datetime | None = None  # When the event actually happened (vs timestamp = storage time)
+    valid_from: datetime | None = None  # Temporal validity start
+    valid_until: datetime | None = None  # Temporal validity end (None = still valid)
+    observation_date: datetime | None = None  # Mastra-style: when the observation was made
+    referenced_date: datetime | None = None  # Date the memory refers to
+    temporal_offset: str | None = None  # Relative offset hint ("2 days ago", "last week")
+
+    # Retrieval hints
+    contextual_intent: str | None = None  # STITCH: inferred intent at ingest time (+35.6% retrieval)
+    is_hot: bool = False  # Codified Context: HOT memories always included, COLD retrieved on-demand
 
     # Access information
     last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -469,7 +532,7 @@ class MemoryItem(BaseModel):
 
         return "\n".join(parts)
 
-    def to_langchain_document(self) -> "Document":
+    def to_langchain_document(self) -> Any:
         """
         Convert the MemoryItem to a LangChain Document.
         Requires langchain to be installed.
@@ -506,6 +569,11 @@ class MemoryItem(BaseModel):
             "linked_concepts": self.linked_concepts if self.linked_concepts else None,
             # Include source info
             "source": self.source if self.source else None,
+            "repo_id": self.repo_id,
+            "worktree_id": self.worktree_id,
+            "task_id": self.task_id,
+            "agent_id": self.agent_id,
+            "run_id": self.run_id,
         }
 
         # Add any custom context and metadata
@@ -566,6 +634,6 @@ class MemoryLink(BaseModel):
             current_time: Current datetime for calculating elapsed time
             decay_rate: Rate of decay (default 0.01)
         """
-        elapsed_seconds = (current_time - self.last_accessed).total_seconds()
+        elapsed_seconds = max(0.0, (current_time - self.last_accessed).total_seconds())
         decay_factor = 1.0 / (1.0 + decay_rate * elapsed_seconds)
         self.strength *= decay_factor
