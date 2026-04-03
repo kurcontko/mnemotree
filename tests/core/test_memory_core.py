@@ -164,6 +164,55 @@ async def test_lite_mode_defaults(mock_store, mock_embeddings):
 
 
 @pytest.mark.asyncio
+async def test_remember_applies_agent_scope_fields(mock_store, mock_embeddings):
+    memory_core = MemoryCore(
+        store=mock_store,
+        embeddings=mock_embeddings,
+        mode_defaults=ModeDefaultsConfig(mode="lite", enable_keywords=False),
+        ner_config=NerConfig(enable_ner=False),
+    )
+
+    memory = await memory_core.remember(
+        "Scoped content",
+        repo_id="repo-1",
+        worktree_id="wt-1",
+        task_id="task-1",
+        agent_id="agent-1",
+        run_id="run-1",
+    )
+
+    assert memory.repo_id == "repo-1"
+    assert memory.worktree_id == "wt-1"
+    assert memory.task_id == "task-1"
+    assert memory.agent_id == "agent-1"
+    assert memory.run_id == "run-1"
+
+
+@pytest.mark.asyncio
+async def test_recall_injects_default_agent_scope_filters(mock_store, mock_embeddings):
+    memory_core = MemoryCore(
+        store=mock_store,
+        embeddings=mock_embeddings,
+        mode_defaults=ModeDefaultsConfig(mode="lite", enable_keywords=False),
+        ner_config=NerConfig(enable_ner=False),
+        default_repo_id="repo-1",
+        default_worktree_id="wt-1",
+        default_task_id="task-1",
+        default_agent_id="agent-1",
+    )
+    memory_core._recall_single = AsyncMock(return_value=[])
+
+    await memory_core.recall("status")
+
+    passed_filters = memory_core._recall_single.await_args.kwargs["filters"]
+    assert passed_filters is not None
+    assert passed_filters.repo_id == "repo-1"
+    assert passed_filters.worktree_id == "wt-1"
+    assert passed_filters.task_id == "task-1"
+    assert passed_filters.agent_id == "agent-1"
+
+
+@pytest.mark.asyncio
 async def test_search_uses_bm25_index_when_enabled(mock_store, mock_embeddings):
     memory_core = MemoryCore(
         store=mock_store,
@@ -317,3 +366,33 @@ def test_rrf_post_rerank_uses_similarity_and_rrf_scores():
         },
     )
     assert [m.memory_id for m in reranked] == ["m2", "m1"]
+
+
+@pytest.mark.asyncio
+async def test_consolidate_requires_llm(mock_store, mock_embeddings):
+    """consolidate() must raise RuntimeError when no LLM is configured."""
+    core = MemoryCore(
+        store=mock_store,
+        llm=None,
+        embeddings=mock_embeddings,
+    )
+    with pytest.raises(RuntimeError, match="requires an LLM"):
+        await core.consolidate()
+
+
+@pytest.mark.asyncio
+async def test_consolidate_empty_memories(memory_core, mock_store):
+    """consolidate() returns zero-count result when no episodic memories exist."""
+    # recall("*") returns only semantic memories → no episodic to consolidate
+    semantic = MemoryItem(
+        content="semantic fact",
+        memory_type=MemoryType.SEMANTIC,
+        importance=0.5,
+    )
+    memory_core.retrieval.recall = AsyncMock(return_value=[semantic])
+
+    result = await memory_core.consolidate()
+
+    assert result.total_memories_processed == 0
+    assert result.clusters_formed == 0
+    assert result.semantic_memories_created == 0

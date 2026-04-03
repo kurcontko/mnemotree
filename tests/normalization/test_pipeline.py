@@ -101,3 +101,28 @@ def test_factory_both_enabled():
     result = create_normalization_pipeline(enable_coref=True, enable_temporal=True)
     assert result is not None
     assert len(result) == 2
+
+
+# --- Error handling tests ---
+
+
+class FailingNormalizer(BaseNormalizer):
+    """Normalizer that always raises."""
+
+    async def normalize(self, content, context=None):
+        raise RuntimeError("normalizer crashed")
+
+
+async def test_pipeline_skips_failing_normalizer():
+    """A failing normalizer should be skipped, not crash the pipeline."""
+    pipeline = NormalizationPipeline([UpperNormalizer(), FailingNormalizer(), SuffixNormalizer()])
+    result = await pipeline.normalize("hello")
+    # UpperNormalizer runs, FailingNormalizer is skipped, SuffixNormalizer runs on uppercase result
+    assert result == "HELLO [normalized]"
+
+
+async def test_pipeline_all_failing_returns_original():
+    """If all normalizers fail, return the original content unchanged."""
+    pipeline = NormalizationPipeline([FailingNormalizer(), FailingNormalizer()])
+    result = await pipeline.normalize("untouched")
+    assert result == "untouched"

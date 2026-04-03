@@ -631,46 +631,39 @@ class TestStanzaNER:
             assert result.mentions == {}
 
 
-class TestLangchainLLMNER:
-    """Tests for LangchainLLMNER backend."""
+class TestPydanticAILLMNER:
+    """Tests for PydanticAI-based LLM NER (backward-compat alias: LangchainLLMNER)."""
 
     def test_initialization(self):
-        """LangchainLLMNER stores LLM and sets up parser."""
-        from mnemotree.ner.llm import LangchainLLMNER
+        """PydanticAILLMNER stores model and defers agent creation."""
+        from mnemotree.ner.llm import LangchainLLMNER, PydanticAILLMNER
 
-        mock_llm = MagicMock()
-        ner = LangchainLLMNER(llm=mock_llm)
-
-        assert ner.llm is mock_llm
-        assert ner.parser is not None
-        assert "entities" in ner.prompt_template
+        ner = PydanticAILLMNER(model="test-model")
+        assert ner is not None
+        # Backward-compat alias works
+        assert LangchainLLMNER is PydanticAILLMNER
 
     @pytest.mark.asyncio
     async def test_extract_entities_success(self):
-        """LangchainLLMNER extracts entities from LLM response."""
-        from mnemotree.ner.llm import LangchainLLMNER
+        """PydanticAILLMNER extracts entities from LLM response."""
+        from mnemotree.ner.base import NERResult
+        from mnemotree.ner.llm import PydanticAILLMNER
 
-        mock_llm = MagicMock()
-        ner = LangchainLLMNER(llm=mock_llm)
+        ner = PydanticAILLMNER(model="test-model")
 
-        # Mock the chain execution
-        with patch.object(ner, "parser") as mock_parser:
-            mock_parser.get_format_instructions.return_value = "format instructions"
+        mock_ner_result = NERResult(
+            entities={"Apple": "ORG", "Tim Cook": "PERSON"},
+            mentions={},
+            confidence={"Apple": 0.95, "Tim Cook": 0.9},
+        )
+        mock_run_result = MagicMock()
+        mock_run_result.output = mock_ner_result
 
-            # Create a mock chain that returns parsed result
-            mock_chain = AsyncMock()
-            mock_chain.ainvoke.return_value = {
-                "entities": {"Apple": "ORG", "Tim Cook": "PERSON"},
-                "mentions": {},
-                "confidence": {"Apple": 0.95, "Tim Cook": 0.9},
-            }
+        ner._agent = MagicMock()
+        ner._agent.run = AsyncMock(return_value=mock_run_result)
 
-            with patch("mnemotree.ner.llm.PromptTemplate") as mock_prompt:
-                mock_prompt.return_value.__or__ = lambda self, other: MagicMock(
-                    __or__=lambda self, other: mock_chain
-                )
-
-                result = await ner.extract_entities("Apple CEO Tim Cook announced...")
+        text = "Apple CEO Tim Cook announced new products"
+        result = await ner.extract_entities(text)
 
         assert "Apple" in result.entities
         assert result.entities["Apple"] == "ORG"
@@ -678,103 +671,39 @@ class TestLangchainLLMNER:
         assert result.entities["Tim Cook"] == "PERSON"
 
     @pytest.mark.asyncio
-    async def test_extract_entities_validation_error_returns_empty(self):
-        """LangchainLLMNER returns empty result on validation error."""
-        from pydantic import ValidationError
+    async def test_extract_entities_error_returns_empty(self):
+        """PydanticAILLMNER returns empty result on error."""
+        from mnemotree.ner.llm import PydanticAILLMNER
 
-        from mnemotree.ner.llm import LangchainLLMNER
+        ner = PydanticAILLMNER(model="test-model")
+        ner._agent = MagicMock()
+        ner._agent.run = AsyncMock(side_effect=RuntimeError("LLM failed"))
 
-        mock_llm = MagicMock()
-        ner = LangchainLLMNER(llm=mock_llm)
-
-        with patch.object(ner, "parser") as mock_parser:
-            mock_parser.get_format_instructions.return_value = "format"
-
-            # Create a mock chain that raises ValidationError
-            mock_chain = AsyncMock()
-            mock_chain.ainvoke.side_effect = ValidationError.from_exception_data("test", [])
-
-            with patch("mnemotree.ner.llm.PromptTemplate") as mock_prompt:
-                mock_prompt.return_value.__or__ = lambda self, other: MagicMock(
-                    __or__=lambda self, other: mock_chain
-                )
-
-                result = await ner.extract_entities("Some text")
-
+        result = await ner.extract_entities("Some text")
         assert result.entities == {}
         assert result.mentions == {}
 
     @pytest.mark.asyncio
-    async def test_extract_entities_type_error_returns_empty(self):
-        """LangchainLLMNER returns empty result on TypeError."""
-        from mnemotree.ner.llm import LangchainLLMNER
-
-        mock_llm = MagicMock()
-        ner = LangchainLLMNER(llm=mock_llm)
-
-        with patch.object(ner, "parser") as mock_parser:
-            mock_parser.get_format_instructions.return_value = "format"
-
-            mock_chain = AsyncMock()
-            mock_chain.ainvoke.side_effect = TypeError("type error")
-
-            with patch("mnemotree.ner.llm.PromptTemplate") as mock_prompt:
-                mock_prompt.return_value.__or__ = lambda self, other: MagicMock(
-                    __or__=lambda self, other: mock_chain
-                )
-
-                result = await ner.extract_entities("Some text")
-
-        assert result.entities == {}
-
-    @pytest.mark.asyncio
-    async def test_extract_entities_value_error_returns_empty(self):
-        """LangchainLLMNER returns empty result on ValueError."""
-        from mnemotree.ner.llm import LangchainLLMNER
-
-        mock_llm = MagicMock()
-        ner = LangchainLLMNER(llm=mock_llm)
-
-        with patch.object(ner, "parser") as mock_parser:
-            mock_parser.get_format_instructions.return_value = "format"
-
-            mock_chain = AsyncMock()
-            mock_chain.ainvoke.side_effect = ValueError("value error")
-
-            with patch("mnemotree.ner.llm.PromptTemplate") as mock_prompt:
-                mock_prompt.return_value.__or__ = lambda self, other: MagicMock(
-                    __or__=lambda self, other: mock_chain
-                )
-
-                result = await ner.extract_entities("Some text")
-
-        assert result.entities == {}
-
-    @pytest.mark.asyncio
     async def test_mention_extraction_finds_all_occurrences(self):
-        """LangchainLLMNER finds all occurrences of entity in text."""
-        from mnemotree.ner.llm import LangchainLLMNER
+        """PydanticAILLMNER finds all occurrences of entity in text."""
+        from mnemotree.ner.base import NERResult
+        from mnemotree.ner.llm import PydanticAILLMNER
 
-        mock_llm = MagicMock()
-        ner = LangchainLLMNER(llm=mock_llm)
+        ner = PydanticAILLMNER(model="test-model")
 
-        with patch.object(ner, "parser") as mock_parser:
-            mock_parser.get_format_instructions.return_value = "format"
+        mock_ner_result = NERResult(
+            entities={"NYC": "LOC"},
+            mentions={},
+            confidence={},
+        )
+        mock_run_result = MagicMock()
+        mock_run_result.output = mock_ner_result
 
-            mock_chain = AsyncMock()
-            mock_chain.ainvoke.return_value = {
-                "entities": {"NYC": "LOC"},
-                "mentions": {},
-                "confidence": {},
-            }
+        ner._agent = MagicMock()
+        ner._agent.run = AsyncMock(return_value=mock_run_result)
 
-            with patch("mnemotree.ner.llm.PromptTemplate") as mock_prompt:
-                mock_prompt.return_value.__or__ = lambda self, other: MagicMock(
-                    __or__=lambda self, other: mock_chain
-                )
-
-                text = "I flew from NYC to LA and then back to NYC"
-                result = await ner.extract_entities(text)
+        text = "I flew from NYC to LA and then back to NYC"
+        result = await ner.extract_entities(text)
 
         # Should find NYC twice
         assert len(result.mentions.get("NYC", [])) == 2
