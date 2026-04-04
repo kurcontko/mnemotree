@@ -1,0 +1,112 @@
+{
+  "benchmark": "longmemeval",
+  "split": "oracle",
+  "num_cases": 12,
+  "k": 20,
+  "judge_enabled": true,
+  "mnemotree": {
+    "summary": {
+      "accuracy": 0.8333333333333334,
+      "total": 12,
+      "by_category": {
+        "knowledge-update": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "multi-session": {
+          "accuracy": 0.5,
+          "count": 2
+        },
+        "single-session-assistant": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "single-session-preference": {
+          "accuracy": 0.5,
+          "count": 2
+        },
+        "single-session-user": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "temporal-reasoning": {
+          "accuracy": 1.0,
+          "count": 2
+        }
+      }
+    },
+    "stats": {
+      "avg_case_ms": 54541.173434331235
+    }
+  },
+  "obsidian_baseline": {
+    "summary": {
+      "accuracy": 0.9166666666666666,
+      "total": 12,
+      "by_category": {
+        "knowledge-update": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "multi-session": {
+          "accuracy": 0.5,
+          "count": 2
+        },
+        "single-session-assistant": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "single-session-preference": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "single-session-user": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "temporal-reasoning": {
+          "accuracy": 1.0,
+          "count": 2
+        }
+      }
+    },
+    "stats": {
+      "avg_case_ms": 1781.18846565485
+    }
+  },
+  "markdown_baseline": {
+    "summary": {
+      "accuracy": 0.75,
+      "total": 12,
+      "by_category": {
+        "knowledge-update": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "multi-session": {
+          "accuracy": 0.5,
+          "count": 2
+        },
+        "single-session-assistant": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "single-session-preference": {
+          "accuracy": 0.5,
+          "count": 2
+        },
+        "single-session-user": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "temporal-reasoning": {
+          "accuracy": 0.5,
+          "count": 2
+        }
+      }
+    },
+    "stats": {
+      "avg_case_ms": 1737.2516349811729
+    }
+  }
+}

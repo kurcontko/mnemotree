@@ -1,0 +1,78 @@
+{
+  "benchmark": "locomo",
+  "split": "locomo10",
+  "num_cases": 20,
+  "k": 20,
+  "judge_enabled": true,
+  "mnemotree": {
+    "summary": {
+      "accuracy": 0.75,
+      "total": 20,
+      "by_category": {
+        "multi_hop": {
+          "accuracy": 1.0,
+          "count": 2
+        },
+        "single_hop": {
+          "accuracy": 0.5625,
+          "count": 8
+        },
+        "temporal": {
+          "accuracy": 0.85,
+          "count": 10
+        }
+      }
+    },
+    "stats": {
+      "avg_case_ms": 2017.140505835414
+    }
+  },
+  "obsidian_baseline": {
+    "summary": {
+      "accuracy": 0.65,
+      "total": 20,
+      "by_category": {
+        "multi_hop": {
+          "accuracy": 0.75,
+          "count": 2
+        },
+        "single_hop": {
+          "accuracy": 0.5,
+          "count": 8
+        },
+        "temporal": {
+          "accuracy": 0.75,
+          "count": 10
+        }
+      }
+    },
+    "stats": {
+      "avg_case_ms": 1631.3339111511596,
+      "total_tokens_stored": 13361
+    }
+  },
+  "markdown_baseline": {
+    "summary": {
+      "accuracy": 0.575,
+      "total": 20,
+      "by_category": {
+        "multi_hop": {
+          "accuracy": 0.75,
+          "count": 2
+        },
+        "single_hop": {
+          "accuracy": 0.4375,
+          "count": 8
+        },
+        "temporal": {
+          "accuracy": 0.65,
+          "count": 10
+        }
+      }
+    },
+    "stats": {
+      "avg_case_ms": 1773.199326521717,
+      "total_tokens_stored": 13361
+    }
+  }
+}
