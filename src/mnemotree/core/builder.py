@@ -233,6 +233,40 @@ class MemoryCoreBuilder:
         self._retrieval_config = replace(self._retrieval_config, enable_prf=False)
         return self
 
+    def with_dedup(self, *, threshold: float = 0.88) -> MemoryCoreBuilder:
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            dedup_enabled=True,
+            dedup_threshold=threshold,
+        )
+        return self
+
+    def disable_dedup(self) -> MemoryCoreBuilder:
+        """Disable deduplication during ingestion."""
+        self._ingestion_config = replace(
+            self._ingestion_config,
+            dedup_enabled=False,
+        )
+        return self
+
+    def with_intent_filter(
+        self, *, backend: Literal["keyword", "llm"] = "keyword"
+    ) -> MemoryCoreBuilder:
+        self._retrieval_config = replace(
+            self._retrieval_config,
+            enable_intent_filter=True,
+            intent_classifier_backend=backend,
+        )
+        return self
+
+    def disable_intent_filter(self) -> MemoryCoreBuilder:
+        """Disable intent-aware type pre-filtering during recall."""
+        self._retrieval_config = replace(
+            self._retrieval_config,
+            enable_intent_filter=False,
+        )
+        return self
+
     def with_normalization(
         self,
         *,

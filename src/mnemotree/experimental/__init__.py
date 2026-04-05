@@ -32,6 +32,15 @@ from .consolidation import (
     ConsolidationResult,
     MemoryConsolidator,
 )
+from .consolidation_lock import (
+    ConsolidationLock,
+    LockState,
+)
+from .consolidation_scheduler import (
+    ConsolidationScheduler,
+    SchedulerConfig,
+    SchedulerState,
+)
 from .truth_maintenance import (
     Claim,
     ClaimsRegistry,
@@ -57,6 +66,12 @@ __all__ = [
     "ConsolidationConfig",
     "ConsolidationResult",
     "MemoryConsolidator",
+    # Consolidation lock & scheduler
+    "ConsolidationLock",
+    "LockState",
+    "ConsolidationScheduler",
+    "SchedulerConfig",
+    "SchedulerState",
     # Truth maintenance
     "Claim",
     "ClaimsRegistry",

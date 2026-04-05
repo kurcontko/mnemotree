@@ -132,6 +132,11 @@ class IngestionConfig:
     # Write gate (pre-persist filter)
     write_gate_enabled: bool = False
     write_gate_policy: str = "permissive"  # "permissive", "balanced", "strict"
+    # Auto-consolidation scheduler
+    auto_consolidation_enabled: bool = False
+    auto_consolidation_min_hours: float = 24.0
+    auto_consolidation_min_memories: int = 50
+    auto_consolidation_check_interval: int = 20
 
 
 @dataclass(frozen=True)
@@ -229,6 +234,12 @@ class MemoryCore:
         self.default_user_id = default_user_id
         self.default_conversation_id = default_conversation_id
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        # Mutual-exclusion: memory IDs with recent explicit link/resolve ops
+        self._explicit_op_ids: set[str] = set()
+        # Event system
+        from .events import EventBus
+
+        self._event_bus = EventBus()
 
         # Conflict detection (bi-temporal invalidation)
         from .conflict import ConflictConfig, ConflictDetector
@@ -271,6 +282,10 @@ class MemoryCore:
             fact_decomposition_max_facts=ingestion_config.fact_decomposition_max_facts,
             write_gate_enabled=ingestion_config.write_gate_enabled,
             write_gate_policy=ingestion_config.write_gate_policy,
+            auto_consolidation_enabled=ingestion_config.auto_consolidation_enabled,
+            auto_consolidation_min_hours=ingestion_config.auto_consolidation_min_hours,
+            auto_consolidation_min_memories=ingestion_config.auto_consolidation_min_memories,
+            auto_consolidation_check_interval=ingestion_config.auto_consolidation_check_interval,
         )
         self._init_mode_defaults(
             mode=mode_defaults.mode,
@@ -315,6 +330,14 @@ class MemoryCore:
         )
         self._init_normalizer(normalization_config)
         self._init_ingestion_helpers(llm=llm)
+
+    def on_event(self, callback: Callable[..., Any]) -> None:
+        """Register a callback for memory events.
+
+        The callback receives a ``MemoryEvent`` instance after each
+        remember, recall, forget, link, consolidate, or evict operation.
+        """
+        self._event_bus.subscribe(callback)
 
     async def remember(
         self,
@@ -658,6 +681,18 @@ class MemoryCore:
         if self._conflict_detector and not skip_store:
             await self._conflict_detector.detect_and_resolve(memory, self.store)
 
+        # Emit event
+        if not skip_store:
+            from .events import EventType, MemoryEvent
+
+            self._event_bus.emit(
+                MemoryEvent(
+                    event_type=EventType.REMEMBER,
+                    memory_ids=[memory.memory_id],
+                    metadata={"memory_type": memory.memory_type.value},
+                )
+            )
+
         return memory
 
     def _resolve_remember_options(
@@ -865,15 +900,39 @@ class MemoryCore:
             store_tasks.append(self.connect(memory.memory_id, related_to=references))
         await asyncio.gather(*store_tasks)
 
-        if self.auto_link_enabled and isinstance(self.store, SupportsKnowledgeGraph):
+        # Mutual-exclusion: skip background auto-linking/conflict-detection
+        # when the caller already made explicit link() calls for this memory
+        has_explicit_ops = memory.memory_id in self._explicit_op_ids
+
+        if (
+            self.auto_link_enabled
+            and isinstance(self.store, SupportsKnowledgeGraph)
+            and not has_explicit_ops
+        ):
             task = asyncio.create_task(self._auto_link_background(memory.memory_id))
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
-        if self.conflict_detection_enabled and self.conflict_detector is not None:
+        if (
+            self.conflict_detection_enabled
+            and self.conflict_detector is not None
+            and not has_explicit_ops
+        ):
             task = asyncio.create_task(self._detect_and_link_conflicts(memory))
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
+
+        # Clear explicit ops marker after use (it's per-remember, not permanent)
+        self._explicit_op_ids.discard(memory.memory_id)
+
+        # Auto-consolidation: notify scheduler and maybe trigger
+        if self._consolidation_scheduler is not None:
+            self._consolidation_scheduler.notify_remember()
+            should, _ = self._consolidation_scheduler.should_consolidate()
+            if should:
+                task = asyncio.create_task(self._auto_consolidate_background())
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
 
     async def _merge_into(
         self,
@@ -1179,14 +1238,25 @@ class MemoryCore:
                 memories = memories[:limit]
             if update_access:
                 await self._update_access_metadata(memories)
-            return memories
+        else:
+            memories = await self.retrieval.recall(
+                query=query,
+                limit=limit,
+                scoring=scoring,
+                update_access=update_access,
+            )
 
-        return await self.retrieval.recall(
-            query=query,
-            limit=limit,
-            scoring=scoring,
-            update_access=update_access,
-        )
+        if memories:
+            from .events import EventType, MemoryEvent
+
+            self._event_bus.emit(
+                MemoryEvent(
+                    event_type=EventType.RECALL,
+                    memory_ids=[m.memory_id for m in memories],
+                    metadata={"count": len(memories)},
+                )
+            )
+        return memories
 
     async def recall_ppr(
         self,
@@ -1340,7 +1410,46 @@ class MemoryCore:
                 duration_seconds=0.0,
             )
 
-        return await consolidator.consolidate(memories, user_id=user_id)
+        result = await consolidator.consolidate(memories, user_id=user_id)
+
+        from .events import EventType, MemoryEvent
+
+        self._event_bus.emit(
+            MemoryEvent(
+                event_type=EventType.CONSOLIDATE,
+                memory_ids=result.created_semantic_ids + result.deprecated_memory_ids,
+                metadata={
+                    "clusters_formed": result.clusters_formed,
+                    "semantic_created": result.semantic_memories_created,
+                    "deprecated": result.memories_deprecated,
+                },
+            )
+        )
+        return result
+
+    async def maybe_consolidate(self) -> Any:
+        """Run consolidation if the automatic scheduler's gates pass.
+
+        Returns:
+            ``ConsolidationResult`` if consolidation ran, ``None`` otherwise.
+
+        Raises:
+            RuntimeError: If auto-consolidation is not enabled.
+        """
+        if self._consolidation_scheduler is None:
+            raise RuntimeError(
+                "Auto-consolidation is not enabled. Set "
+                "auto_consolidation_enabled=True in IngestionConfig."
+            )
+        return await self._consolidation_scheduler.maybe_consolidate(self)
+
+    async def _auto_consolidate_background(self) -> None:
+        """Fire-and-forget auto-consolidation triggered by scheduler."""
+        try:
+            if self._consolidation_scheduler is not None:
+                await self._consolidation_scheduler.maybe_consolidate(self)
+        except Exception:
+            logger.warning("Background auto-consolidation failed", exc_info=True)
 
     def _resolve_recall_options(
         self,
@@ -1508,6 +1617,52 @@ class MemoryCore:
         analysis = await self.analyzer.analyze_patterns("\n".join(memory_texts))
         return analysis
 
+    async def export_index(self, *, max_per_type: int = 50) -> str:
+        """Generate a human-readable markdown index of all stored memories.
+
+        Groups memories by type with snippet, importance, and timestamp.
+        Useful for debugging, auditing, and MEMORY.md-style overviews.
+
+        Args:
+            max_per_type: Maximum memories to list per type section.
+
+        Returns:
+            Markdown string.
+        """
+        if not isinstance(self.store, SupportsMemoryListing):
+            raise RuntimeError("Store does not support list_memories().")
+
+        all_memories = await self.store.list_memories(include_embeddings=False)
+
+        # Group by type
+        by_type: dict[str, list[MemoryItem]] = {}
+        for m in all_memories:
+            key = m.memory_type.value
+            by_type.setdefault(key, []).append(m)
+
+        lines = [f"# Memory Index ({len(all_memories)} total)", ""]
+
+        for type_name in sorted(by_type.keys()):
+            memories = by_type[type_name]
+            # Sort by importance descending
+            memories.sort(key=lambda m: m.importance, reverse=True)
+            lines.append(f"## {type_name.title()} ({len(memories)} memories)")
+            lines.append("")
+
+            for m in memories[:max_per_type]:
+                snippet = (m.summary or m.content or "")[:80].replace("\n", " ")
+                ts = coerce_datetime(m.timestamp, default=None)
+                ts_str = ts.strftime("%Y-%m-%d") if ts else "?"
+                lines.append(
+                    f"- `{m.memory_id[:8]}` {ts_str} — {snippet} (imp: {m.importance:.2f})"
+                )
+
+            if len(memories) > max_per_type:
+                lines.append(f"- ... and {len(memories) - max_per_type} more")
+            lines.append("")
+
+        return "\n".join(lines)
+
     def judge_conflicts(
         self,
         memories: list[MemoryItem],
@@ -1633,7 +1788,18 @@ class MemoryCore:
         Returns:
             Success status
         """
-        return await self.persistence.delete(memory_id, cascade=cascade)
+        result = await self.persistence.delete(memory_id, cascade=cascade)
+        if result:
+            from .events import EventType, MemoryEvent
+
+            self._event_bus.emit(
+                MemoryEvent(
+                    event_type=EventType.FORGET,
+                    memory_ids=[memory_id],
+                    metadata={"cascade": cascade},
+                )
+            )
+        return result
 
     async def evict(
         self,
@@ -1707,6 +1873,16 @@ class MemoryCore:
         if not dry_run and evicted_ids:
             await asyncio.gather(*[self.persistence.delete(mid) for mid in evicted_ids])
 
+            from .events import EventType, MemoryEvent
+
+            self._event_bus.emit(
+                MemoryEvent(
+                    event_type=EventType.EVICT,
+                    memory_ids=evicted_ids,
+                    metadata={"count": len(evicted_ids)},
+                )
+            )
+
         return evicted_ids
 
     # Knowledge Graph Operations
@@ -1753,13 +1929,28 @@ class MemoryCore:
                 "Use Neo4jMemoryStore or SQLiteVecMemoryStore."
             )
 
-        return await self.store.create_link(
+        # Mark IDs for mutual-exclusion with background auto-linking
+        self._explicit_op_ids.add(source_id)
+        self._explicit_op_ids.add(target_id)
+
+        result = await self.store.create_link(
             source_id=source_id,
             target_id=target_id,
             link_type=link_type,
             context=context,
             bidirectional=bidirectional,
         )
+
+        from .events import EventType, MemoryEvent
+
+        self._event_bus.emit(
+            MemoryEvent(
+                event_type=EventType.LINK,
+                memory_ids=[source_id, target_id],
+                metadata={"link_type": link_type.value, "bidirectional": bidirectional},
+            )
+        )
+        return result
 
     async def get_links(
         self,
@@ -2298,6 +2489,10 @@ class MemoryCore:
         fact_decomposition_max_facts: int = 10,
         write_gate_enabled: bool = False,
         write_gate_policy: str = "permissive",
+        auto_consolidation_enabled: bool = False,
+        auto_consolidation_min_hours: float = 24.0,
+        auto_consolidation_min_memories: int = 50,
+        auto_consolidation_check_interval: int = 20,
     ) -> None:
         self.mode = mode
         self.retrieval_mode = retrieval_mode
@@ -2338,6 +2533,40 @@ class MemoryCore:
         self.conflict_detector: InlineConflictDetector | None = None
         self.fact_decomposer: FactDecomposer | None = None
         self._write_gate: Any | None = None
+        # Auto-consolidation scheduler
+        self._consolidation_scheduler: Any | None = None
+        if auto_consolidation_enabled:
+            from ..experimental.consolidation_scheduler import (
+                ConsolidationScheduler,
+                SchedulerConfig,
+            )
+
+            store_dir = self._resolve_store_dir()
+            if store_dir is not None:
+                self._consolidation_scheduler = ConsolidationScheduler(
+                    store_dir=store_dir,
+                    config=SchedulerConfig(
+                        min_hours_since_last=auto_consolidation_min_hours,
+                        min_memories_since_last=auto_consolidation_min_memories,
+                        check_interval=auto_consolidation_check_interval,
+                    ),
+                )
+
+    def _resolve_store_dir(self) -> str | None:
+        """Best-effort resolution of store persistence directory for scheduler state."""
+        store = self.store
+        # SQLiteVecMemoryStore
+        if hasattr(store, "db_path"):
+            from pathlib import Path
+
+            p = Path(str(store.db_path))
+            if p.name != ":memory:":
+                return str(p.parent)
+        # ChromaMemoryStore
+        if hasattr(store, "_persist_directory"):
+            return str(store._persist_directory)
+        # Fallback: use cwd
+        return None
 
     def _init_mode_defaults(
         self,

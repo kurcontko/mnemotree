@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ..rerankers import CrossEncoderReranker, NoOpReranker
 from .builder import MemoryCoreBuilder
+from .events import EventBus, EventType, MemoryEvent
 from .intent import (
     INTENT_TO_TYPES,
     IntentClassifier,
@@ -41,6 +42,10 @@ __all__ = [
     "RememberOptions",
     "RecallFilters",
     "RecallOptions",
+    # Events
+    "EventBus",
+    "EventType",
+    "MemoryEvent",
     # Config
     "IngestionConfig",
     "ModeDefaultsConfig",

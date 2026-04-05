@@ -994,6 +994,26 @@ async def consolidate(
     }
 
 
+async def memory_index(
+    max_per_type: int = 50,
+) -> dict[str, Any]:
+    """Generate a human-readable markdown index of all stored memories.
+
+    Groups memories by type with snippets, importance scores, and timestamps.
+    Useful for browsing, debugging, and understanding memory contents at a glance.
+
+    Args:
+        max_per_type: Maximum memories to list per type section (default: 50).
+
+    Returns:
+        Dictionary with markdown index text and total count.
+    """
+    memory_core = await _get_memory_core()
+    markdown = await memory_core.export_index(max_per_type=max_per_type)
+    total = markdown.split("total)")[0].split("(")[-1] if "total)" in markdown else "0"
+    return {"index": markdown, "total_memories": total}
+
+
 async def judge_conflicts(
     memory_ids: list[str] | None = None,
     query: str | None = None,
@@ -1102,6 +1122,7 @@ def _register_tools(mcp: Any) -> None:
     mcp.tool(observe)
     # Export tools
     mcp.tool(export_memories_tool)
+    mcp.tool(memory_index)
 
 
 def _load_fastmcp() -> Any:
