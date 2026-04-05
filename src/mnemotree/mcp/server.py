@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from mnemotree.core.memory import (
     MemoryCore,
@@ -603,11 +603,18 @@ async def export_memories_tool(
             until=coerce_datetime(until, default=None) if until else None,
         )
 
+    validated_mode: Literal["single", "vault"] = "single"
+    if mode == "vault":
+        validated_mode = "vault"
+    validated_sort: Literal["timestamp", "importance", "memory_type"] = "timestamp"
+    if sort_by in ("importance", "memory_type"):
+        validated_sort = sort_by  # type: ignore[assignment]
+
     options = ExportOptions(
-        mode=mode if mode in ("single", "vault") else "single",
+        mode=validated_mode,
         output_path=output_path,
         include_links=include_links,
-        sort_by=sort_by if sort_by in ("timestamp", "importance", "memory_type") else "timestamp",
+        sort_by=validated_sort,
     )
 
     path, count = await export_memories(store, options, parsed_filters)
@@ -718,11 +725,7 @@ async def get_links(
         List of link records.
     """
     memory_core = await _get_memory_core()
-    parsed_types = (
-        [_parse_link_type(lt) for lt in link_types]
-        if link_types
-        else None
-    )
+    parsed_types = [_parse_link_type(lt) for lt in link_types] if link_types else None
     if direction not in ("outgoing", "incoming", "both"):
         raise ValueError(f"direction must be 'outgoing', 'incoming', or 'both', got '{direction}'")
     links = await memory_core.get_links(
@@ -781,11 +784,15 @@ async def suggest_links(
             score = suggestion[2] if len(suggestion) > 2 else 0.0
             reason = suggestion[3] if len(suggestion) > 3 else None
             entry = {
-                "target_id": target_memory.memory_id if isinstance(target_memory, MemoryItem) else str(target_memory),
+                "target_id": target_memory.memory_id
+                if isinstance(target_memory, MemoryItem)
+                else str(target_memory),
                 "score": float(score),
             }
             if link_type is not None:
-                entry["link_type"] = link_type.value if hasattr(link_type, "value") else str(link_type)
+                entry["link_type"] = (
+                    link_type.value if hasattr(link_type, "value") else str(link_type)
+                )
             if reason:
                 entry["reason"] = reason
             if isinstance(target_memory, MemoryItem):
@@ -825,12 +832,14 @@ async def get_conflicts(
         conflict_memories = await asyncio.gather(*conflict_tasks)
         for cm in conflict_memories:
             if cm is not None:
-                result["conflicting_memories"].append({
-                    "memory_id": cm.memory_id,
-                    "snippet": _memory_snippet(cm),
-                    "importance": cm.importance,
-                    "memory_type": cm.memory_type.value,
-                })
+                result["conflicting_memories"].append(
+                    {
+                        "memory_id": cm.memory_id,
+                        "snippet": _memory_snippet(cm),
+                        "importance": cm.importance,
+                        "memory_type": cm.memory_type.value,
+                    }
+                )
 
     # Also check for CONTRADICTS links
     try:
@@ -1009,18 +1018,14 @@ async def judge_conflicts(
     memories: list[MemoryItem] = []
 
     if memory_ids:
-        results = await asyncio.gather(
-            *(memory_core.store.get_memory(mid) for mid in memory_ids)
-        )
+        results = await asyncio.gather(*(memory_core.store.get_memory(mid) for mid in memory_ids))
         memories = [m for m in results if m is not None]
     elif query:
         memories = await memory_core.recall(query, limit=limit)
     else:
         raise ValueError("Provide either memory_ids or query.")
 
-    conflicts = memory_core.judge_conflicts(
-        memories, similarity_threshold=similarity_threshold
-    )
+    conflicts = memory_core.judge_conflicts(memories, similarity_threshold=similarity_threshold)
     return {
         "memories_checked": len(memories),
         "conflicts_found": len(conflicts),

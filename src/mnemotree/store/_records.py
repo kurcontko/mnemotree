@@ -119,7 +119,9 @@ def chroma_metadata_from_memory(memory: MemoryItem) -> dict[str, str]:
         "conflicts_with": ",".join(memory.conflicts_with) if memory.conflicts_with else "",
         "previous_event_id": memory.previous_event_id if memory.previous_event_id else "",
         "next_event_id": memory.next_event_id if memory.next_event_id else "",
-        "stability_seconds": str(memory.stability_seconds) if memory.stability_seconds is not None else "",
+        "stability_seconds": str(memory.stability_seconds)
+        if memory.stability_seconds is not None
+        else "",
         "event_time": serialize_datetime(memory.event_time) or "",
         "valid_from": serialize_datetime(memory.valid_from) or "",
         "valid_until": serialize_datetime(memory.valid_until) or "",
@@ -235,8 +237,12 @@ def sqlite_record_from_memory(memory: MemoryItem) -> dict[str, Any]:
         "event_time": serialize_datetime(memory.event_time) if memory.event_time else None,
         "valid_from": serialize_datetime(memory.valid_from) if memory.valid_from else None,
         "valid_until": serialize_datetime(memory.valid_until) if memory.valid_until else None,
-        "observation_date": serialize_datetime(memory.observation_date) if memory.observation_date else None,
-        "referenced_date": serialize_datetime(memory.referenced_date) if memory.referenced_date else None,
+        "observation_date": serialize_datetime(memory.observation_date)
+        if memory.observation_date
+        else None,
+        "referenced_date": serialize_datetime(memory.referenced_date)
+        if memory.referenced_date
+        else None,
         "temporal_offset": memory.temporal_offset,
         "contextual_intent": memory.contextual_intent,
         "is_hot": 1 if memory.is_hot else 0,

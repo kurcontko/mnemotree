@@ -48,11 +48,28 @@ class ConflictJudge:
     is provided, saving most LLM calls.
     """
 
-    _NEGATION_WORDS = frozenset({
-        "not", "never", "no", "isn't", "aren't", "doesn't", "don't",
-        "won't", "can't", "false", "wrong", "incorrect", "neither",
-        "nor", "none", "nobody", "nothing", "nowhere",
-    })
+    _NEGATION_WORDS = frozenset(
+        {
+            "not",
+            "never",
+            "no",
+            "isn't",
+            "aren't",
+            "doesn't",
+            "don't",
+            "won't",
+            "can't",
+            "false",
+            "wrong",
+            "incorrect",
+            "neither",
+            "nor",
+            "none",
+            "nobody",
+            "nothing",
+            "nowhere",
+        }
+    )
 
     def __init__(
         self,
@@ -62,9 +79,7 @@ class ConflictJudge:
         self.config = config or ConflictJudgeConfig()
         self.llm = llm
 
-    def detect_conflicts(
-        self, memories: list[MemoryItem]
-    ) -> dict[str, ConflictAnnotation]:
+    def detect_conflicts(self, memories: list[MemoryItem]) -> dict[str, ConflictAnnotation]:
         """Fast pairwise conflict detection among recalled memories.
 
         Returns a mapping from memory_id to ConflictAnnotation for memories
@@ -84,7 +99,9 @@ class ConflictJudge:
                 pairs_checked += 1
 
                 # Check pre-existing conflicts_with
-                if a.memory_id in (b.conflicts_with or []) or b.memory_id in (a.conflicts_with or []):
+                if a.memory_id in (b.conflicts_with or []) or b.memory_id in (
+                    a.conflicts_with or []
+                ):
                     self._add_conflict(annotations, a, b, "pre-existing conflict")
                     continue
 
@@ -98,13 +115,17 @@ class ConflictJudge:
                 # High similarity — check for negation signals
                 if self._has_negation_signal(a, b):
                     self._add_conflict(
-                        annotations, a, b,
+                        annotations,
+                        a,
+                        b,
                         f"high similarity ({sim:.3f}) with negation signal",
                     )
                 elif a.timestamp != b.timestamp:
                     # Near-duplicate with different timestamps — potential update
                     self._add_conflict(
-                        annotations, a, b,
+                        annotations,
+                        a,
+                        b,
                         f"near-duplicate ({sim:.3f}), newer may supersede older",
                     )
 

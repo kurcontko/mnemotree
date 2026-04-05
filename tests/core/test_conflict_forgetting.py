@@ -96,16 +96,16 @@ class TestConflictDetector:
     async def test_skips_same_id(self) -> None:
         """Candidate with same ID as new memory is skipped."""
         store = AsyncMock()
-        store.get_similar_memories = AsyncMock(return_value=[
-            _make_memory(memory_id="m1", embedding=[1.0, 0.0, 0.0]),
-        ])
+        store.get_similar_memories = AsyncMock(
+            return_value=[
+                _make_memory(memory_id="m1", embedding=[1.0, 0.0, 0.0]),
+            ]
+        )
         # Patch isinstance checks by making the store satisfy SupportsVectorSearch
         with patch("mnemotree.core.conflict.isinstance", side_effect=lambda obj, cls: True):
             detector = ConflictDetector(ConflictConfig(enable=True))
             # new_memory has same ID as candidate
-            result = await detector.detect_and_resolve(
-                _make_memory(memory_id="m1"), store
-            )
+            result = await detector.detect_and_resolve(_make_memory(memory_id="m1"), store)
         # candidate skipped because same ID → no invalidation
         assert result == []
 
@@ -227,12 +227,8 @@ class TestConflictDetector:
         new_time = datetime(2024, 6, 1, tzinfo=timezone.utc)
 
         # Orthogonal embeddings → cosine sim = 0
-        candidate = _make_memory(
-            memory_id="old", embedding=[0.0, 1.0, 0.0], timestamp=old_time
-        )
-        new_mem = _make_memory(
-            memory_id="new", embedding=[1.0, 0.0, 0.0], timestamp=new_time
-        )
+        candidate = _make_memory(memory_id="old", embedding=[0.0, 1.0, 0.0], timestamp=old_time)
+        new_mem = _make_memory(memory_id="new", embedding=[1.0, 0.0, 0.0], timestamp=new_time)
 
         store = AsyncMock()
         store.get_similar_memories = AsyncMock(return_value=[candidate])
@@ -444,9 +440,7 @@ class TestEviction:
         core.persistence.delete = AsyncMock()
 
         with patch("mnemotree.core.memory.isinstance", side_effect=patched_isinstance):
-            result = await MemoryCore.evict(
-                core, min_importance=0.4, dry_run=True
-            )
+            result = await MemoryCore.evict(core, min_importance=0.4, dry_run=True)
 
         # low (0.2) is below min_importance (0.4) → evicted
         assert "low" in result

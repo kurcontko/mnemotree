@@ -1,4 +1,5 @@
 """Unit tests for PPR algorithm (src/mnemotree/core/ppr.py)."""
+
 from __future__ import annotations
 
 from mnemotree.core.models import LinkType, MemoryLink

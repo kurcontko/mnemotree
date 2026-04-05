@@ -3,6 +3,7 @@
 These tests verify the full pipeline: store memories → create links → run PPR / SCMRAG.
 They skip if sqlite_vec is unavailable (CI without the optional dep).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -21,9 +22,7 @@ try:
 except ImportError:
     _HAS_SQLITE_VEC = False
 
-pytestmark = pytest.mark.skipif(
-    not _HAS_SQLITE_VEC, reason="sqlite_vec not installed"
-)
+pytestmark = pytest.mark.skipif(not _HAS_SQLITE_VEC, reason="sqlite_vec not installed")
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -90,9 +89,7 @@ async def test_get_neighborhood_links_link_type_filter(store):
     await store.create_link("A", "B", LinkType.CAUSES)
     await store.create_link("A", "C", LinkType.PART_OF)
 
-    links = await store.get_neighborhood_links(
-        ["A"], max_depth=1, link_types=[LinkType.CAUSES]
-    )
+    links = await store.get_neighborhood_links(["A"], max_depth=1, link_types=[LinkType.CAUSES])
     target_ids = {lk.target_id for lk in links}
     assert "B" in target_ids
     assert "C" not in target_ids

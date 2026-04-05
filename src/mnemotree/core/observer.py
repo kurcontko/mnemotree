@@ -114,9 +114,7 @@ class MemoryObserver:
         # Cap observations per turn
         return observations[: self.config.max_observations_per_turn]
 
-    async def _llm_extract(
-        self, content: str, now: datetime
-    ) -> list[Observation]:
+    async def _llm_extract(self, content: str, now: datetime) -> list[Observation]:
         """Use LLM to extract memorable facts."""
         try:
             response = await self.llm.ainvoke(  # type: ignore[union-attr]
@@ -147,9 +145,7 @@ class MemoryObserver:
             logger.debug("LLM observation extraction failed", exc_info=True)
             return self._passthrough_extract(content, now)
 
-    def _passthrough_extract(
-        self, content: str, now: datetime
-    ) -> list[Observation]:
+    def _passthrough_extract(self, content: str, now: datetime) -> list[Observation]:
         """Store content directly without LLM extraction."""
         return [
             Observation(
