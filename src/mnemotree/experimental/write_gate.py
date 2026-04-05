@@ -9,6 +9,7 @@ Implements intelligent filtering to avoid storing noise:
 5. Relevance scoring - contextual importance
 """
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -247,7 +248,9 @@ class ContextAwareWriteGate:
         quality_result = self._check_quality(memory)
         if quality_result.decision == WriteDecision.REJECT:
             return quality_result
-        scores["quality"] = quality_result.quality_score or 0.5
+        scores["quality"] = (
+            quality_result.quality_score if quality_result.quality_score is not None else 0.5
+        )
         reasons.extend(quality_result.reasons)
         return None
 
@@ -259,7 +262,9 @@ class ContextAwareWriteGate:
         reasons: list[str],
     ) -> WriteResult | None:
         novelty_result = await self._assess_novelty(memory, existing_memories)
-        scores["novelty"] = novelty_result.novelty_score or 0.5
+        scores["novelty"] = (
+            novelty_result.novelty_score if novelty_result.novelty_score is not None else 0.5
+        )
         if novelty_result.decision in (WriteDecision.REJECT, WriteDecision.MERGE):
             return novelty_result
         reasons.extend(novelty_result.reasons)
@@ -296,7 +301,11 @@ class ContextAwareWriteGate:
         reasons: list[str],
     ) -> None:
         relevance_result = self._assess_relevance(memory, context)
-        scores["relevance"] = relevance_result.relevance_score or 0.5
+        scores["relevance"] = (
+            relevance_result.relevance_score
+            if relevance_result.relevance_score is not None
+            else 0.5
+        )
         reasons.extend(relevance_result.reasons)
 
     def _finalize_decision(
@@ -373,7 +382,11 @@ class ContextAwareWriteGate:
 
         # Use custom novelty assessor if provided
         if self.novelty_assessor:
-            novelty_score = await self.novelty_assessor(memory, existing_memories)
+            result = self.novelty_assessor(memory, existing_memories)
+            if inspect.isawaitable(result):
+                novelty_score = await result
+            else:
+                novelty_score = result
         else:
             novelty_score = self._default_novelty_assessment(memory, existing_memories)
 
@@ -454,6 +467,12 @@ class ContextAwareWriteGate:
             )
 
         # Check for excessive punctuation/symbols
+        if not content:
+            return WriteResult(
+                decision=WriteDecision.REJECT,
+                reasons=[RejectionReason.TOO_SHORT.value],
+                score=0.0,
+            )
         symbol_ratio = sum(1 for c in content if not c.isalnum() and not c.isspace()) / len(content)
         if symbol_ratio > 0.3:
             return WriteResult(
@@ -526,7 +545,9 @@ class ContextAwareWriteGate:
         if "important_topics" in context:
             # Check if memory mentions important topics
             topics = context["important_topics"]
-            if any(topic.lower() in memory.content.lower() for topic in topics):
+            if isinstance(topics, list) and any(
+                isinstance(t, str) and t.lower() in memory.content.lower() for t in topics
+            ):
                 relevance_score += 0.2
                 reasons.append("Mentions important topics")
 

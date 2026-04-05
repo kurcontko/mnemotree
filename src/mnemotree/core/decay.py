@@ -33,6 +33,12 @@ class ForgettingCurve:
     decay_power: float = 0.5
     target_retention: float = 0.9
 
+    def __post_init__(self) -> None:
+        if self.decay_power <= 0:
+            raise ValueError("decay_power must be positive")
+        if not (0 < self.target_retention < 1):
+            raise ValueError("target_retention must be between 0 and 1 (exclusive)")
+
     @property
     def factor(self) -> float:
         """Derive factor so R(S) = target_retention."""
@@ -82,6 +88,9 @@ class DecayConfig:
         """
         decay_power = kwargs.get("decay_power", 0.5)
         target_retention = kwargs.get("target_retention", 0.9)
+
+        if decay_power <= 0:
+            raise ValueError("decay_power must be positive")
 
         # R(t, S) = (1 + factor * t / S) ^ (-decay_power) = 0.5
         # factor = target_retention^(-1/decay_power) - 1
@@ -135,6 +144,33 @@ MEMORY_TYPE_DEFAULTS: dict[MemoryType, DecayConfig] = {
 }
 
 _DEFAULT_CONFIG = DecayConfig()
+
+
+# ---------------------------------------------------------------------------
+# Importance-coupled initial stability
+# ---------------------------------------------------------------------------
+
+
+def initial_stability(memory_type: MemoryType, importance: float) -> float:
+    """Return a starting stability_seconds value scaled by memory importance.
+
+    High-importance memories (>= 0.7) get 2x the base stability.
+    Low-importance memories (< 0.3) get 0.5x the base stability.
+    Mid-range (0.3-0.7) gets the default.
+
+    Args:
+        memory_type: The MemoryType of the memory being stored.
+        importance: Importance score in [0, 1].
+
+    Returns:
+        Initial stability in seconds.
+    """
+    base = MEMORY_TYPE_DEFAULTS.get(memory_type, _DEFAULT_CONFIG).stability_seconds
+    if importance >= 0.7:
+        return base * 2.0
+    if importance < 0.3:
+        return base * 0.5
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +239,7 @@ class StabilityUpdater:
             Updated stability in seconds, capped at max_stability_seconds.
         """
         if current_stability <= 0:
-            return current_stability
+            return 0.0
 
         exponent = self.sensitivity * (1.0 - retrievability)
         # Clamp exponent to avoid overflow

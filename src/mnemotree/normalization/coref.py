@@ -120,6 +120,11 @@ class CoreferenceNormalizer(BaseNormalizer):
         if self._fastcoref_model is None:
             self._fastcoref_model = FCoref()
 
-        preds = self._fastcoref_model.predict(texts=[content])
-        resolved = preds[0].get_resolved_text()
-        return resolved if resolved else content
+        try:
+            preds = self._fastcoref_model.predict(texts=[content])
+            if preds and len(preds) > 0:
+                resolved = preds[0].get_resolved_text()
+                return resolved if resolved else content
+        except Exception:
+            pass
+        return content

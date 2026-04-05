@@ -104,7 +104,7 @@ class MnemotreeAutoGenMemory:
                 if relevant:
                     memory_context = "\n".join(
                         [
-                            f"[Memory from {mem.timestamp.strftime('%Y-%m-%d')}]: {mem.content}"
+                            f"[Memory from {mem.timestamp.strftime('%Y-%m-%d') if hasattr(mem.timestamp, 'strftime') else str(mem.timestamp or '')}]: {mem.content}"
                             for mem in relevant
                         ]
                     )
@@ -171,7 +171,8 @@ class MnemotreeAutoGenMemory:
         )
 
         return [
-            {"role": mem.metadata.get("role", "user"), "content": mem.content} for mem in memories
+            {"role": (mem.metadata or {}).get("role", "user"), "content": mem.content}
+            for mem in memories
         ]
 
     async def search_context(self, query: str, limit: int = 5) -> list[str]:

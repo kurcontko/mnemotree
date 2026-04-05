@@ -2,49 +2,54 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Any, TypeVar
 
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_core.output_parsers import BaseOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import Runnable
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class AnalysisStrategy(Enum):
     """Defines different strategies for memory analysis"""
 
-    QUICK = "quick"  # Fast, surface-level analysis
-    DEEP = "deep"  # Thorough, detailed analysis
-    ADAPTIVE = "adaptive"  # Adjusts based on content complexity
+    QUICK = "quick"
+    DEEP = "deep"
+    ADAPTIVE = "adaptive"
 
 
 class BaseAnalyzer(ABC):
-    """Base class for all analyzers."""
+    """Base class for all analyzers. Uses PydanticAI for structured LLM output."""
 
-    def __init__(self, llm: BaseLanguageModel):
-        self.llm = llm
-        self.chain = self._create_chain()
-
-    @abstractmethod
-    def _get_template(self) -> str:
-        """Return the prompt template for the analyzer."""
+    def __init__(self, model: str | Any = "openai:gpt-4o-mini"):
+        self.model = model
+        self._agent: Any = None
 
     @abstractmethod
-    def _get_parser(self) -> BaseOutputParser:
-        """Return the output parser for the analyzer."""
+    def _get_system_prompt(self) -> str:
+        """Return the system prompt for this analyzer."""
 
-    def _create_chain(self) -> Runnable:
-        """Create the analysis chain."""
-        parser = self._get_parser()
-        template = self._get_template()
+    @abstractmethod
+    def _get_output_type(self) -> type[BaseModel]:
+        """Return the Pydantic output model."""
 
-        prompt = PromptTemplate(
-            template=template,
-            input_variables=["content", "context"],
-            partial_variables={"format_instructions": parser.get_format_instructions()},
+    def _build_agent(self) -> Any:
+        from pydantic_ai import Agent
+
+        return Agent(
+            self.model,
+            output_type=self._get_output_type(),
+            instructions=self._get_system_prompt(),
         )
 
-        return prompt | self.llm | parser
+    @property
+    def agent(self) -> Any:
+        if self._agent is None:
+            self._agent = self._build_agent()
+        return self._agent
 
     async def analyze(self, content: str, context_str: str) -> dict:
-        """Perform analysis using the chain."""
-        return await self.chain.ainvoke({"content": content, "context": context_str})
+        """Perform analysis, returning a dict (model_dump of the output)."""
+        user_prompt = f"Content: {content}\n\nContext: {context_str}"
+        result = await self.agent.run(user_prompt)
+        output = result.output
+        return output.model_dump() if hasattr(output, "model_dump") else dict(output)

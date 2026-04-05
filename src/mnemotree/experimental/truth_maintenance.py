@@ -15,7 +15,6 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from langchain_core.language_models.base import BaseLanguageModel
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.models import MemoryItem
@@ -50,7 +49,6 @@ class ResolutionStrategy(str, Enum):
     ENSEMBLE = "ensemble"  # Combine multiple signals
 
 
-@dataclass
 class Claim(BaseModel):
     """
     A normalized fact or statement extracted from memories.
@@ -134,7 +132,7 @@ class ClaimsRegistry:
 
     def __init__(
         self,
-        llm: BaseLanguageModel | None = None,
+        llm: Any | None = None,
         staleness_threshold_days: int = 90,
         confidence_threshold: float = 0.3,
     ):
@@ -178,7 +176,7 @@ class ClaimsRegistry:
                     statement=memory.content,
                     source_memory_ids=[memory.memory_id],
                     confidence=memory.confidence,
-                    credibility=memory.credibility or 1.0,
+                    credibility=memory.credibility if memory.credibility is not None else 1.0,
                 )
             ]
 
@@ -202,7 +200,7 @@ Claims:"""
 
         chain = prompt | self.llm
         result = await chain.ainvoke({"content": memory.content})
-        text = result.content if hasattr(result, "content") else str(result)
+        text = (result.content if hasattr(result, "content") else str(result)) or ""
 
         # Parse claims from LLM output
         claims = []
@@ -220,7 +218,7 @@ Claims:"""
                         statement=parts[3],
                         source_memory_ids=[memory.memory_id],
                         confidence=memory.confidence,
-                        credibility=memory.credibility or 1.0,
+                        credibility=memory.credibility if memory.credibility is not None else 1.0,
                     )
                 )
 
@@ -356,7 +354,7 @@ Severity:"""
         )
 
         if hasattr(result, "content"):
-            text = result.content.strip().upper()
+            text = (result.content or "").strip().upper()
         else:
             text = str(result).strip().upper()
 
@@ -401,7 +399,7 @@ Severity:"""
             # Weighted combination
             scores = []
             for claim in claims:
-                recency_days = (datetime.now(timezone.utc) - claim.updated_at).days
+                recency_days = max(0, (datetime.now(timezone.utc) - claim.updated_at).days)
                 recency_score = 1.0 / (1.0 + recency_days / 30.0)
 
                 score = (

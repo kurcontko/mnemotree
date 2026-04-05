@@ -55,8 +55,11 @@ class MemoryClusterer:
             return ClusteringResult([], [], {}, {})
 
         if method.startswith("vector_"):
-            # Extract embeddings
-            embeddings = np.array([m.embedding for m in memories])
+            # Extract embeddings — filter out memories without embeddings
+            valid = [(i, m) for i, m in enumerate(memories) if m.embedding]
+            if not valid:
+                return ClusteringResult([], [], {}, {})
+            embeddings = np.array([m.embedding for _, m in valid])
 
             if method == "vector_dbscan":
                 clusters = await self._dbscan_clustering(
@@ -72,6 +75,13 @@ class MemoryClusterer:
                 memories, similarity_threshold=similarity_threshold
             )
 
+        # Map cluster IDs back to original memory indices for vector methods
+        if method.startswith("vector_"):
+            # clusters.cluster_ids aligns with 'valid', not all 'memories'
+            cluster_source = [(valid[j][1], cid) for j, cid in enumerate(clusters.cluster_ids)]
+        else:
+            cluster_source = [(memories[j], cid) for j, cid in enumerate(clusters.cluster_ids)]
+
         # Get cluster metadata
         unique_clusters = set(clusters.cluster_ids)
         cluster_sizes = {c: clusters.cluster_ids.count(c) for c in unique_clusters}
@@ -79,9 +89,7 @@ class MemoryClusterer:
         # Generate summaries for each cluster
         cluster_summaries = {}
         for cluster_id in unique_clusters:
-            cluster_memories = [
-                m for i, m in enumerate(memories) if clusters.cluster_ids[i] == cluster_id
-            ]
+            cluster_memories = [m for m, cid in cluster_source if cid == cluster_id]
             memory_texts = [f"- {m.content}" for m in cluster_memories]
             summary = await self.summarizer.summarize("\n".join(memory_texts))
             cluster_summaries[cluster_id] = str(summary) if summary else ""
@@ -137,6 +145,8 @@ class MemoryClusterer:
         for i, mem1 in enumerate(memories):
             graph.add_node(i)
             for j, mem2 in enumerate(memories[i + 1 :], i + 1):
+                if not mem1.embedding or not mem2.embedding:
+                    continue
                 similarity = np.dot(mem1.embedding, mem2.embedding)
                 if similarity >= similarity_threshold:
                     graph.add_edge(i, j)

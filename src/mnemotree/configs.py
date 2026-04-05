@@ -6,10 +6,7 @@ This module provides pre-configured setups optimized for specific scenarios.
 
 import os
 from dataclasses import dataclass
-
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from typing import Any
 
 from mnemotree.core import MemoryCore
 from mnemotree.core.adaptive import (
@@ -37,8 +34,8 @@ class MemorySystemConfig:
     """Complete configuration for a memory system."""
 
     # Core
-    llm: BaseLanguageModel | None = None
-    embeddings: Embeddings | None = None
+    llm: Any | None = None
+    embeddings: Any | None = None
 
     # Retrieval
     use_hybrid_retrieval: bool = True
@@ -67,17 +64,20 @@ class MemorySystemConfig:
 
         # Initialize LLM and embeddings if not provided.
         # Prefer explicit constructor args; otherwise fall back to env-configured defaults.
-        llm = self.llm or ChatOpenAI(
-            model=os.getenv("MNEMOTREE_LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4",
-            temperature=float(os.getenv("MNEMOTREE_LLM_TEMPERATURE", "0.7")),
-        )
+        # PydanticAI model strings are used when [analysis] extra is installed.
+        if self.llm is not None:
+            llm = self.llm
+        else:
+            llm = os.getenv("MNEMOTREE_LLM_MODEL") or os.getenv("OPENAI_MODEL") or "openai:gpt-4o"
 
-        embedding_model = os.getenv("MNEMOTREE_EMBEDDING_MODEL") or os.getenv(
-            "OPENAI_EMBEDDING_MODEL"
-        )
-        embeddings = self.embeddings or (
-            OpenAIEmbeddings(model=embedding_model) if embedding_model else OpenAIEmbeddings()
-        )
+        if self.embeddings is not None:
+            embeddings = self.embeddings
+        else:
+            embeddings = (
+                os.getenv("MNEMOTREE_EMBEDDING_MODEL")
+                or os.getenv("OPENAI_EMBEDDING_MODEL")
+                or "openai:text-embedding-3-small"
+            )
 
         retrieval_config = RetrievalConfig(
             retrieval_mode="hybrid" if self.use_hybrid_retrieval else "basic",

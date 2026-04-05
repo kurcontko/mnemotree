@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from mnemotree.core.models import LinkType
 from mnemotree.core.query import FilterOperator, MemoryFilter, MemoryQuery, SortOrder
 from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
 
@@ -139,35 +140,127 @@ async def test_sqlite_vec_query_memories(tmp_path, memory_item):
 
 @pytest.mark.asyncio
 async def test_sqlite_vec_get_similar_memories(tmp_path, memory_item):
-    """Test vector similarity search."""
+    """Test vector similarity search via get_similar_memories (KNN MATCH)."""
+    dim = 4  # small dimension for fast tests
     db_path = tmp_path / "memories.sqlite"
-    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=len(memory_item.embedding))
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=dim)
     await store.initialize()
 
     try:
-        # Store memories
         mem1 = memory_item.model_copy(
             update={
                 "memory_id": "mem-1",
                 "content": "Python programming tutorial",
                 "importance": 0.8,
+                "embedding": [1.0, 0.0, 0.0, 0.0],
             }
         )
         mem2 = memory_item.model_copy(
-            update={"memory_id": "mem-2", "content": "JavaScript basics", "importance": 0.6}
+            update={
+                "memory_id": "mem-2",
+                "content": "JavaScript basics",
+                "importance": 0.6,
+                "embedding": [0.0, 1.0, 0.0, 0.0],
+            }
         )
         mem3 = memory_item.model_copy(
-            update={"memory_id": "mem-3", "content": "Advanced Python features", "importance": 0.9}
+            update={
+                "memory_id": "mem-3",
+                "content": "Advanced Python features",
+                "importance": 0.9,
+                "embedding": [0.9, 0.1, 0.0, 0.0],
+            }
         )
 
         await store.store_memory(mem1)
         await store.store_memory(mem2)
         await store.store_memory(mem3)
 
-        # Test basic retrieval
-        results = await store.get_memory("mem-1")
-        assert results is not None
-        assert results.content == "Python programming tutorial"
+        # Search near mem1's embedding — should find mem1 and mem3 closest
+        results = await store.get_similar_memories(
+            query="python", query_embedding=[1.0, 0.0, 0.0, 0.0], top_k=3
+        )
+        assert len(results) == 3
+        assert results[0].memory_id == "mem-1"
+        assert results[1].memory_id == "mem-3"
+        assert results[2].memory_id == "mem-2"
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_vec_query_memories_with_vector(tmp_path, memory_item):
+    """Test query_memories with a vector query uses KNN MATCH."""
+    dim = 4
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=dim)
+    await store.initialize()
+
+    try:
+        mem1 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-1",
+                "content": "Alpha memory",
+                "embedding": [1.0, 0.0, 0.0, 0.0],
+            }
+        )
+        mem2 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-2",
+                "content": "Beta memory",
+                "embedding": [0.0, 0.0, 1.0, 0.0],
+            }
+        )
+        await store.store_memory(mem1)
+        await store.store_memory(mem2)
+
+        query = MemoryQuery(vector=[1.0, 0.0, 0.0, 0.0], limit=2)
+        results = await store.query_memories(query)
+        assert len(results) == 2
+        assert results[0].memory_id == "mem-1"
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_vec_get_similar_with_filters(tmp_path, memory_item):
+    """Test get_similar_memories with metadata filters + KNN MATCH."""
+    dim = 4
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=dim)
+    await store.initialize()
+
+    try:
+        from mnemotree.core.models import MemoryType
+
+        mem1 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-1",
+                "content": "Semantic memory",
+                "memory_type": MemoryType.SEMANTIC,
+                "embedding": [1.0, 0.0, 0.0, 0.0],
+            }
+        )
+        mem2 = memory_item.model_copy(
+            update={
+                "memory_id": "mem-2",
+                "content": "Episodic memory",
+                "memory_type": MemoryType.EPISODIC,
+                "embedding": [0.9, 0.1, 0.0, 0.0],
+            }
+        )
+        await store.store_memory(mem1)
+        await store.store_memory(mem2)
+
+        # Filter to only semantic — should return only mem1
+        results = await store.get_similar_memories(
+            query="test",
+            query_embedding=[1.0, 0.0, 0.0, 0.0],
+            top_k=5,
+            filters={"memory_type": "semantic"},
+        )
+        assert len(results) == 1
+        assert results[0].memory_id == "mem-1"
     finally:
         await store.close()
 
@@ -343,5 +436,152 @@ async def test_sqlite_vec_error_handling(tmp_path, memory_item):
         # Should handle gracefully without error
         await store.update_connections("non-existent-id", related_ids=["rel-1"])
 
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_cascade_delete_removes_links(tmp_path, memory_item):
+    """Cascade delete should remove links pointing to/from the deleted memory."""
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=len(memory_item.embedding))
+    await store.initialize()
+
+    try:
+        from mnemotree.core.models import MemoryItem, MemoryType
+
+        m2 = MemoryItem(
+            memory_id="target-mem",
+            content="target memory",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.5,
+            embedding=memory_item.embedding,
+        )
+        await store.store_memory(memory_item)
+        await store.store_memory(m2)
+
+        # Create a link between them
+        await store.create_link(
+            source_id=memory_item.memory_id,
+            target_id=m2.memory_id,
+            link_type=LinkType.REFERENCES,
+        )
+        links_before = await store.get_links(memory_item.memory_id)
+        assert len(links_before) >= 1
+
+        # Delete without cascade — links should remain
+        await store.delete_memory(memory_item.memory_id, cascade=False)
+        # Re-store to get links back for comparison later
+        await store.store_memory(memory_item)
+
+        # Create link again
+        await store.create_link(
+            source_id=memory_item.memory_id,
+            target_id=m2.memory_id,
+            link_type=LinkType.REFERENCES,
+        )
+
+        # Delete WITH cascade — links should be cleaned up
+        await store.delete_memory(memory_item.memory_id, cascade=True)
+
+        # Links from/to deleted memory should be gone
+        links_after = await store.get_links(memory_item.memory_id)
+        assert len(links_after) == 0
+
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_list_memories(tmp_path, memory_item):
+    """list_memories should return all stored memories."""
+    db_path = tmp_path / "memories.sqlite"
+    store = SQLiteVecMemoryStore(db_path=db_path, embedding_dim=len(memory_item.embedding))
+    await store.initialize()
+
+    try:
+        from mnemotree.core.models import MemoryItem, MemoryType
+
+        m2 = MemoryItem(
+            memory_id="mem-2",
+            content="second memory",
+            memory_type=MemoryType.EPISODIC,
+            importance=0.7,
+            embedding=memory_item.embedding,
+        )
+        await store.store_memory(memory_item)
+        await store.store_memory(m2)
+
+        # List without embeddings
+        memories = await store.list_memories(include_embeddings=False)
+        assert len(memories) == 2
+        ids = {m.memory_id for m in memories}
+        assert memory_item.memory_id in ids
+        assert "mem-2" in ids
+        assert all(m.embedding is None for m in memories)
+
+        # List with embeddings
+        memories_with_emb = await store.list_memories(include_embeddings=True)
+        assert len(memories_with_emb) == 2
+        assert any(m.embedding is not None for m in memories_with_emb)
+
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_store_memory_rejects_empty_embedding(tmp_path):
+    """Storing a memory with empty embedding [] should raise ValueError."""
+    from mnemotree.core.models import MemoryItem, MemoryType
+
+    store = SQLiteVecMemoryStore(db_path=tmp_path / "test.sqlite")
+    await store.initialize()
+    try:
+        mem = MemoryItem(
+            content="test",
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.5,
+            embedding=[],
+        )
+        with pytest.raises(ValueError, match="requires embeddings"):
+            await store.store_memory(mem)
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_query_memories_dimension_mismatch(tmp_path, memory_item):
+    """Querying with wrong embedding dimension should raise ValueError."""
+    store = SQLiteVecMemoryStore(
+        db_path=tmp_path / "test.sqlite",
+        embedding_dim=len(memory_item.embedding),
+    )
+    await store.initialize()
+    try:
+        await store.store_memory(memory_item)
+
+        # Query with wrong dimension
+        wrong_dim_vector = [0.1, 0.2]  # 2-dim vs memory_item's dimension
+        query = MemoryQuery(vector=wrong_dim_vector, limit=5)
+        with pytest.raises(ValueError, match="dimension.*does not match"):
+            await store.query_memories(query)
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_get_similar_memories_dimension_mismatch(tmp_path, memory_item):
+    """get_similar_memories with wrong dimension should raise ValueError."""
+    store = SQLiteVecMemoryStore(
+        db_path=tmp_path / "test.sqlite",
+        embedding_dim=len(memory_item.embedding),
+    )
+    await store.initialize()
+    try:
+        await store.store_memory(memory_item)
+
+        wrong_dim = [0.1, 0.2]  # 2-dim vs store dimension
+        with pytest.raises(ValueError, match="dimension.*does not match"):
+            await store.get_similar_memories("test", wrong_dim, top_k=5)
     finally:
         await store.close()

@@ -99,3 +99,18 @@ async def test_store_memory(mock_memory_core):
 
     assert result == "mem-123"
     mock_memory_core.remember.assert_called_once_with("test", importance=0.8, tags=["tag1"])
+
+
+@pytest.mark.asyncio
+async def test_store_memory_defaults(mock_memory_core):
+    """store_memory should work with only content (importance/tags use defaults)."""
+    tool = AutogenMemoryTool(mock_memory_core)
+
+    mock_memory = MagicMock()
+    mock_memory.memory_id = "mem-456"
+    mock_memory_core.remember.return_value = mock_memory
+
+    result = await tool.store_memory(content="just content")
+
+    assert result == "mem-456"
+    mock_memory_core.remember.assert_called_once_with("just content", importance=0.5, tags=[])

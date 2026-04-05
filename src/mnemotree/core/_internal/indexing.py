@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
 from collections import Counter
@@ -7,6 +8,8 @@ from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from ..models import MemoryItem
+
+logger = logging.getLogger(__name__)
 
 
 def tokenize(text: str) -> list[str]:
@@ -168,7 +171,7 @@ class BM25Index:
             if tf <= 0:
                 continue
             dl = self.doc_len.get(memory_id, 0)
-            denom = tf + self.k1 * (1 - self.b + self.b * (dl / avgdl))
+            denom = tf + self.k1 * (1 - self.b + self.b * (dl / avgdl if avgdl > 0 else 1.0))
             score = idf * (tf * (self.k1 + 1)) / denom if denom else 0.0
             scores[memory_id] = scores.get(memory_id, 0.0) + score
 
@@ -378,6 +381,11 @@ class IndexManager:
         if weights is None:
             weights = [1.0 for _ in ranked_lists]
         if len(weights) != len(ranked_lists):
+            logger.warning(
+                "weights length %d != ranked_lists length %d; falling back to uniform weights",
+                len(weights),
+                len(ranked_lists),
+            )
             weights = [1.0 for _ in ranked_lists]
 
         scores: dict[str, float] = {}

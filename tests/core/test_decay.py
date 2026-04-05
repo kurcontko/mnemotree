@@ -129,3 +129,41 @@ class TestStabilityUpdater:
     def test_zero_stability_unchanged(self):
         updater = StabilityUpdater()
         assert updater.update(0, 0.5) == pytest.approx(0)
+
+    def test_negative_stability_returns_zero(self):
+        """Negative stability should return 0 instead of propagating invalid state."""
+        updater = StabilityUpdater()
+        assert updater.update(-100.0, 0.5) == pytest.approx(0.0)
+
+
+class TestDecayConfigValidation:
+    def test_zero_decay_power_raises(self):
+        with pytest.raises(ValueError, match="decay_power must be positive"):
+            DecayConfig.from_half_life(86400, decay_power=0)
+
+    def test_negative_decay_power_raises(self):
+        with pytest.raises(ValueError, match="decay_power must be positive"):
+            DecayConfig.from_half_life(86400, decay_power=-0.5)
+
+
+class TestForgettingCurveValidation:
+    def test_zero_decay_power_raises(self):
+        """ForgettingCurve with decay_power=0 should raise, not ZeroDivisionError."""
+        with pytest.raises(ValueError, match="decay_power must be positive"):
+            ForgettingCurve(decay_power=0)
+
+    def test_negative_decay_power_raises(self):
+        with pytest.raises(ValueError, match="decay_power must be positive"):
+            ForgettingCurve(decay_power=-0.5)
+
+    def test_target_retention_zero_raises(self):
+        with pytest.raises(ValueError, match="target_retention must be between"):
+            ForgettingCurve(target_retention=0.0)
+
+    def test_target_retention_one_raises(self):
+        with pytest.raises(ValueError, match="target_retention must be between"):
+            ForgettingCurve(target_retention=1.0)
+
+    def test_valid_params_ok(self):
+        curve = ForgettingCurve(decay_power=0.3, target_retention=0.85)
+        assert curve.factor > 0

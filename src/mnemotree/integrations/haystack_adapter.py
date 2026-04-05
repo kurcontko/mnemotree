@@ -111,7 +111,8 @@ class MnemotreeHaystackMemory:
         )
 
         return [
-            {"role": mem.metadata.get("role", "user"), "content": mem.content} for mem in memories
+            {"role": (mem.metadata or {}).get("role", "user"), "content": mem.content}
+            for mem in memories
         ]
 
     async def search_relevant(self, query: str, limit: int = 5) -> list[dict]:
@@ -130,9 +131,11 @@ class MnemotreeHaystackMemory:
 
         return [
             {
-                "role": mem.metadata.get("role", "user"),
+                "role": (mem.metadata or {}).get("role", "user"),
                 "content": mem.content,
-                "timestamp": mem.timestamp.isoformat(),
+                "timestamp": mem.timestamp.isoformat()
+                if hasattr(mem.timestamp, "isoformat")
+                else str(mem.timestamp or ""),
                 "importance": mem.importance,
             }
             for mem in memories

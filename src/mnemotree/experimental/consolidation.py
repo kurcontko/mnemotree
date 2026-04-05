@@ -14,7 +14,6 @@ from typing import Any
 from uuid import uuid4
 
 import numpy as np
-from langchain_core.language_models.base import BaseLanguageModel
 from sklearn.cluster import DBSCAN, AgglomerativeClustering
 
 from ..analysis.clustering import MemoryClusterer
@@ -79,7 +78,7 @@ class MemoryConsolidator:
 
     def __init__(
         self,
-        llm: BaseLanguageModel,
+        llm: Any,
         clusterer: MemoryClusterer | None = None,
         config: ConsolidationConfig | None = None,
     ):
@@ -92,7 +91,7 @@ class MemoryConsolidator:
             config: Consolidation configuration
         """
         self.llm = llm
-        self.clusterer = clusterer or MemoryClusterer(summarizer=Summarizer(llm=llm))
+        self.clusterer = clusterer or MemoryClusterer(summarizer=Summarizer(model=llm))
         self.config = config or ConsolidationConfig()
 
     async def consolidate(
@@ -155,13 +154,17 @@ class MemoryConsolidator:
         Returns:
             List of memory clusters
         """
-        # Extract embeddings
+        # Extract embeddings — skip memories without embeddings to avoid
+        # spurious clusters from zero-vector placeholders
+        valid_indices = []
         embeddings = []
-        for memory in memories:
+        for i, memory in enumerate(memories):
             if memory.embedding:
+                valid_indices.append(i)
                 embeddings.append(memory.embedding)
-            else:
-                embeddings.append([0.0] * 768)  # Placeholder
+
+        if not embeddings:
+            return []
 
         embeddings_array = np.array(embeddings)
 
@@ -181,14 +184,14 @@ class MemoryConsolidator:
 
         labels = clusterer.fit_predict(embeddings_array)
 
-        # Group memories by cluster label
+        # Group memories by cluster label (only valid-embedding memories)
         clusters: dict[int, list[MemoryItem]] = {}
-        for memory, label in zip(memories, labels, strict=True):
+        for idx, label in zip(valid_indices, labels, strict=True):
             if label == -1:  # Noise points in DBSCAN
                 continue
             if label not in clusters:
                 clusters[label] = []
-            clusters[label].append(memory)
+            clusters[label].append(memories[idx])
 
         # Filter out small clusters
         return [
@@ -300,9 +303,9 @@ Summary:"""
             }
         )
 
-        if hasattr(result, "content"):
+        if hasattr(result, "content") and result.content:
             return result.content.strip()
-        return str(result).strip()
+        return str(result).strip() or "Summary unavailable"
 
     def _extract_common_tags(self, cluster: list[MemoryItem]) -> list[str]:
         """Extract tags that appear in multiple cluster memories."""

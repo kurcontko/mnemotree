@@ -11,6 +11,8 @@ def keyword_overlap_score(tags: list[str] | None, keywords: list[str] | None) ->
         return 0.0
     tag_tokens: set[str] = set()
     for tag in tags:
+        if not tag or not isinstance(tag, str):
+            continue
         lowered = tag.lower()
         tag_tokens.add(lowered)
         tag_tokens.update(lowered.replace("-", " ").split())

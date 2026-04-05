@@ -1,10 +1,15 @@
 import pytest
 
-from mnemotree.core.models import MemoryItem, MemoryType
+from mnemotree.core.models import LinkType, MemoryItem, MemoryLink, MemoryType
 from mnemotree.core.query import MemoryQuery, MemoryQueryBuilder
 from mnemotree.core.retrieval import (
+    CAUSAL_LINK_TYPES,
+    SEMANTIC_LINK_TYPES,
+    TEMPORAL_LINK_TYPES,
     BaseRetriever,
-    HybridFusionRetriever,
+    FusionStrategy,
+    HybridRetriever,
+    RetrievalStage,
     VectorEntityRetriever,
     rrf_fuse,
 )
@@ -276,7 +281,7 @@ async def test_hybrid_fusion_recall_structured_updates_access():
     m1 = _memory("m1", [1.0, 0.0])
     store = DummyStore(structured_memories=[m1])
 
-    retriever = HybridFusionRetriever(
+    retriever = HybridRetriever(
         store=store,
         scoring_system=MemoryScoring(),
         ner=None,
@@ -309,7 +314,7 @@ async def test_hybrid_fusion_recall_reranks_top_candidates():
     )
     reranker = DummyReranker({"m2": 0, "m1": 1, "m3": 2})
 
-    retriever = HybridFusionRetriever(
+    retriever = HybridRetriever(
         store=store,
         scoring_system=MemoryScoring(),
         ner=ner,
@@ -326,3 +331,318 @@ async def test_hybrid_fusion_recall_reranks_top_candidates():
     assert [memory.memory_id for memory in results][:2] == ["m2", "m1"]
     assert reranker.calls[0][2] is None
     assert set(store.updated_metadata.keys()) == {"m1", "m2", "m3"}
+
+
+# ---------------------------------------------------------------------------
+# MAGMA four-graph constants
+# ---------------------------------------------------------------------------
+
+
+class TestGraphDimensionConstants:
+    def test_semantic_link_types(self) -> None:
+        assert LinkType.SUPPORTS in SEMANTIC_LINK_TYPES
+        assert LinkType.CONTRADICTS in SEMANTIC_LINK_TYPES
+        assert LinkType.ELABORATES in SEMANTIC_LINK_TYPES
+        assert LinkType.SIMILAR_TO in SEMANTIC_LINK_TYPES
+        assert LinkType.GENERALIZES in SEMANTIC_LINK_TYPES
+        assert LinkType.SUPERSEDES in SEMANTIC_LINK_TYPES
+
+    def test_temporal_link_types(self) -> None:
+        assert LinkType.FOLLOWS in TEMPORAL_LINK_TYPES
+        assert LinkType.SEQUENCE in TEMPORAL_LINK_TYPES
+        assert len(TEMPORAL_LINK_TYPES) == 2
+
+    def test_causal_link_types(self) -> None:
+        assert LinkType.CAUSES in CAUSAL_LINK_TYPES
+        assert LinkType.DERIVES_FROM in CAUSAL_LINK_TYPES
+        assert len(CAUSAL_LINK_TYPES) == 2
+
+    def test_no_overlap_temporal_semantic(self) -> None:
+        assert not (TEMPORAL_LINK_TYPES & SEMANTIC_LINK_TYPES)
+
+
+# ---------------------------------------------------------------------------
+# Graph-aware DummyStore for MAGMA traversal tests
+# ---------------------------------------------------------------------------
+
+
+class GraphAwareDummyStore(DummyStore):
+    """Extends DummyStore with SupportsKnowledgeGraph-compatible methods."""
+
+    def __init__(
+        self,
+        *,
+        vector_memories: list[MemoryItem] | None = None,
+        entity_memories: list[MemoryItem] | None = None,
+        graph_neighbors: list[tuple[MemoryItem, int, list[MemoryLink]]] | None = None,
+    ) -> None:
+        super().__init__(
+            vector_memories=vector_memories,
+            entity_memories=entity_memories,
+        )
+        self.graph_neighbors = graph_neighbors or []
+        self.traverse_calls: list[dict] = []
+
+    async def traverse_graph(
+        self,
+        start_id: str,
+        *,
+        max_depth: int = 3,
+        link_types: list[LinkType] | None = None,
+        strategy: str = "bfs",
+    ) -> list[tuple[MemoryItem, int, list[MemoryLink]]]:
+        self.traverse_calls.append(
+            {
+                "start_id": start_id,
+                "max_depth": max_depth,
+                "link_types": link_types,
+            }
+        )
+        return self.graph_neighbors
+
+    async def create_link(self, *a, **kw) -> MemoryLink:
+        raise NotImplementedError
+
+    async def get_links(self, *a, **kw) -> list[MemoryLink]:
+        return []
+
+    async def find_path(self, *a, **kw):
+        return None
+
+    async def suggest_links(self, *a, **kw):
+        return []
+
+    async def update_link_strength(self, *a, **kw) -> bool:
+        return True
+
+    async def delete_link(self, *a, **kw) -> bool:
+        return True
+
+    async def get_backlinks(self, *a, **kw) -> list[MemoryItem]:
+        return []
+
+    async def get_neighborhood_links(self, *a, **kw) -> list[MemoryLink]:
+        return []
+
+    async def traverse_typed_path(self, *a, **kw) -> list:
+        return []
+
+
+@pytest.mark.asyncio
+async def test_hybrid_retriever_collects_graph_candidates() -> None:
+    """HybridRetriever collects graph candidates when graph_weight > 0."""
+    query = "test query"
+    embedder = DummyEmbedder({query: [1.0, 0.0]})
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.9, 0.1])
+    m_graph = _memory("g1", [0.8, 0.2])
+
+    link = MemoryLink(
+        source_id="m1",
+        target_id="g1",
+        link_type=LinkType.ELABORATES,
+    )
+    store = GraphAwareDummyStore(
+        vector_memories=[m1, m2],
+        graph_neighbors=[(m_graph, 1, [link])],
+    )
+
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        graph_weight=0.3,
+        vector_weight=0.5,
+        bm25_weight=0.2,
+    )
+
+    results = await retriever.recall(query, limit=5, scoring=False, update_access=False)
+    # Graph candidate should be included in results
+    result_ids = {m.memory_id for m in results}
+    assert "g1" in result_ids
+    # Store's traverse_graph should have been called
+    assert len(store.traverse_calls) > 0
+
+
+@pytest.mark.asyncio
+async def test_hybrid_retriever_skips_graph_when_weight_zero() -> None:
+    """HybridRetriever skips graph collection when graph_weight=0."""
+    query = "test query"
+    embedder = DummyEmbedder({query: [1.0, 0.0]})
+    m1 = _memory("m1", [1.0, 0.0])
+
+    store = GraphAwareDummyStore(vector_memories=[m1])
+
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        graph_weight=0.0,
+    )
+
+    await retriever.recall(query, limit=5, scoring=False, update_access=False)
+    assert len(store.traverse_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_graph_candidates_with_none_entities():
+    """Memories with entities=None should not crash graph candidate collection."""
+    m1 = _memory("m1", [1.0, 0.0])
+    m1.entities = None  # type: ignore[assignment]
+    m2 = _memory("m2", [0.9, 0.1])
+    m2.entities = {"org": "ACME"}
+
+    store = DummyStore(vector_memories=[m1, m2])
+    embedder = DummyEmbedder({"q": [1.0, 0.0]})
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        graph_weight=0.3,
+    )
+    # Should not raise AttributeError: 'NoneType' object has no attribute 'keys'
+    results = await retriever.recall(
+        MemoryQuery(vector=[1.0, 0.0]), limit=5, scoring=False, update_access=False
+    )
+    assert isinstance(results, list)
+
+
+# ---------------------------------------------------------------------------
+# Fusion strategy tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hybrid_weighted_sum_fusion():
+    """WeightedSum fusion normalizes scores and applies weights."""
+    query = "test"
+    embedder = DummyEmbedder({query: [1.0, 0.0]})
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore(vector_memories=[m1, m2])
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        fusion_strategy=FusionStrategy.WEIGHTED_SUM,
+    )
+    results = await retriever.recall(query, limit=5, scoring=False, update_access=False)
+    assert len(results) >= 1
+    # m1 should rank first (higher embedding similarity)
+    assert results[0].memory_id == "m1"
+
+
+@pytest.mark.asyncio
+async def test_hybrid_max_score_fusion():
+    """MaxScore fusion takes the maximum score per memory across stages."""
+    query = "test"
+    embedder = DummyEmbedder({query: [1.0, 0.0]})
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore(vector_memories=[m1, m2])
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=embedder,
+        fusion_strategy=FusionStrategy.MAX_SCORE,
+    )
+    results = await retriever.recall(query, limit=5, scoring=False, update_access=False)
+    assert len(results) >= 1
+    assert results[0].memory_id == "m1"
+
+
+@pytest.mark.asyncio
+async def test_hybrid_retrieve_standalone():
+    """The standalone retrieve() method fuses pre-scored candidates."""
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+    m3 = _memory("m3", [0.0, 1.0])
+
+    store = DummyStore()
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=DummyEmbedder({"q": [1.0, 0.0]}),
+    )
+    results = await retriever.retrieve(
+        query="q",
+        vector_candidates=[(m1, 0.9), (m2, 0.5)],
+        entity_candidates=[(m3, 0.8)],
+        top_k=3,
+        apply_reranking=False,
+    )
+    assert len(results) >= 1
+    # All three memories should appear in results
+    result_ids = {r.memory.memory_id for r in results}
+    assert result_ids == {"m1", "m2", "m3"}
+
+
+@pytest.mark.asyncio
+async def test_hybrid_retrieve_with_reranking():
+    """Standalone retrieve() applies reranking when configured."""
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore()
+    reranker = DummyReranker({"m2": 0, "m1": 1})
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=DummyEmbedder({"q": [1.0, 0.0]}),
+        reranker=reranker,
+    )
+    results = await retriever.retrieve(
+        query="q",
+        vector_candidates=[(m1, 0.9), (m2, 0.5)],
+        entity_candidates=[],
+        top_k=2,
+        apply_reranking=True,
+    )
+    # Reranker should have been called
+    assert len(reranker.calls) == 1
+    # Rerank scores should appear in result scores
+    for r in results:
+        assert RetrievalStage.RERANK.value in r.scores
+        assert RetrievalStage.RERANK in r.retrieval_stages
+
+
+@pytest.mark.asyncio
+async def test_maybe_rerank_error_returns_original():
+    """If reranking fails, _maybe_rerank returns original order."""
+
+    class FailingReranker(BaseReranker):
+        async def rerank(self, query, candidates, top_k=None):
+            raise RuntimeError("model failed")
+
+    m1 = _memory("m1", [1.0, 0.0])
+    m2 = _memory("m2", [0.5, 0.5])
+
+    store = DummyStore()
+    retriever = HybridRetriever(
+        store=store,
+        scoring_system=MemoryScoring(),
+        ner=None,
+        keyword_extractor=None,
+        embedder=DummyEmbedder({"q": [1.0, 0.0]}),
+        reranker=FailingReranker(),
+        rerank_candidates=10,
+    )
+    result = await retriever._maybe_rerank("q", [m1, m2])
+    # Should return original order, not crash
+    assert [m.memory_id for m in result] == ["m1", "m2"]

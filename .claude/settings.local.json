@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__brightdata__scrape_as_markdown"
+    ]
+  }
+}

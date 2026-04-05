@@ -529,13 +529,14 @@ class SQLiteGraphIndex:
         for term in name_only:
             if len(term) < 4:
                 continue
+            escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             rows = conn.execute(
                 """
                 SELECT id, name, type
                 FROM entity
-                WHERE name LIKE ?
+                WHERE name LIKE ? ESCAPE '\\'
                 """,
-                (f"%{term}%",),
+                (f"%{escaped}%",),
             ).fetchall()
             entity_rows.extend(rows)
         return entity_rows
@@ -558,13 +559,14 @@ class SQLiteGraphIndex:
             entity_rows.extend(rows)
             if len(name) < 4:
                 continue
+            escaped = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             rows = conn.execute(
                 """
                 SELECT id, name, type
                 FROM entity
-                WHERE name LIKE ? AND type = ?
+                WHERE name LIKE ? ESCAPE '\\' AND type = ?
                 """,
-                (f"%{name}%", entity_type),
+                (f"%{escaped}%", entity_type),
             ).fetchall()
             entity_rows.extend(rows)
         return entity_rows
