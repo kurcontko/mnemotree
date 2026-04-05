@@ -167,10 +167,14 @@ def _filter_superseded(memories: list, k: int) -> list:
 
 async def run_mnemotree(items: list[dict], *, store_dir: str, k: int,
                         generate_fn, judge_fn,
-                        enable_decay: bool = False) -> tuple[list[CaseResult], dict]:
+                        enable_decay: bool = False,
+                        use_ppr: bool = False) -> tuple[list[CaseResult], dict]:
     results, timings = [], []
     ingested_docs: set[str] = set()
     cores: dict[str, Any] = {}
+
+    # Use sqlite_vec when PPR is requested (needed for knowledge graph)
+    backend = "sqlite_vec" if use_ppr else "chroma"
 
     for i, item in enumerate(items):
         doc_id = item["doc_id"]
@@ -181,8 +185,9 @@ async def run_mnemotree(items: list[dict], *, store_dir: str, k: int,
                 enable_ner=True, enable_keywords=False, reranker="none",
                 retrieval_mode="hybrid", enable_bm25=True,
                 enable_decay=enable_decay,
-                decay_stability_days=1.0,  # Fast decay for CR — favor recent chunks
+                decay_stability_days=1.0,
                 decay_floor=0.05,
+                store_backend=backend,
             )
             cores[doc_id] = core
 
@@ -204,16 +209,31 @@ async def run_mnemotree(items: list[dict], *, store_dir: str, k: int,
         t0 = time.perf_counter()
         # Retrieve more candidates, then filter conflicts
         fetch_k = k * 2 if enable_decay else k
-        retrieved = await cores[doc_id].recall(item["question"], limit=fetch_k, scoring=True, update_access=False)
+        if use_ppr:
+            # PPR: graph-augmented retrieval traverses entity links for multi-hop
+            retrieved = await cores[doc_id].recall_ppr(item["question"], limit=fetch_k)
+        else:
+            retrieved = await cores[doc_id].recall(item["question"], limit=fetch_k, scoring=True, update_access=False)
 
         if enable_decay and len(retrieved) > 1:
             retrieved = _filter_superseded(retrieved, k)
+
+        if enable_decay:
+            # Sort by timestamp descending — newest facts first (primacy bias)
+            retrieved = sorted(retrieved, key=lambda m: getattr(m, 'timestamp', None) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
         context = "\n".join(f"[{j+1}] {m.content}" for j, m in enumerate(retrieved))
 
         predicted = ""
         if generate_fn:
-            predicted = await generate_fn(context, item["question"])
+            # Conflict-aware prompt for CR
+            cr_prompt = (
+                "You are answering questions using retrieved facts. "
+                "IMPORTANT: The facts are ordered newest-first. If you see conflicting "
+                "information about the same entity, ALWAYS use the version that appears "
+                "FIRST (newest). Older facts may be outdated. Be concise and specific."
+            ) if enable_decay else None
+            predicted = await generate_fn(context, item["question"], system_prompt=cr_prompt)
         score = 0.0
         if judge_fn and predicted:
             score = await judge_fn(item["question"], item["answer"], predicted)
@@ -313,6 +333,7 @@ def parse_args():
     p.add_argument("--judge-model", default="openai/gpt-4o-mini")
     p.add_argument("--output", default="benchmarks/results/mab_comparison.json")
     p.add_argument("--enable-decay", action="store_true", help="Enable temporal decay scoring (favor newer memories)")
+    p.add_argument("--use-ppr", action="store_true", help="Use PPR graph retrieval with SQLiteVec backend")
     return p.parse_args()
 
 
@@ -332,11 +353,12 @@ async def main():
         from benchmarks.lib.answering import generate_answer, judge_answer, get_openai_client
         client, model = get_openai_client()
         judge_model = args.judge_model
-        async def generate_fn(ctx, q): return await generate_answer(client, model, ctx, q)
+        async def generate_fn(ctx, q, system_prompt=None): return await generate_answer(client, model, ctx, q, system_prompt=system_prompt)
         async def judge_fn(q, exp, pred): return await judge_answer(client, judge_model, q, exp, pred)
 
-    print(f"\n[1/3] Running Mnemotree (decay={'ON' if args.enable_decay else 'OFF'})...")
-    mt_r, mt_s = await run_mnemotree(items, store_dir=args.store_dir, k=args.k, generate_fn=generate_fn, judge_fn=judge_fn, enable_decay=args.enable_decay)
+    mode = "PPR" if args.use_ppr else ("decay" if args.enable_decay else "standard")
+    print(f"\n[1/3] Running Mnemotree ({mode})...")
+    mt_r, mt_s = await run_mnemotree(items, store_dir=args.store_dir, k=args.k, generate_fn=generate_fn, judge_fn=judge_fn, enable_decay=args.enable_decay or args.use_ppr, use_ppr=args.use_ppr)
     mt_sum = _aggregate(mt_r)
     print(f"  Mnemotree accuracy: {mt_sum['accuracy']:.1%}")
 

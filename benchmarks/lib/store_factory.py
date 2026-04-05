@@ -47,13 +47,15 @@ async def create_memory_core(
     enable_decay: bool = False,
     decay_stability_days: float = 7.0,
     decay_floor: float = 0.1,
+    # Store backend
+    store_backend: str = "chroma",  # "chroma" or "sqlite_vec"
 ) -> Any:
     """Build and return a configured MemoryCore for benchmark use.
 
     If sample_id is provided, creates an isolated per-sample store directory.
+    store_backend: "chroma" (default) or "sqlite_vec" (enables KG + PPR).
     """
     from mnemotree import MemoryCoreBuilder
-    from mnemotree.store import ChromaMemoryStore
     from mnemotree.embeddings.local import LocalSentenceTransformerEmbeddings
 
     store_path = Path(store_dir)
@@ -64,10 +66,16 @@ async def create_memory_core(
         shutil.rmtree(store_path, ignore_errors=True)
     store_path.mkdir(parents=True, exist_ok=True)
 
-    store = ChromaMemoryStore(
-        persist_directory=str(store_path),
-        enable_graph_index=enable_ner,
-    )
+    if store_backend == "sqlite_vec":
+        from mnemotree.store.sqlite_vec_store import SQLiteVecMemoryStore
+        db_path = store_path / "mnemotree.sqlite"
+        store = SQLiteVecMemoryStore(db_path=str(db_path))
+    else:
+        from mnemotree.store import ChromaMemoryStore
+        store = ChromaMemoryStore(
+            persist_directory=str(store_path),
+            enable_graph_index=enable_ner,
+        )
     await store.initialize()
 
     embeddings = LocalSentenceTransformerEmbeddings(
@@ -111,6 +119,19 @@ async def create_memory_core(
             decay_power=0.5,
             target_retention=0.9,
         )
+        # Recency-boosted scoring for conflict resolution
+        from mnemotree.core.scoring import MemoryScoring
+        scorer = MemoryScoring(
+            recency_weight=0.6,
+            relevance_weight=0.3,
+            importance_weight=0.1,
+            recency_stability_seconds=decay_stability_days * 86400,
+            recency_power=-0.8,  # Steeper recency dropoff
+            enable_decay=True,
+            decay_stability_seconds=decay_stability_days * 86400,
+            decay_floor=decay_floor,
+        )
+        builder = builder.with_memory_scoring(scorer)
 
     if local_models:
         builder = builder.with_local_models(
