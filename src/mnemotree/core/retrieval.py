@@ -33,29 +33,35 @@ logger = logging.getLogger(__name__)
 # MAGMA four-graph dimension classification
 # ---------------------------------------------------------------------------
 
-SEMANTIC_LINK_TYPES: frozenset[LinkType] = frozenset({
-    LinkType.SUPPORTS,
-    LinkType.CONTRADICTS,
-    LinkType.ELABORATES,
-    LinkType.REFERENCES,
-    LinkType.SIMILAR_TO,
-    LinkType.EXEMPLIFIES,
-    LinkType.GENERALIZES,
-    LinkType.DERIVES_FROM,
-    LinkType.PART_OF,
-    LinkType.UPDATES,
-    LinkType.SUPERSEDES,
-})
+SEMANTIC_LINK_TYPES: frozenset[LinkType] = frozenset(
+    {
+        LinkType.SUPPORTS,
+        LinkType.CONTRADICTS,
+        LinkType.ELABORATES,
+        LinkType.REFERENCES,
+        LinkType.SIMILAR_TO,
+        LinkType.EXEMPLIFIES,
+        LinkType.GENERALIZES,
+        LinkType.DERIVES_FROM,
+        LinkType.PART_OF,
+        LinkType.UPDATES,
+        LinkType.SUPERSEDES,
+    }
+)
 
-TEMPORAL_LINK_TYPES: frozenset[LinkType] = frozenset({
-    LinkType.FOLLOWS,
-    LinkType.SEQUENCE,
-})
+TEMPORAL_LINK_TYPES: frozenset[LinkType] = frozenset(
+    {
+        LinkType.FOLLOWS,
+        LinkType.SEQUENCE,
+    }
+)
 
-CAUSAL_LINK_TYPES: frozenset[LinkType] = frozenset({
-    LinkType.CAUSES,
-    LinkType.DERIVES_FROM,
-})
+CAUSAL_LINK_TYPES: frozenset[LinkType] = frozenset(
+    {
+        LinkType.CAUSES,
+        LinkType.DERIVES_FROM,
+    }
+)
 
 __all__ = [
     "Retriever",
@@ -493,9 +499,7 @@ class HybridRetriever(BaseRetriever):
         stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]] = {
             RetrievalStage.VECTOR: self._score_candidates(vector_memories, query_embedding),
             RetrievalStage.ENTITY: self._score_candidates(entity_memories, query_embedding),
-            RetrievalStage.BM25: [
-                (m, 1.0 / (i + 1)) for i, m in enumerate(bm25_memories)
-            ],
+            RetrievalStage.BM25: [(m, 1.0 / (i + 1)) for i, m in enumerate(bm25_memories)],
         }
 
         if (
@@ -522,7 +526,9 @@ class HybridRetriever(BaseRetriever):
             try:
                 query_keywords = await keyword_task if keyword_task else []
             except Exception:
-                logger.debug("Keyword extraction failed, proceeding without keywords", exc_info=True)
+                logger.debug(
+                    "Keyword extraction failed, proceeding without keywords", exc_info=True
+                )
                 query_keywords = []
             memories = self.signal_ranker.rank(
                 memories,
@@ -647,9 +653,11 @@ class HybridRetriever(BaseRetriever):
         if query_embedding:
             entity_memories = sorted(
                 entity_memories,
-                key=lambda memory: cosine_similarity(memory.embedding, query_embedding)
-                if memory.embedding
-                else 0.0,
+                key=lambda memory: (
+                    cosine_similarity(memory.embedding, query_embedding)
+                    if memory.embedding
+                    else 0.0
+                ),
                 reverse=True,
             )
 
@@ -743,9 +751,7 @@ class HybridRetriever(BaseRetriever):
                 seed_entities.update(m.entities.keys())
         if seed_entities and isinstance(self.store, SupportsEntityQuery):
             try:
-                entity_neighbors = await self.store.query_by_entities(
-                    list(seed_entities)[:10]
-                )
+                entity_neighbors = await self.store.query_by_entities(list(seed_entities)[:10])
                 for mem in entity_neighbors:
                     if mem.memory_id not in seed_id_set and mem.memory_id not in scored:
                         sim = 0.5  # default entity co-occurrence score
@@ -792,10 +798,7 @@ class HybridRetriever(BaseRetriever):
             return []
         if not query_embedding:
             return [(m, 0.0) for m in memories]
-        return [
-            (m, max(0.0, cosine_similarity(m.embedding, query_embedding)))
-            for m in memories
-        ]
+        return [(m, max(0.0, cosine_similarity(m.embedding, query_embedding))) for m in memories]
 
     def _fuse_candidates(
         self, stage_candidates: dict[RetrievalStage, list[tuple[MemoryItem, float]]]
@@ -950,7 +953,9 @@ class PPRGraphRetriever(BaseRetriever):
 
         # 3. Fetch neighbourhood links (requires SupportsKnowledgeGraph)
         if not isinstance(self.store, SupportsKnowledgeGraph):
-            logger.warning("PPRGraphRetriever: store does not support SupportsKnowledgeGraph; falling back to seed results")
+            logger.warning(
+                "PPRGraphRetriever: store does not support SupportsKnowledgeGraph; falling back to seed results"
+            )
             if limit is not None:
                 vector_memories = vector_memories[:limit]
             return vector_memories
@@ -975,9 +980,7 @@ class PPRGraphRetriever(BaseRetriever):
 
         # 5. Fetch MemoryItems for top PPR nodes not already in seed results
         seed_ids = {m.memory_id for m in vector_memories}
-        extra_ids = [
-            mid for mid in ppr_scores if mid not in seed_ids
-        ]
+        extra_ids = [mid for mid in ppr_scores if mid not in seed_ids]
         extra_memories: list[MemoryItem] = []
         if extra_ids:
             fetch_tasks = [self.store.get_memory(mid) for mid in extra_ids]
@@ -1160,7 +1163,9 @@ class TypedPathRetriever(BaseRetriever):
         resolved_limit = limit if limit is not None else 10
 
         if not isinstance(self.store, SupportsKnowledgeGraph):
-            logger.warning("TypedPathRetriever: store does not support SupportsKnowledgeGraph; returning empty")
+            logger.warning(
+                "TypedPathRetriever: store does not support SupportsKnowledgeGraph; returning empty"
+            )
             return []
 
         # Seed retrieval

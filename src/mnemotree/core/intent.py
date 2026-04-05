@@ -21,8 +21,8 @@ __all__ = [
 
 
 class RetrievalIntent(str, Enum):
-    EPISODIC = "episodic"    # "What happened when...", "When did I..."
-    SEMANTIC = "semantic"    # "What is...", "How does...", "Why is..."
+    EPISODIC = "episodic"  # "What happened when...", "When did I..."
+    SEMANTIC = "semantic"  # "What is...", "How does...", "Why is..."
     PROCEDURAL = "procedural"  # "How do I...", "Steps to...", "How to..."
     UNKNOWN = "unknown"
 
@@ -88,8 +88,10 @@ class LLMIntentClassifier:
         try:
             response = await self.llm.ainvoke(_CLASSIFY_PROMPT.format(query=query))
             text = (
-                (response.content if hasattr(response, "content") else str(response)) or ""
-            ).strip().lower()
+                ((response.content if hasattr(response, "content") else str(response)) or "")
+                .strip()
+                .lower()
+            )
             for intent in RetrievalIntent:
                 if intent.value in text:
                     return intent

@@ -248,7 +248,9 @@ class ContextAwareWriteGate:
         quality_result = self._check_quality(memory)
         if quality_result.decision == WriteDecision.REJECT:
             return quality_result
-        scores["quality"] = quality_result.quality_score if quality_result.quality_score is not None else 0.5
+        scores["quality"] = (
+            quality_result.quality_score if quality_result.quality_score is not None else 0.5
+        )
         reasons.extend(quality_result.reasons)
         return None
 
@@ -260,7 +262,9 @@ class ContextAwareWriteGate:
         reasons: list[str],
     ) -> WriteResult | None:
         novelty_result = await self._assess_novelty(memory, existing_memories)
-        scores["novelty"] = novelty_result.novelty_score if novelty_result.novelty_score is not None else 0.5
+        scores["novelty"] = (
+            novelty_result.novelty_score if novelty_result.novelty_score is not None else 0.5
+        )
         if novelty_result.decision in (WriteDecision.REJECT, WriteDecision.MERGE):
             return novelty_result
         reasons.extend(novelty_result.reasons)
@@ -297,7 +301,11 @@ class ContextAwareWriteGate:
         reasons: list[str],
     ) -> None:
         relevance_result = self._assess_relevance(memory, context)
-        scores["relevance"] = relevance_result.relevance_score if relevance_result.relevance_score is not None else 0.5
+        scores["relevance"] = (
+            relevance_result.relevance_score
+            if relevance_result.relevance_score is not None
+            else 0.5
+        )
         reasons.extend(relevance_result.reasons)
 
     def _finalize_decision(

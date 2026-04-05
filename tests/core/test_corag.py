@@ -1,4 +1,5 @@
 """Unit tests for CoRAG (src/mnemotree/core/corag.py)."""
+
 from __future__ import annotations
 
 import pytest
@@ -81,10 +82,12 @@ async def test_chain_executes_second_hop():
     m1 = _memory("m1", "Alice knows Bob")
     m2 = _memory("m2", "Bob works at ACME")
 
-    retriever = StubRetriever({
-        "Who does Alice know?": [m1],
-        "Where does Bob work?": [m2],
-    })
+    retriever = StubRetriever(
+        {
+            "Who does Alice know?": [m1],
+            "Where does Bob work?": [m2],
+        }
+    )
     hook = OneHopHook("Where does Bob work?")
     chain = ChainOfRetrieval(retriever=retriever, hook=hook, cfg=CoRAGConfig(max_hops=4))
     memories, trace = await chain.retrieve("Who does Alice know?", limit=10)
@@ -98,10 +101,12 @@ async def test_chain_executes_second_hop():
 @pytest.mark.asyncio
 async def test_chain_stops_when_no_new_memories():
     m1 = _memory("m1", "Alice knows Bob")
-    retriever = StubRetriever({
-        "Alice?": [m1],
-        "sub": [m1],  # same memory, no new additions
-    })
+    retriever = StubRetriever(
+        {
+            "Alice?": [m1],
+            "sub": [m1],  # same memory, no new additions
+        }
+    )
     hook = OneHopHook("sub")
     cfg = CoRAGConfig(max_hops=4, min_new_memories=1)
     chain = ChainOfRetrieval(retriever=retriever, hook=hook, cfg=cfg)
@@ -148,10 +153,12 @@ async def test_chain_returns_sorted_by_importance():
 @pytest.mark.asyncio
 async def test_chain_deduplicates_memories():
     m1 = _memory("m1", "Alice")
-    retriever = StubRetriever({
-        "q": [m1],
-        "follow-up": [m1],  # same memory returned again
-    })
+    retriever = StubRetriever(
+        {
+            "q": [m1],
+            "follow-up": [m1],  # same memory returned again
+        }
+    )
     hook = OneHopHook("follow-up")
     chain = ChainOfRetrieval(retriever=retriever, hook=hook, cfg=CoRAGConfig(max_hops=3))
     memories, _ = await chain.retrieve("q", limit=10)

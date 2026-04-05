@@ -130,7 +130,6 @@ class TestStabilityUpdater:
         updater = StabilityUpdater()
         assert updater.update(0, 0.5) == pytest.approx(0)
 
-
     def test_negative_stability_returns_zero(self):
         """Negative stability should return 0 instead of propagating invalid state."""
         updater = StabilityUpdater()

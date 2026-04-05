@@ -4,6 +4,7 @@ Based on CoRAG (NeurIPS 2025): iteratively retrieve → LLM reason → refine qu
 Each hop the LLM inspects accumulated evidence and either proposes a new sub-query
 or signals that retrieval is complete.
 """
+
 from __future__ import annotations
 
 import logging
@@ -116,7 +117,7 @@ class OpenAIReasoningHook:
         client = AsyncOpenAI(base_url=self.base_url, api_key=api_key)
 
         summaries = "\n".join(
-            f"- [{i+1}] {m.content[:200]}" for i, m in enumerate(accumulated[:15])
+            f"- [{i + 1}] {m.content[:200]}" for i, m in enumerate(accumulated[:15])
         )
 
         messages = [
@@ -202,9 +203,7 @@ class ChainOfRetrieval:
                 update_access=False,
             )
 
-            added = {
-                m.memory_id: m for m in new_memories if m.memory_id not in accumulated
-            }
+            added = {m.memory_id: m for m in new_memories if m.memory_id not in accumulated}
             accumulated.update(added)
 
             logger.debug(
@@ -216,7 +215,11 @@ class ChainOfRetrieval:
             )
 
             if len(added) < cfg.min_new_memories:
-                logger.debug("CoRAG stopping: added %d < min_new_memories=%d", len(added), cfg.min_new_memories)
+                logger.debug(
+                    "CoRAG stopping: added %d < min_new_memories=%d",
+                    len(added),
+                    cfg.min_new_memories,
+                )
                 break
 
             refined = await self.hook.reason_and_refine(

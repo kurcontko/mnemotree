@@ -169,9 +169,7 @@ def _build_yaml_frontmatter(memory: MemoryItem) -> str:
         lines.append(f"tags: [{tag_list}]")
 
     if memory.entities:
-        entity_parts = ", ".join(
-            f"{k}: {v}" for k, v in memory.entities.items()
-        )
+        entity_parts = ", ".join(f"{k}: {v}" for k, v in memory.entities.items())
         lines.append(f"entities: {{{entity_parts}}}")
 
     if memory.emotions:
@@ -254,9 +252,7 @@ def _memory_to_section(
         lines.append(f"**Tags:** {tag_str}")
 
     if memory.entities:
-        entity_str = ", ".join(
-            f"{k} ({v})" for k, v in memory.entities.items()
-        )
+        entity_str = ", ".join(f"{k} ({v})" for k, v in memory.entities.items())
         lines.append(f"**Entities:** {entity_str}")
 
     if memory.emotions:
@@ -296,9 +292,7 @@ def _memory_to_file(
         parts.append("")
 
     if memory.entities:
-        entity_str = ", ".join(
-            f"{k} ({v})" for k, v in memory.entities.items()
-        )
+        entity_str = ", ".join(f"{k} ({v})" for k, v in memory.entities.items())
         parts.append(f"**Entities:** {entity_str}")
         parts.append("")
 
@@ -335,9 +329,7 @@ def render_single_file(
     for memory in memories:
         title = id_to_title[memory.memory_id]
         mem_links = links_by_id.get(memory.memory_id, [])
-        section = _memory_to_section(
-            memory, title, mem_links, id_to_title, options.include_links
-        )
+        section = _memory_to_section(memory, title, mem_links, id_to_title, options.include_links)
         lines.append(section)
         lines.append("")
         lines.append("---")
@@ -372,9 +364,7 @@ def render_vault(
 
         filename = f"{stem}.md"
         mem_links = links_by_id.get(memory.memory_id, [])
-        content = _memory_to_file(
-            memory, title, mem_links, id_to_title, options.include_links
-        )
+        content = _memory_to_file(memory, title, mem_links, id_to_title, options.include_links)
         files[filename] = content
 
     # Generate index file
@@ -389,8 +379,7 @@ def render_vault(
         title = id_to_title[memory.memory_id]
         tags = ", ".join(memory.tags) if memory.tags else ""
         index_lines.append(
-            f"| [[{title}]] | {memory.memory_type.value} | "
-            f"{memory.importance} | {tags} |"
+            f"| [[{title}]] | {memory.memory_type.value} | {memory.importance} | {tags} |"
         )
     index_lines.append("")
     files["_index.md"] = "\n".join(index_lines)
@@ -422,9 +411,7 @@ async def export_memories(
         options = ExportOptions()
 
     if not isinstance(store, SupportsMemoryListing):
-        raise NotImplementedError(
-            "Export requires a store that supports list_memories()."
-        )
+        raise NotImplementedError("Export requires a store that supports list_memories().")
 
     memories = await store.list_memories(include_embeddings=False)
     memories = _filter_memories(memories, filters)

@@ -11,7 +11,9 @@ from mnemotree.core._internal.scoring import (
 from mnemotree.core.models import MemoryItem, MemoryType
 
 
-def _mem(mid: str, *, tags: list[str] | None = None, embedding: list[float] | None = None) -> MemoryItem:
+def _mem(
+    mid: str, *, tags: list[str] | None = None, embedding: list[float] | None = None
+) -> MemoryItem:
     return MemoryItem(
         memory_id=mid,
         content=f"content-{mid}",
@@ -27,7 +29,9 @@ class TestKeywordOverlapScore:
         assert keyword_overlap_score(["python", "testing"], ["python"]) == pytest.approx(1.0)
 
     def test_partial_match(self):
-        assert keyword_overlap_score(["python", "testing"], ["python", "rust"]) == pytest.approx(0.5)
+        assert keyword_overlap_score(["python", "testing"], ["python", "rust"]) == pytest.approx(
+            0.5
+        )
 
     def test_no_match(self):
         assert keyword_overlap_score(["python"], ["rust"]) == pytest.approx(0.0)

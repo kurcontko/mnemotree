@@ -171,9 +171,7 @@ def migrate_sqlite_phase1_fields(
     added = False
     for col_name, col_type in _PHASE1_COLUMNS:
         if col_name not in columns:
-            conn.execute(
-                f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}'
-            )
+            conn.execute(f'ALTER TABLE "{collection_name}" ADD COLUMN {col_name} {col_type}')
             added = True
     if added:
         conn.commit()

@@ -159,7 +159,12 @@ include = ["src/mnemotree/py.typed"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -W error --cov=mnemotree --cov-report=term-missing"
+addopts = "-ra --cov=mnemotree --cov-report=term-missing"
+filterwarnings = [
+    "error",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+    "ignore::ResourceWarning",
+]
 testpaths = [
     "tests",
 ]

@@ -35,7 +35,10 @@ class TestRetrievalIntent:
 class TestKeywordIntentClassifier:
     @pytest.mark.asyncio
     async def test_episodic_queries(self, classifier: KeywordIntentClassifier) -> None:
-        assert await classifier.classify("When did I last meet with Alice?") == RetrievalIntent.EPISODIC
+        assert (
+            await classifier.classify("When did I last meet with Alice?")
+            == RetrievalIntent.EPISODIC
+        )
         assert await classifier.classify("What happened yesterday?") == RetrievalIntent.EPISODIC
         assert await classifier.classify("Do you remember the meeting?") == RetrievalIntent.EPISODIC
         assert await classifier.classify("Did I ever visit Paris?") == RetrievalIntent.EPISODIC
@@ -52,7 +55,9 @@ class TestKeywordIntentClassifier:
         assert await classifier.classify("How to install Python?") == RetrievalIntent.PROCEDURAL
         assert await classifier.classify("How do I configure nginx?") == RetrievalIntent.PROCEDURAL
         assert await classifier.classify("Steps to deploy to AWS") == RetrievalIntent.PROCEDURAL
-        assert await classifier.classify("Set up a virtual environment") == RetrievalIntent.PROCEDURAL
+        assert (
+            await classifier.classify("Set up a virtual environment") == RetrievalIntent.PROCEDURAL
+        )
 
     @pytest.mark.asyncio
     async def test_unknown_queries(self, classifier: KeywordIntentClassifier) -> None:
@@ -70,7 +75,11 @@ class TestKeywordIntentClassifier:
         # "how do i" is procedural, "what is" would be semantic — both match once
         # Implementation favors procedural when tied
         result = await classifier.classify("how do i explain what is happening?")
-        assert result in {RetrievalIntent.PROCEDURAL, RetrievalIntent.SEMANTIC, RetrievalIntent.EPISODIC}
+        assert result in {
+            RetrievalIntent.PROCEDURAL,
+            RetrievalIntent.SEMANTIC,
+            RetrievalIntent.EPISODIC,
+        }
 
 
 class TestLLMIntentClassifier:

@@ -558,7 +558,10 @@ class MemoryCore:
                     importance=importance or 0.0,
                     tags=tags or [],
                     embedding=enrichment.embedding,
-                    metadata={"write_gate_rejected": True, "rejection_reason": str(gate_result.reason)},
+                    metadata={
+                        "write_gate_rejected": True,
+                        "rejection_reason": str(gate_result.reason),
+                    },
                 )
 
         # --- Fact decomposition gate (before dedup, to operate on atomic units) ---
@@ -918,9 +921,7 @@ class MemoryCore:
                     context=f"auto-linked score={score:.3f}",
                 )
         except Exception:
-            _log.warning(
-                "Background auto-linking failed for %s", memory_id, exc_info=True
-            )
+            _log.warning("Background auto-linking failed for %s", memory_id, exc_info=True)
 
     async def _detect_and_link_conflicts(self, memory: MemoryItem) -> None:
         """Fire-and-forget: detect contradictions and create CONTRADICTS links."""
@@ -1295,7 +1296,9 @@ class MemoryCore:
         if self.llm is None:
             raise RuntimeError("consolidate() requires an LLM. Pass llm= to MemoryCore.")
 
-        consolidation_cfg = config if isinstance(config, ConsolidationConfig) else ConsolidationConfig()
+        consolidation_cfg = (
+            config if isinstance(config, ConsolidationConfig) else ConsolidationConfig()
+        )
 
         consolidator = MemoryConsolidator(llm=self.llm, config=consolidation_cfg)
 
@@ -1307,7 +1310,8 @@ class MemoryCore:
             update_access=False,
         )
         memories = [
-            m for m in all_results
+            m
+            for m in all_results
             if m.memory_type in (MemoryType.EPISODIC, MemoryType.AUTOBIOGRAPHICAL)
             and (user_id is None or m.user_id == user_id)
         ]
@@ -1520,9 +1524,7 @@ class MemoryCore:
         """
         from ._internal.conflict_judge import ConflictJudge, ConflictJudgeConfig
 
-        judge = ConflictJudge(
-            config=ConflictJudgeConfig(similarity_threshold=similarity_threshold)
-        )
+        judge = ConflictJudge(config=ConflictJudgeConfig(similarity_threshold=similarity_threshold))
         annotations = judge.detect_conflicts(memories)
         return {
             mid: {
@@ -1558,9 +1560,7 @@ class MemoryCore:
         from .observer import MemoryObserver
 
         observer = MemoryObserver(llm=self.llm)
-        observations = await observer.observe(
-            content, context=context, user_id=user_id
-        )
+        observations = await observer.observe(content, context=context, user_id=user_id)
 
         memory_ids: list[str] = []
         uid = user_id or self.default_user_id
@@ -1658,9 +1658,7 @@ class MemoryCore:
         import math as _math
 
         if not isinstance(self.store, SupportsMemoryListing):
-            raise RuntimeError(
-                "Store does not support list_memories() (SupportsMemoryListing)."
-            )
+            raise RuntimeError("Store does not support list_memories() (SupportsMemoryListing).")
 
         all_memories = await self.store.list_memories(
             include_embeddings=False, include_invalidated=False
@@ -1677,9 +1675,7 @@ class MemoryCore:
             return (1.0 - alpha) * (1.0 - temporal_freshness) + alpha * (1.0 - m.importance)
 
         candidates = [
-            (m, _eviction_score(m))
-            for m in all_memories
-            if m.importance < importance_floor
+            (m, _eviction_score(m)) for m in all_memories if m.importance < importance_floor
         ]
         candidates.sort(key=lambda x: x[1], reverse=True)
 
@@ -1704,9 +1700,7 @@ class MemoryCore:
         evicted_ids = list(evict_set)
 
         if not dry_run and evicted_ids:
-            await asyncio.gather(
-                *[self.persistence.delete(mid) for mid in evicted_ids]
-            )
+            await asyncio.gather(*[self.persistence.delete(mid) for mid in evicted_ids])
 
         return evicted_ids
 
@@ -2492,9 +2486,7 @@ class MemoryCore:
         hyde_embedder = None
         if enable_hyde:
             if self.llm is None:
-                raise ValueError(
-                    "enable_hyde=True requires an LLM. Pass llm= to MemoryCore."
-                )
+                raise ValueError("enable_hyde=True requires an LLM. Pass llm= to MemoryCore.")
             from .hyde import HyDEEmbedder
 
             hyde_embedder = HyDEEmbedder(llm=self.llm, embedder=self.embedder)
@@ -2512,9 +2504,7 @@ class MemoryCore:
         self._query_decomposer: QueryDecomposer | None = None
         if enable_ms_rag:
             if self.llm is None:
-                raise ValueError(
-                    "enable_ms_rag=True requires an LLM. Pass llm= to MemoryCore."
-                )
+                raise ValueError("enable_ms_rag=True requires an LLM. Pass llm= to MemoryCore.")
             from .query_decomposition import QueryDecomposer
 
             self._query_decomposer = QueryDecomposer(

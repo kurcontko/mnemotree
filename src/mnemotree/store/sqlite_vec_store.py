@@ -451,8 +451,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 )
                 if cascade:
                     conn.execute(
-                        f'DELETE FROM "{self._link_table}" '
-                        "WHERE source_id = ? OR target_id = ?",
+                        f'DELETE FROM "{self._link_table}" WHERE source_id = ? OR target_id = ?',
                         (memory_id, memory_id),
                     )
                 conn.commit()
@@ -542,9 +541,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
         async with self._lock:
             conn = self._require_conn()
             where_sql = "" if include_invalidated else "WHERE valid_until IS NULL"
-            rows = conn.execute(
-                f'SELECT * FROM "{self.collection_name}" {where_sql}'
-            ).fetchall()
+            rows = conn.execute(f'SELECT * FROM "{self.collection_name}" {where_sql}').fetchall()
             memories = []
             for row in rows:
                 memory = sqlite_memory_from_row(row)
@@ -605,7 +602,9 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                         "ORDER BY v.distance "
                         "LIMIT ? OFFSET ?"
                     )
-                    rows = conn.execute(sql, [vector_blob, fetch_k, *params, limit, offset]).fetchall()
+                    rows = conn.execute(
+                        sql, [vector_blob, fetch_k, *params, limit, offset]
+                    ).fetchall()
                 else:
                     sql = (
                         f'SELECT * FROM "{self.collection_name}" '
@@ -660,9 +659,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 vector_blob = sqlite_vec.serialize_float32(query_embedding)
                 # Use KNN MATCH syntax (sqlite-vec requires this)
                 fetch_k = top_k + 50  # extra candidates for post-filtering
-                extra_where = (
-                    "AND " + " AND ".join(where_clauses) if where_clauses else ""
-                )
+                extra_where = "AND " + " AND ".join(where_clauses) if where_clauses else ""
                 sql = (
                     f"SELECT m.*, v.distance "
                     f'FROM "{self._vector_table}" v '
