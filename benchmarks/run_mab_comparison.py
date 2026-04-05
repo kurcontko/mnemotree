@@ -112,6 +112,57 @@ def load_mab(splits: list[str], limit_docs: int = 0, limit_questions: int = 0) -
     return items
 
 
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    """Fast cosine similarity between two vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _filter_superseded(memories: list, k: int) -> list:
+    """Remove older memories that are near-duplicates of newer ones.
+
+    For conflict resolution: if two memories are >0.85 cosine similar
+    but have different timestamps, the older one is superseded by the
+    newer one and should be removed.
+    """
+    if len(memories) <= 1:
+        return memories[:k]
+
+    superseded: set[str] = set()
+    for i, a in enumerate(memories):
+        if a.memory_id in superseded:
+            continue
+        a_emb = getattr(a, "embedding", None)
+        a_ts = getattr(a, "timestamp", None)
+        if not a_emb or not a_ts:
+            continue
+
+        for j in range(i + 1, len(memories)):
+            b = memories[j]
+            if b.memory_id in superseded:
+                continue
+            b_emb = getattr(b, "embedding", None)
+            b_ts = getattr(b, "timestamp", None)
+            if not b_emb or not b_ts:
+                continue
+
+            sim = _cosine_sim(a_emb, b_emb)
+            if sim > 0.85 and a_ts != b_ts:
+                # Keep the newer one, supersede the older
+                if a_ts < b_ts:
+                    superseded.add(a.memory_id)
+                    break  # a is superseded, stop checking its pairs
+                else:
+                    superseded.add(b.memory_id)
+
+    filtered = [m for m in memories if m.memory_id not in superseded]
+    return filtered[:k]
+
+
 # --- Runners ---
 
 async def run_mnemotree(items: list[dict], *, store_dir: str, k: int,
@@ -151,7 +202,13 @@ async def run_mnemotree(items: list[dict], *, store_dir: str, k: int,
             print(f"    [mnemotree] Ingested {len(item['chunks'])} chunks for {doc_id}")
 
         t0 = time.perf_counter()
-        retrieved = await cores[doc_id].recall(item["question"], limit=k, scoring=True, update_access=False)
+        # Retrieve more candidates, then filter conflicts
+        fetch_k = k * 2 if enable_decay else k
+        retrieved = await cores[doc_id].recall(item["question"], limit=fetch_k, scoring=True, update_access=False)
+
+        if enable_decay and len(retrieved) > 1:
+            retrieved = _filter_superseded(retrieved, k)
+
         context = "\n".join(f"[{j+1}] {m.content}" for j, m in enumerate(retrieved))
 
         predicted = ""
