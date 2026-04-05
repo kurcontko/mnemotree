@@ -202,7 +202,7 @@ class TestFSRSEdgeCases:
         s = FSRSSchedule(memory_id="m1", repetition_count=10, stability_seconds=86400.0)
         s.schedule_next_review(grade=1)
         assert s.repetition_count == 0
-        assert s.stability_seconds == 60.0
+        assert s.stability_seconds == pytest.approx(60.0)
 
 
 class TestAdaptiveUpdateImportance:

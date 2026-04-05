@@ -188,7 +188,7 @@ def test_typed_path_query_defaults():
     q = TypedPathQuery()
     assert q.start_ids == []
     assert q.path_pattern == []
-    assert q.min_strength == 0.0
+    assert q.min_strength == pytest.approx(0.0)
     assert q.limit == 10
 
 

@@ -228,6 +228,7 @@ class MemoryCore:
         self.store = store
         self.default_user_id = default_user_id
         self.default_conversation_id = default_conversation_id
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
         # Conflict detection (bi-temporal invalidation)
         from .conflict import ConflictConfig, ConflictDetector
@@ -865,10 +866,14 @@ class MemoryCore:
         await asyncio.gather(*store_tasks)
 
         if self.auto_link_enabled and isinstance(self.store, SupportsKnowledgeGraph):
-            asyncio.create_task(self._auto_link_background(memory.memory_id))
+            task = asyncio.create_task(self._auto_link_background(memory.memory_id))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
         if self.conflict_detection_enabled and self.conflict_detector is not None:
-            asyncio.create_task(self._detect_and_link_conflicts(memory))
+            task = asyncio.create_task(self._detect_and_link_conflicts(memory))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
     async def _merge_into(
         self,
