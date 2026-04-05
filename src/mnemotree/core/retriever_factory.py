@@ -53,7 +53,7 @@ class RetrieverFactory:
         graph_weight: float = 0.0,
         rrf_k: int = 60,
         enable_rrf_signal_rerank: bool = False,
-        rerank_candidates: int = 50,
+        rerank_candidates: int = 150,
         hyde_embedder: Any = None,
         # Backward compat — ignored
         use_fusion_retriever: bool = True,

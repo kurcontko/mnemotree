@@ -117,7 +117,7 @@ class MemoryCoreBuilder:
         *,
         enable_fact_memories: bool = True,
         enable_per_type_retrieval: bool = True,
-        per_type_k: int = 25,
+        per_type_k: int = 30,
     ) -> MemoryCoreBuilder:
         """Enable ENGRAM-style fact-as-memory architecture."""
         self._engram_config = EngramConfig(
@@ -232,7 +232,7 @@ class MemoryCoreBuilder:
         enable_rrf_signal_rerank: bool = False,
         reranker_backend: Literal["none", "flashrank", "cross_encoder"] = "none",
         reranker_model: str = "ms-marco-TinyBERT-L-2-v2",
-        rerank_candidates: int = 50,
+        rerank_candidates: int = 150,
     ) -> MemoryCoreBuilder:
         self._retrieval_config = replace(
             self._retrieval_config,
