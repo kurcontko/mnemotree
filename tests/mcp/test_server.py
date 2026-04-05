@@ -1397,7 +1397,7 @@ async def test_suggest_links_tool(monkeypatch):
     result = await server.suggest_links(memory_id="mem-1", limit=3)
     assert len(result) == 1
     assert result[0]["target_id"] == "target-1"
-    assert result[0]["score"] == 0.85
+    assert result[0]["score"] == pytest.approx(0.85)
     assert result[0]["memory_type"] == "semantic"
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from mnemotree.core.models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetime
 
 
@@ -169,7 +171,7 @@ def test_decay_strength_clamps_negative_elapsed_time():
         decay_rate=0.01,
     )
     # Strength should remain unchanged (elapsed clamped to 0, decay_factor = 1.0)
-    assert link.strength == 0.8
+    assert link.strength == pytest.approx(0.8)
 
 
 def test_decay_strength_normal_decay():

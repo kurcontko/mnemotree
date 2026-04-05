@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from mnemotree.core.models import LinkType, MemoryItem, MemoryType
 
 
@@ -189,8 +191,8 @@ class TestSQLiteSerialization:
         row = conn.execute('SELECT * FROM "t" LIMIT 1').fetchone()
         restored = sqlite_memory_from_row(row)
 
-        assert restored.confidence == 0.0
-        assert restored.fidelity == 0.0
+        assert restored.confidence == pytest.approx(0.0)
+        assert restored.fidelity == pytest.approx(0.0)
         conn.close()
 
 

@@ -37,16 +37,16 @@ class TestKeywordOverlapScore:
         assert keyword_overlap_score(["python"], ["rust"]) == pytest.approx(0.0)
 
     def test_none_tags(self):
-        assert keyword_overlap_score(None, ["python"]) == 0.0
+        assert keyword_overlap_score(None, ["python"]) == pytest.approx(0.0)
 
     def test_none_keywords(self):
-        assert keyword_overlap_score(["python"], None) == 0.0
+        assert keyword_overlap_score(["python"], None) == pytest.approx(0.0)
 
     def test_empty_tags(self):
-        assert keyword_overlap_score([], ["python"]) == 0.0
+        assert keyword_overlap_score([], ["python"]) == pytest.approx(0.0)
 
     def test_empty_keywords(self):
-        assert keyword_overlap_score(["python"], []) == 0.0
+        assert keyword_overlap_score(["python"], []) == pytest.approx(0.0)
 
     def test_case_insensitive(self):
         assert keyword_overlap_score(["Python"], ["python"]) == pytest.approx(1.0)

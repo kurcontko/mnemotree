@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.core.observer import (
     MemoryObserver,
@@ -138,8 +140,8 @@ class TestReflectorConfig:
     def test_defaults(self):
         config = ReflectorConfig()
         assert config.min_memories_for_consolidation == 10
-        assert config.consolidation_interval_hours == 24.0
-        assert config.conflict_similarity_threshold == 0.92
+        assert config.consolidation_interval_hours == pytest.approx(24.0)
+        assert config.conflict_similarity_threshold == pytest.approx(0.92)
 
 
 def _make_memory(content: str, embedding: list[float] | None = None) -> MemoryItem:
@@ -241,7 +243,7 @@ class TestObservation:
     def test_defaults(self):
         obs = Observation(content="test fact")
         assert obs.memory_type == MemoryType.EPISODIC
-        assert obs.importance == 0.5
+        assert obs.importance == pytest.approx(0.5)
         assert obs.source == "observer"
         assert obs.tags == []
 
@@ -254,6 +256,6 @@ class TestObservation:
             observation_date=now,
             tags=["preference"],
         )
-        assert obs.importance == 0.8
+        assert obs.importance == pytest.approx(0.8)
         assert obs.observation_date == now
         assert obs.tags == ["preference"]
