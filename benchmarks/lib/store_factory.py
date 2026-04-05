@@ -43,6 +43,10 @@ async def create_memory_core(
     extractor_path: str | None = None,
     local_device: str = "cpu",
     clean: bool = True,
+    # CR improvement parameters
+    enable_decay: bool = False,
+    decay_stability_days: float = 7.0,
+    decay_floor: float = 0.1,
 ) -> Any:
     """Build and return a configured MemoryCore for benchmark use.
 
@@ -98,6 +102,15 @@ async def create_memory_core(
 
     if enable_bm25:
         builder = builder.enable_bm25()
+
+    if enable_decay:
+        builder = builder.with_decay(
+            enable=True,
+            stability_days=decay_stability_days,
+            floor=decay_floor,
+            decay_power=0.5,
+            target_retention=0.9,
+        )
 
     if local_models:
         builder = builder.with_local_models(
