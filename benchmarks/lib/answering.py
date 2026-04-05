@@ -30,7 +30,7 @@ async def generate_answer(
     question: str,
     *,
     system_prompt: str | None = None,
-    max_tokens: int = 200,
+    max_tokens: int = 500,
 ) -> str:
     """Generate an answer given retrieved context and a question."""
     if system_prompt is None:
@@ -84,7 +84,7 @@ async def judge_answer(
             },
         ],
         temperature=0,
-        max_tokens=10,
+        max_tokens=100,  # Reasoning models need more tokens
     )
     verdict = (response.choices[0].message.content or "").strip().lower()
     if "correct" in verdict and "incorrect" not in verdict:
