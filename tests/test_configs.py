@@ -1,6 +1,9 @@
 """Tests for configuration module."""
 
+import importlib.util
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from mnemotree.configs import (
     ConfiguredMemorySystem,
@@ -179,6 +182,10 @@ class TestPreConfiguredSetups:
         assert config.consolidation_config.min_cluster_size == 2
 
 
+_has_langchain_openai = importlib.util.find_spec("langchain_openai") is not None
+
+
+@pytest.mark.skipif(not _has_langchain_openai, reason="langchain_openai not installed")
 class TestBuildMemorySystem:
     """Tests for MemorySystemConfig.build_memory_system()."""
 
