@@ -29,6 +29,23 @@ from .scoring import MemoryScoring
 
 logger = logging.getLogger(__name__)
 
+
+def _pin_hot_memories(memories: list[MemoryItem], limit: int | None) -> list[MemoryItem]:
+    """Ensure ``is_hot`` memories appear in results even if scored below the cutoff.
+
+    Hot memories are moved to the front; remaining cold memories fill the rest
+    up to *limit*.  If no hot memories exist this is a no-op.
+    """
+    if not memories or limit is None:
+        return memories
+    hot = [m for m in memories if m.is_hot]
+    if not hot:
+        return memories
+    cold = [m for m in memories if not m.is_hot]
+    # Hot first, then cold — total capped to limit
+    return (hot + cold)[:limit]
+
+
 # ---------------------------------------------------------------------------
 # MAGMA four-graph dimension classification
 # ---------------------------------------------------------------------------
@@ -292,6 +309,9 @@ class VectorEntityRetriever(BaseRetriever):
                 },
             )
 
+        # Hot memory pinning: ensure is_hot memories are always included
+        memories = _pin_hot_memories(memories, limit)
+
         if limit is not None:
             memories = memories[:limit]
 
@@ -480,9 +500,28 @@ class HybridRetriever(BaseRetriever):
             scoring,
             bool(self.reranker and self.rerank_candidates > 0),
         )
+
+        # Intent-aware retrieval depth: adjust candidate pool based on query intent
+        candidate_multiplier = 5  # default
+        query_intent = None
+        if isinstance(query, str):
+            from .intent import KeywordIntentClassifier, RetrievalIntent
+
+            _classifier = KeywordIntentClassifier()
+            query_intent = await _classifier.classify(query)
+            if query_intent == RetrievalIntent.EPISODIC:
+                candidate_multiplier = 3  # tighter, temporal focus
+            elif query_intent == RetrievalIntent.SEMANTIC:
+                candidate_multiplier = 7  # broader, need definitions
+            elif query_intent == RetrievalIntent.PROCEDURAL:
+                candidate_multiplier = 5  # moderate, procedural steps
+            logger.debug(
+                "query intent=%s candidate_multiplier=%d", query_intent, candidate_multiplier
+            )
+
         cache_len = self.index_manager.doc_count if self.index_manager else 0
         candidate_k = min(
-            max(50, resolved_limit * 5),
+            max(50, resolved_limit * candidate_multiplier),
             max(resolved_limit, cache_len or resolved_limit),
         )
 
@@ -508,7 +547,7 @@ class HybridRetriever(BaseRetriever):
             and vector_memories
         ):
             graph_candidates = await self._collect_graph_candidates(
-                vector_memories, candidate_k, query_embedding
+                vector_memories, candidate_k, query_embedding, query_intent=query_intent
             )
             if graph_candidates:
                 stage_candidates[RetrievalStage.GRAPH] = graph_candidates
@@ -541,6 +580,9 @@ class HybridRetriever(BaseRetriever):
             )
 
         memories = await self._maybe_rerank(query, memories)
+
+        # Hot memory pinning: ensure is_hot memories are always included
+        memories = _pin_hot_memories(memories, limit)
 
         if limit is not None:
             memories = memories[:limit]
@@ -694,15 +736,27 @@ class HybridRetriever(BaseRetriever):
         seed_memories: list[MemoryItem],
         candidate_k: int,
         query_embedding: list[float] | None,
+        query_intent: Any = None,
     ) -> list[tuple[MemoryItem, float]]:
         """Traverse semantic, temporal, causal, and entity graphs from seed memories.
 
         Uses the MAGMA four-graph pattern: each graph dimension is traversed
         independently, then results are merged with depth-based scoring.
+        Graph depth adapts to query intent when available.
         """
         if not isinstance(self.store, SupportsKnowledgeGraph):
             return []
         seed_ids = [m.memory_id for m in seed_memories[:5]]  # Limit seeds
+
+        # Intent-aware graph depth
+        from .intent import RetrievalIntent
+
+        if query_intent == RetrievalIntent.EPISODIC:
+            graph_depth = 1  # tight, temporal focus
+        elif query_intent == RetrievalIntent.PROCEDURAL:
+            graph_depth = 3  # follow sequences
+        else:
+            graph_depth = 2  # default
 
         # Traverse three explicit graph dimensions in parallel
         graph_dims: list[tuple[str, list[LinkType]]] = [
@@ -713,7 +767,7 @@ class HybridRetriever(BaseRetriever):
         tasks = [
             self.store.traverse_graph(
                 sid,
-                max_depth=2,
+                max_depth=graph_depth,
                 link_types=link_types,
             )
             for sid in seed_ids
