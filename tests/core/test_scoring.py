@@ -215,3 +215,19 @@ def test_decay_floor_should_not_increase_importance():
     # Score should NOT exceed original importance (0.1)
     # Without the fix, this would incorrectly return 0.3 (the floor)
     assert score <= 0.1
+
+
+def test_negative_access_count_does_not_crash():
+    """Negative access_count (corrupt data) should not cause math.log crash."""
+    scoring = MemoryScoring(
+        importance_weight=1.0,
+        recency_weight=0.0,
+        relevance_weight=0.0,
+    )
+    now = datetime(2024, 1, 2, tzinfo=timezone.utc)
+
+    # Corrupt data: negative access_count
+    corrupt = _memory(now, access_count=-5, importance=0.5)
+    score = scoring.calculate_memory_score(corrupt, current_time=now)
+    # Should not crash; access_boost clamped to log(1) = 0
+    assert score == pytest.approx(0.5)

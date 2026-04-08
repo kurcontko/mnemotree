@@ -9,7 +9,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
-from langchain_core.embeddings.embeddings import Embeddings
+from .._protocols import AsyncEmbeddingModel
 
 
 @dataclass
@@ -20,7 +20,7 @@ class CacheEntry:
     expires_at: float
 
 
-class CachedEmbeddings(Embeddings):
+class CachedEmbeddings:
     """Wrapper that caches embeddings with TTL-based LRU eviction.
 
     This reduces latency for repeated content by avoiding redundant
@@ -43,7 +43,7 @@ class CachedEmbeddings(Embeddings):
 
     def __init__(
         self,
-        embedder: Embeddings,
+        embedder: AsyncEmbeddingModel,
         *,
         max_size: int = 1000,
         ttl_seconds: float = 3600.0,
@@ -138,8 +138,8 @@ class CachedEmbeddings(Embeddings):
             if cached is not None:
                 self._hits += 1
                 return cached
+            self._misses += 1
 
-        self._misses += 1
         embedding = await self._embedder.aembed_query(text)
 
         async with self._lock:
@@ -173,7 +173,8 @@ class CachedEmbeddings(Embeddings):
                 self._put_cached(text, embedding)
                 results[idx] = embedding
 
-        return [e for e in results if e is not None]
+        # All slots should be filled; cast type (filtering would misalign indices)
+        return list(results)  # type: ignore[arg-type]
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple documents with caching (asynchronous)."""
@@ -201,4 +202,5 @@ class CachedEmbeddings(Embeddings):
                     self._put_cached(text, embedding)
                     results[idx] = embedding
 
-        return [e for e in results if e is not None]
+        # All slots should be filled; cast type (filtering would misalign indices)
+        return list(results)  # type: ignore[arg-type]

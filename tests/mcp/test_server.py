@@ -390,7 +390,7 @@ def test_get_mcp_registers_tools(monkeypatch):
     instance = server._get_mcp()
 
     assert isinstance(instance, DummyFastMCP)
-    assert len(instance.tools) == 5
+    assert len(instance.tools) == 17
 
 
 def test_memory_timestamp_fallbacks():
@@ -822,6 +822,30 @@ async def test_update_memory_valid_importance(mock_memory_core_with_store):
 
 
 @pytest.mark.asyncio
+async def test_update_memory_phase1_fields(mock_memory_core_with_store):
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    memory.metadata = {}
+    _, store = mock_memory_core_with_store(memory=memory)
+
+    updated = await server.update_memory(
+        memory_id="mem-1",
+        patch={
+            "is_hot": True,
+            "contextual_intent": "factual_update",
+            "event_time": "2024-06-15T10:30:00+00:00",
+            "valid_from": "2024-01-01T00:00:00+00:00",
+            "valid_until": None,
+        },
+    )
+
+    assert updated["is_hot"] is True
+    assert updated["contextual_intent"] == "factual_update"
+    assert "2024-06-15" in str(updated.get("event_time", ""))
+    assert updated.get("valid_until") is None
+    store.store_memory.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_timeline_empty_memories(timeline_setup):
     timeline_setup([])
     assert await server.timeline(memory_id="mem-1") == []
@@ -964,3 +988,439 @@ def test_module_main_executes(monkeypatch):
 
     assert DummyFastMCP.last_instance is not None
     assert DummyFastMCP.last_instance.ran is True
+
+
+# ---- Tests for new knowledge-graph + conflict MCP tools ----
+
+
+def test_parse_link_type_valid():
+    from mnemotree.core.models import LinkType
+
+    assert server._parse_link_type(None) == LinkType.REFERENCES
+    assert server._parse_link_type("elaborates") == LinkType.ELABORATES
+    assert server._parse_link_type("CONTRADICTS") == LinkType.CONTRADICTS
+    assert server._parse_link_type(" supersedes ") == LinkType.SUPERSEDES
+
+
+def test_parse_link_type_invalid():
+    with pytest.raises(ValueError, match="Unknown link_type"):
+        server._parse_link_type("nonexistent")
+
+
+def test_link_types_returns_all():
+    result = server.link_types()
+    assert "references" in result
+    assert "supersedes" in result
+    assert "contradicts" in result
+    assert len(result) == len(list(server.LinkType))
+
+
+@pytest.mark.asyncio
+async def test_link_memories(monkeypatch):
+    from mnemotree.core.models import LinkType, MemoryLink
+
+    link = MemoryLink(
+        source_id="src",
+        target_id="tgt",
+        link_type=LinkType.ELABORATES,
+        strength=1.0,
+        context="test link",
+    )
+    memory_core = MagicMock()
+    memory_core.link = AsyncMock(return_value=link)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.link_memories(
+        source_id="src",
+        target_id="tgt",
+        link_type="elaborates",
+        context="test link",
+    )
+
+    assert result["source_id"] == "src"
+    assert result["target_id"] == "tgt"
+    assert result["link_type"] == "elaborates"
+    assert result["context"] == "test link"
+
+
+@pytest.mark.asyncio
+async def test_get_links(monkeypatch):
+    from mnemotree.core.models import LinkType, MemoryLink
+
+    link = MemoryLink(
+        source_id="m1",
+        target_id="m2",
+        link_type=LinkType.REFERENCES,
+        strength=0.9,
+    )
+    memory_core = MagicMock()
+    memory_core.get_links = AsyncMock(return_value=[link])
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.get_links("m1", direction="outgoing")
+
+    assert len(result) == 1
+    assert result[0]["source_id"] == "m1"
+    assert result[0]["link_type"] == "references"
+
+
+@pytest.mark.asyncio
+async def test_get_links_invalid_direction(monkeypatch):
+    memory_core = MagicMock()
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="direction must be"):
+        await server.get_links("m1", direction="invalid")
+
+
+@pytest.mark.asyncio
+async def test_traverse_graph(monkeypatch):
+    graph = {
+        "start": "m1",
+        "depth": 2,
+        "nodes": [{"id": "m2"}],
+        "edges": [],
+        "node_count": 1,
+        "edge_count": 0,
+    }
+    memory_core = MagicMock()
+    memory_core.explore = AsyncMock(return_value=graph)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.traverse_graph("m1", depth=2)
+
+    assert result["start"] == "m1"
+    assert result["node_count"] == 1
+    memory_core.explore.assert_awaited_once_with("m1", depth=2)
+
+
+@pytest.mark.asyncio
+async def test_traverse_graph_clamps_depth(monkeypatch):
+    memory_core = MagicMock()
+    memory_core.explore = AsyncMock(return_value={"nodes": [], "edges": []})
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    await server.traverse_graph("m1", depth=99)
+
+    memory_core.explore.assert_awaited_once_with("m1", depth=5)
+
+
+@pytest.mark.asyncio
+async def test_get_conflicts(monkeypatch):
+    from mnemotree.core.models import LinkType, MemoryLink
+
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP)
+    m1.conflicts_with = ["m2"]
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP)
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+
+    memory_core = MagicMock(store=store)
+    memory_core.get_links = AsyncMock(
+        return_value=[
+            MemoryLink(
+                source_id="m1", target_id="m2", link_type=LinkType.CONTRADICTS, strength=1.0
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.get_conflicts("m1")
+
+    assert result["memory_id"] == "m1"
+    assert result["conflicts_with"] == ["m2"]
+    assert len(result["conflicting_memories"]) == 1
+    assert result["conflicting_memories"][0]["memory_id"] == "m2"
+    assert len(result["contradiction_links"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_conflicts_not_found(monkeypatch):
+    store = MagicMock()
+    store.get_memory = AsyncMock(return_value=None)
+    memory_core = MagicMock(store=store)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="not found"):
+        await server.get_conflicts("missing")
+
+
+@pytest.mark.asyncio
+async def test_resolve_conflict_keep_both(monkeypatch):
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP)
+    m1.conflicts_with = ["m2"]
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP)
+    m2.conflicts_with = ["m1"]
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+    store.store_memory = AsyncMock()
+
+    memory_core = MagicMock(store=store)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.resolve_conflict("m1", "m2", resolution="keep_both")
+
+    assert result["resolution"] == "keep_both"
+    assert "both memories kept" in result["action"]
+    assert store.store_memory.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_resolve_conflict_keep_newer(monkeypatch):
+    m1 = _make_memory("m1", datetime(2024, 1, 2, tzinfo=timezone.utc))
+    m2 = _make_memory("m2", datetime(2024, 1, 1, tzinfo=timezone.utc))
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+
+    memory_core = MagicMock(store=store)
+    memory_core.forget = AsyncMock(return_value=True)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.resolve_conflict("m1", "m2", resolution="keep_newer")
+
+    assert result["deleted"] == "m2"
+    assert result["kept"] == "m1"
+
+
+@pytest.mark.asyncio
+async def test_resolve_conflict_keep_newer_unparseable_timestamps(monkeypatch):
+    """keep_newer raises ValueError when timestamps cannot be parsed."""
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP)
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP)
+    # Corrupt timestamps so coerce_datetime returns None
+    m1.timestamp = "not-a-date"  # type: ignore[assignment]
+    m2.timestamp = "also-not-a-date"  # type: ignore[assignment]
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+
+    memory_core = MagicMock(store=store)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="unparseable timestamps"):
+        await server.resolve_conflict("m1", "m2", resolution="keep_newer")
+
+
+@pytest.mark.asyncio
+async def test_consolidate_rejects_invalid_min_cluster_size(monkeypatch):
+    """consolidate raises ValueError for min_cluster_size < 1."""
+    memory_core = MagicMock()
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="min_cluster_size must be >= 1"):
+        await server.consolidate(min_cluster_size=0)
+
+
+@pytest.mark.asyncio
+async def test_resolve_conflict_supersede(monkeypatch):
+    from mnemotree.core.models import LinkType, MemoryLink
+
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP)
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP)
+
+    link = MemoryLink(
+        source_id="m1",
+        target_id="m2",
+        link_type=LinkType.SUPERSEDES,
+        strength=1.0,
+        context="Conflict resolution: superseded",
+    )
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+
+    memory_core = MagicMock(store=store)
+    memory_core.link = AsyncMock(return_value=link)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.resolve_conflict("m1", "m2", resolution="supersede", winner_id="m1")
+
+    assert result["winner"] == "m1"
+    assert result["loser"] == "m2"
+    assert "link" in result
+    assert result["link"]["link_type"] == "supersedes"
+
+
+@pytest.mark.asyncio
+async def test_resolve_conflict_invalid_resolution(monkeypatch):
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP)
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP)
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+    memory_core = MagicMock(store=store)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="Unknown resolution"):
+        await server.resolve_conflict("m1", "m2", resolution="invalid")
+
+
+# ---------------------------------------------------------------------------
+# Judge conflicts MCP tool
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_judge_conflicts_by_ids(monkeypatch):
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP, embedding=[1.0, 0.0])
+    m1.conflicts_with = ["m2"]
+    m2 = _make_memory("m2", DEFAULT_TIMESTAMP, embedding=[1.0, 0.0])
+    m2.conflicts_with = ["m1"]
+
+    store = MagicMock()
+    store.get_memory = AsyncMock(side_effect=lambda mid: {"m1": m1, "m2": m2}.get(mid))
+
+    memory_core = MagicMock(store=store)
+    memory_core.judge_conflicts = MagicMock(
+        return_value={
+            "m1": {"memory_id": "m1", "conflicting_ids": ["m2"], "reasons": {"m2": "pre-existing"}},
+        }
+    )
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.judge_conflicts(memory_ids=["m1", "m2"])
+    assert result["memories_checked"] == 2
+    assert result["conflicts_found"] == 1
+
+
+@pytest.mark.asyncio
+async def test_judge_conflicts_by_query(monkeypatch):
+    m1 = _make_memory("m1", DEFAULT_TIMESTAMP, embedding=[1.0, 0.0])
+
+    memory_core = MagicMock()
+    memory_core.recall = AsyncMock(return_value=[m1])
+    memory_core.judge_conflicts = MagicMock(return_value={})
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.judge_conflicts(query="test", limit=5)
+    assert result["memories_checked"] == 1
+    assert result["conflicts_found"] == 0
+    memory_core.recall.assert_called_once_with("test", limit=5)
+
+
+@pytest.mark.asyncio
+async def test_judge_conflicts_requires_input(monkeypatch):
+    memory_core = MagicMock()
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    with pytest.raises(ValueError, match="Provide either"):
+        await server.judge_conflicts()
+
+
+# ---------------------------------------------------------------------------
+# Consolidate MCP tool
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_consolidate_tool(monkeypatch):
+    from types import SimpleNamespace
+
+    result_obj = SimpleNamespace(
+        total_memories_processed=10,
+        clusters_formed=2,
+        semantic_memories_created=2,
+        memories_deprecated=3,
+        created_semantic_ids=["s1", "s2"],
+        deprecated_memory_ids=["d1", "d2", "d3"],
+        duration_seconds=1.5,
+    )
+
+    memory_core = MagicMock()
+    memory_core.consolidate = AsyncMock(return_value=result_obj)
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.consolidate(dry_run=True)
+    assert result["total_memories_processed"] == 10
+    assert result["semantic_memories_created"] == 2
+    assert result["dry_run"] is True
+    memory_core.consolidate.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_observe_tool(monkeypatch):
+    memory_core = MagicMock()
+    memory_core.observe = AsyncMock(return_value=["obs-1", "obs-2"])
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.observe(
+        content="I work at Acme Corp and love Python",
+        user_id="u1",
+        conversation_id="c1",
+    )
+
+    assert result["observations_stored"] == 2
+    assert result["memory_ids"] == ["obs-1", "obs-2"]
+    memory_core.observe.assert_called_once_with(
+        "I work at Acme Corp and love Python",
+        user_id="u1",
+        conversation_id="c1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_observe_tool_no_observations(monkeypatch):
+    memory_core = MagicMock()
+    memory_core.observe = AsyncMock(return_value=[])
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.observe(content="hi")
+    assert result["observations_stored"] == 0
+    assert result["memory_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_suggest_links_tool(monkeypatch):
+    from mnemotree.core.models import LinkType
+    from mnemotree.store.protocols import SupportsKnowledgeGraph
+
+    target = MemoryItem(
+        memory_id="target-1",
+        content="Related memory content",
+        memory_type=MemoryType.SEMANTIC,
+        importance=0.7,
+        timestamp=str(DEFAULT_TIMESTAMP),
+        embedding=[0.1, 0.2],
+    )
+    # suggest_links returns list[tuple[MemoryItem, LinkType, float, str|None]]
+    mock_store = MagicMock(spec=SupportsKnowledgeGraph)
+    mock_store.suggest_links = AsyncMock(return_value=[(target, LinkType.SIMILAR_TO, 0.85, None)])
+
+    memory_core = MagicMock()
+    memory_core.store = mock_store
+    monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
+
+    result = await server.suggest_links(memory_id="mem-1", limit=3)
+    assert len(result) == 1
+    assert result[0]["target_id"] == "target-1"
+    assert result[0]["score"] == pytest.approx(0.85)
+    assert result[0]["memory_type"] == "semantic"
+
+
+# ---------------------------------------------------------------------------
+# update_memory content validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_memory_content_null_raises(mock_memory_core_with_store):
+    """Patching content with None should raise, not store 'None' string."""
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    mock_memory_core_with_store(memory=memory)
+
+    with pytest.raises(ValueError, match="content cannot be null"):
+        await server.update_memory(memory_id="mem-1", patch={"content": None})
+
+
+@pytest.mark.asyncio
+async def test_update_memory_content_empty_raises(mock_memory_core_with_store):
+    """Patching content with empty string should raise."""
+    memory = _make_memory("mem-1", DEFAULT_TIMESTAMP)
+    mock_memory_core_with_store(memory=memory)
+
+    with pytest.raises(ValueError, match="content cannot be empty"):
+        await server.update_memory(memory_id="mem-1", patch={"content": "  "})

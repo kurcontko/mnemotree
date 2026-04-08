@@ -168,6 +168,95 @@ class TestSpacedRepetitionIntegration:
         assert new_stability > initial_stability
 
 
+class TestFSRSEdgeCases:
+    def test_invalid_grade_uses_default_multiplier(self):
+        """Invalid grade values (>4) use default multiplier."""
+        s = FSRSSchedule(memory_id="m1", stability_seconds=86400.0, difficulty=5.0)
+        s.schedule_next_review(grade=99)
+        # Default multiplier=2.5, difficulty_factor=1.0 at diff=5.0
+        assert s.stability_seconds == pytest.approx(216000.0)
+        assert s.repetition_count == 1
+
+    def test_difficulty_clamped_at_boundaries(self):
+        """Difficulty stays within [1.0, 10.0] even with extreme grades."""
+        s1 = FSRSSchedule(memory_id="m1", difficulty=1.0)
+        s1.schedule_next_review(grade=4)  # delta=-0.5
+        assert s1.difficulty >= 1.0
+
+        s2 = FSRSSchedule(memory_id="m2", difficulty=9.5)
+        s2.schedule_next_review(grade=1)  # delta=+2.0 → would be 11.5
+        assert s2.difficulty <= 10.0
+
+    def test_stability_capped_at_365_days(self):
+        """Stability never exceeds 365 days."""
+        s = FSRSSchedule(
+            memory_id="m1",
+            stability_seconds=300 * 86400.0,  # 300 days
+            difficulty=1.0,  # Low difficulty → high multiplier
+        )
+        s.schedule_next_review(grade=4)
+        assert s.stability_seconds <= 365 * 86400
+
+    def test_grade_1_resets_repetition_count(self):
+        """Grade 1 (Again) resets to 0 reps and minimal stability."""
+        s = FSRSSchedule(memory_id="m1", repetition_count=10, stability_seconds=86400.0)
+        s.schedule_next_review(grade=1)
+        assert s.repetition_count == 0
+        assert s.stability_seconds == pytest.approx(60.0)
+
+
+class TestAdaptiveUpdateImportance:
+    def test_zero_elapsed_time_minimal_decay(self):
+        """Memory just accessed should barely decay."""
+        system = AdaptiveDecaySystem()
+        now = datetime.now(timezone.utc)
+        mem = _memory(importance=0.8, last_accessed=now, access_count=5)
+        new_imp = system.update_importance(mem, current_time=now)
+        assert new_imp >= 0.7  # Minimal decay
+
+    def test_spaced_repetition_boost_when_due(self):
+        """SR boost adds 0.1 when next_review is due."""
+        system = AdaptiveDecaySystem(enable_spaced_repetition=True)
+        now = datetime.now(timezone.utc)
+        mem = _memory(importance=0.5, last_accessed=now, access_count=5)
+        system.register_for_spaced_repetition(mem, initial_grade=3)
+
+        # Force next_review to be in the past
+        schedule = system.sr_schedules[mem.memory_id]
+        schedule.next_review = now - timedelta(seconds=1)
+
+        new_imp = system.update_importance(mem, current_time=now)
+        # Should include the 0.1 boost, capped at 1.0
+        assert new_imp > 0.5
+
+
+class TestDueReviews:
+    def test_empty_schedules(self):
+        """No registered memories → empty list."""
+        system = AdaptiveDecaySystem()
+        assert system.get_due_reviews() == []
+
+    def test_partial_due(self):
+        """Only memories past next_review are returned."""
+        system = AdaptiveDecaySystem()
+        now = datetime.now(timezone.utc)
+
+        m1 = _memory()
+        m1.memory_id = "m1"
+        m2 = _memory()
+        m2.memory_id = "m2"
+
+        system.register_for_spaced_repetition(m1, initial_grade=3)
+        system.register_for_spaced_repetition(m2, initial_grade=3)
+
+        # Make only m1 overdue
+        system.sr_schedules["m1"].next_review = now - timedelta(seconds=1)
+
+        due = system.get_due_reviews(current_time=now)
+        assert "m1" in due
+        assert "m2" not in due
+
+
 class TestBackwardCompat:
     def test_adaptive_importance_system_alias(self):
         """Backward compat aliases should only exist in experimental."""

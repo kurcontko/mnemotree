@@ -297,3 +297,37 @@ class TestWriteGateCosimeSimilarity:
         vec2 = [-1.0, 0.0]
         similarity = ContextAwareWriteGate._cosine_similarity(vec1, vec2)
         assert abs(similarity + 1.0) < 0.01
+
+
+class TestSyncNoveltyAssessor:
+    """Test that sync novelty assessors work (not just async)."""
+
+    @pytest.mark.asyncio
+    async def test_sync_novelty_assessor_accepted(self):
+        """A synchronous novelty assessor should work without TypeError."""
+
+        def sync_assessor(memory, existing):
+            return 1.0  # Fully novel
+
+        gate = ContextAwareWriteGate(
+            policy=WritePolicy.permissive(),
+            novelty_assessor=sync_assessor,
+        )
+        memory = _make_memory(embedding=[0.1, 0.2, 0.3])
+        result = await gate.evaluate(memory, existing_memories=[])
+        assert result.decision == WriteDecision.ACCEPT
+
+    @pytest.mark.asyncio
+    async def test_async_novelty_assessor_accepted(self):
+        """An async novelty assessor should also work."""
+
+        async def async_assessor(memory, existing):
+            return 1.0
+
+        gate = ContextAwareWriteGate(
+            policy=WritePolicy.permissive(),
+            novelty_assessor=async_assessor,
+        )
+        memory = _make_memory(embedding=[0.1, 0.2, 0.3])
+        result = await gate.evaluate(memory, existing_memories=[])
+        assert result.decision == WriteDecision.ACCEPT

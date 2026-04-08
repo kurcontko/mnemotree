@@ -1,14 +1,15 @@
 import asyncio
+import dataclasses
+import logging
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import uuid4
 
-from langchain_core.embeddings.embeddings import Embeddings
-from langchain_core.language_models.base import BaseLanguageModel
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+if TYPE_CHECKING:
+    from .intent import IntentClassifier
 
 from ..analysis.clustering import ClusteringResult, MemoryClusterer
 from ..analysis.keywords import KeywordExtractor, SpacyKeywordExtractor
@@ -24,12 +25,16 @@ from ..store.protocols import (
     MemoryCRUDStore,
     SupportsConnections,
     SupportsKnowledgeGraph,
+    SupportsMemoryListing,
     SupportsMetadataUpdate,
     SupportsStructuredQuery,
     SupportsVectorSearch,
 )
 from ..store.serialization import serialize_datetime
+from ._internal.conflict import ConflictDetector as InlineConflictDetector
+from ._internal.deduplication import DedupChecker
 from ._internal.enrichment import EnrichmentResult, StandardEnrichmentPipeline
+from ._internal.fact_decomposer import FactDecomposer
 from ._internal.indexing import IndexManager
 from ._internal.ingestion_queue import IngestionRequest, MemoryIngestionQueue
 from ._internal.persistence import DefaultPersistence
@@ -37,7 +42,9 @@ from .models import LinkType, MemoryItem, MemoryLink, MemoryType, coerce_datetim
 from .query import FilterOperator, MemoryFilter, MemoryQuery, MemoryQueryBuilder
 from .retrieval import Retriever
 from .retriever_factory import RetrieverFactory
-from .scoring import MemoryScoring
+from .scoring import MemoryScoring, cosine_similarity
+
+logger = logging.getLogger(__name__)
 
 MemoryMode = Literal["lite", "pro"]
 RetrievalMode = Literal["basic", "hybrid"]
@@ -76,18 +83,26 @@ class ScoringConfig:
 
 @dataclass(frozen=True)
 class RetrievalConfig:
-    retrieval_mode: RetrievalMode = "basic"
-    enable_bm25: bool = False
+    retrieval_mode: RetrievalMode = "hybrid"
+    enable_bm25: bool = True
     bm25_k1: float = 1.2
     bm25_b: float = 0.75
     rrf_k: int = 60
-    enable_prf: bool = False
+    enable_prf: bool = True
     prf_docs: int = 5
     prf_terms: int = 8
     enable_rrf_signal_rerank: bool = False
     reranker_backend: Literal["none", "flashrank", "cross_encoder"] = "none"
     reranker_model: str = "ms-marco-TinyBERT-L-2-v2"
     rerank_candidates: int = 50
+    # SimpleMem: intent-aware type pre-filtering (arXiv:2601.02553)
+    enable_intent_filter: bool = True
+    intent_classifier_backend: Literal["keyword", "llm"] = "keyword"
+    # HyDE: hypothetical document embedding
+    enable_hyde: bool = False
+    # MS-RAG: multi-step query decomposition (EMNLP 2025)
+    enable_ms_rag: bool = False
+    ms_rag_max_sub_queries: int = 4
 
 
 @dataclass(frozen=True)
@@ -101,6 +116,22 @@ class NormalizationConfig:
 class IngestionConfig:
     async_ingest: bool = False
     ingestion_queue_size: int = 100
+    # Deduplication
+    dedup_enabled: bool = True
+    dedup_threshold: float = 0.88
+    # Auto-linking (background SIMILAR_TO links after each remember)
+    auto_link_enabled: bool = True
+    auto_link_threshold: float = 0.80
+    # Conflict detection (background CONTRADICTS links)
+    conflict_detection_enabled: bool = True
+    conflict_similarity_min: float = 0.55
+    # Atomic fact decomposition (opt-in; requires llm=)
+    fact_decomposition_enabled: bool = False
+    fact_decomposition_min_length: int = 200
+    fact_decomposition_max_facts: int = 10
+    # Write gate (pre-persist filter)
+    write_gate_enabled: bool = False
+    write_gate_policy: str = "permissive"  # "permissive", "balanced", "strict"
 
 
 @dataclass(frozen=True)
@@ -164,8 +195,8 @@ class MemoryCore:
     def __init__(
         self,
         store: MemoryCRUDStore,
-        llm: BaseLanguageModel | None = None,
-        embeddings: Embeddings | None = None,
+        llm: Any | None = None,
+        embeddings: Any | None = None,
         *,
         retriever: Retriever | None = None,
         mode_defaults: ModeDefaultsConfig | None = None,
@@ -174,6 +205,9 @@ class MemoryCore:
         retrieval_config: RetrievalConfig | None = None,
         ingestion_config: IngestionConfig | None = None,
         normalization_config: NormalizationConfig | None = None,
+        conflict_config: Any | None = None,
+        default_user_id: str | None = None,
+        default_conversation_id: str | None = None,
     ):
         """
         Initializes the MemoryCore.
@@ -189,8 +223,21 @@ class MemoryCore:
             retrieval_config: Retrieval and reranking configuration.
             ingestion_config: Async ingestion configuration.
             normalization_config: Content normalization configuration.
+            conflict_config: Optional ConflictConfig for automatic conflict detection.
         """
         self.store = store
+        self.default_user_id = default_user_id
+        self.default_conversation_id = default_conversation_id
+        self._background_tasks: set[asyncio.Task[Any]] = set()
+
+        # Conflict detection (bi-temporal invalidation)
+        from .conflict import ConflictConfig, ConflictDetector
+
+        _cc = conflict_config
+        if _cc is not None and isinstance(_cc, ConflictConfig) and _cc.enable:
+            self._conflict_detector: ConflictDetector | None = ConflictDetector(_cc)
+        else:
+            self._conflict_detector = None
 
         mode_defaults = mode_defaults or ModeDefaultsConfig()
         ner_config = ner_config or NerConfig()
@@ -213,6 +260,17 @@ class MemoryCore:
             rerank_candidates=retrieval_config.rerank_candidates,
             async_ingest=ingestion_config.async_ingest,
             ingestion_queue_size=ingestion_config.ingestion_queue_size,
+            dedup_enabled=ingestion_config.dedup_enabled,
+            dedup_threshold=ingestion_config.dedup_threshold,
+            auto_link_enabled=ingestion_config.auto_link_enabled,
+            auto_link_threshold=ingestion_config.auto_link_threshold,
+            conflict_detection_enabled=ingestion_config.conflict_detection_enabled,
+            conflict_similarity_min=ingestion_config.conflict_similarity_min,
+            fact_decomposition_enabled=ingestion_config.fact_decomposition_enabled,
+            fact_decomposition_min_length=ingestion_config.fact_decomposition_min_length,
+            fact_decomposition_max_facts=ingestion_config.fact_decomposition_max_facts,
+            write_gate_enabled=ingestion_config.write_gate_enabled,
+            write_gate_policy=ingestion_config.write_gate_policy,
         )
         self._init_mode_defaults(
             mode=mode_defaults.mode,
@@ -249,8 +307,14 @@ class MemoryCore:
             enable_rrf_signal_rerank=retrieval_config.enable_rrf_signal_rerank,
             rerank_candidates=retrieval_config.rerank_candidates,
             retriever=retriever,
+            enable_intent_filter=retrieval_config.enable_intent_filter,
+            intent_classifier_backend=retrieval_config.intent_classifier_backend,
+            enable_hyde=retrieval_config.enable_hyde,
+            enable_ms_rag=retrieval_config.enable_ms_rag,
+            ms_rag_max_sub_queries=retrieval_config.ms_rag_max_sub_queries,
         )
         self._init_normalizer(normalization_config)
+        self._init_ingestion_helpers(llm=llm)
 
     async def remember(
         self,
@@ -405,7 +469,8 @@ class MemoryCore:
             raise ValueError("remember_async does not support skip_store.")
         await self._ensure_ingestion_queue()
         queue = self._ingestion_queue
-        assert queue is not None
+        if queue is None:
+            raise RuntimeError("Failed to initialize ingestion queue")
         memory_id = memory_id or str(uuid4())
         timestamp = timestamp or datetime.now(timezone.utc)
         await queue.enqueue(
@@ -461,6 +526,7 @@ class MemoryCore:
         metadata: dict[str, Any] | None = None,
         conversation_id: str | None = None,
         user_id: str | None = None,
+        _skip_decompose: bool = False,
     ) -> MemoryItem:
         analyze, summarize = self._resolve_analysis_flags(analyze, summarize)
 
@@ -470,6 +536,83 @@ class MemoryCore:
         enrichment = await self.enrichment.enrich(
             content, context, analyze=analyze, summarize=summarize
         )
+
+        # --- Write gate (pre-filter) ---
+        if not skip_store and self._write_gate is not None:
+            from ..experimental.write_gate import WriteDecision
+
+            gate_result = await self._write_gate.evaluate(
+                memory=MemoryItem(
+                    content=content,
+                    memory_type=memory_type or MemoryType.SEMANTIC,
+                    importance=importance if importance is not None else 0.5,
+                    tags=tags or [],
+                    embedding=enrichment.embedding,
+                ),
+                context=context,
+            )
+            if gate_result.decision == WriteDecision.REJECT:
+                # Return a non-persisted MemoryItem to avoid breaking callers
+                return MemoryItem(
+                    content=content,
+                    memory_type=memory_type or MemoryType.SEMANTIC,
+                    importance=importance or 0.0,
+                    tags=tags or [],
+                    embedding=enrichment.embedding,
+                    metadata={
+                        "write_gate_rejected": True,
+                        "rejection_reason": str(gate_result.reason),
+                    },
+                )
+
+        # --- Fact decomposition gate (before dedup, to operate on atomic units) ---
+        if (
+            not _skip_decompose
+            and not skip_store
+            and self.fact_decomposer is not None
+            and self.fact_decomposer.is_compound(content, self.fact_decomposition_min_length)
+        ):
+            return await self._decompose_and_store(
+                content,
+                memory_type=memory_type,
+                importance=importance,
+                tags=tags,
+                context=context,
+                analyze=analyze,
+                summarize=summarize,
+                references=references,
+                memory_id=memory_id,
+                timestamp=timestamp,
+                source=source,
+                author=author,
+                metadata=metadata,
+                conversation_id=conversation_id,
+                user_id=user_id,
+            )
+
+        # --- Deduplication check ---
+        if not skip_store and self.dedup_checker is not None:
+            try:
+                dup_result = await self.dedup_checker.find_duplicate(
+                    enrichment.embedding, content, user_id, limit=3
+                )
+            except Exception:
+                import logging as _logging
+
+                _logging.getLogger(__name__).debug(
+                    "Dedup check failed — proceeding without deduplication", exc_info=True
+                )
+                dup_result = None
+            if dup_result is not None:
+                existing, score = dup_result
+                return await self._merge_into(
+                    existing=existing,
+                    new_content=content,
+                    new_enrichment=enrichment,
+                    new_tags=tags,
+                    new_importance=importance,
+                    new_metadata=metadata,
+                )
 
         memory_type, importance = self._resolve_importance_and_type(
             memory_type,
@@ -499,8 +642,22 @@ class MemoryCore:
         )
 
         memory = MemoryItem(**memory_data)
+
+        # --- STITCH: infer contextual_intent at ingest time (+35.6% retrieval) ---
+        if self._intent_classifier is not None and memory.contextual_intent is None:
+            try:
+                intent = await self._intent_classifier.classify(content)
+                memory.contextual_intent = intent.value
+            except Exception:
+                logger.debug("Intent classification failed", exc_info=True)
+
         memory = await self._apply_pre_remember_hooks(memory)
         await self._persist_memory(memory, references, skip_store)
+
+        # Conflict detection: run after persist so the new memory is in the store
+        if self._conflict_detector and not skip_store:
+            await self._conflict_detector.detect_and_resolve(memory, self.store)
+
         return memory
 
     def _resolve_remember_options(
@@ -574,6 +731,12 @@ class MemoryCore:
         if skip_store is None:
             skip_store = False
 
+        # Namespace isolation: auto-inject defaults
+        if user_id is None and self.default_user_id is not None:
+            user_id = self.default_user_id
+        if conversation_id is None and self.default_conversation_id is not None:
+            conversation_id = self.default_conversation_id
+
         if timestamp is not None:
             parsed = coerce_datetime(timestamp, default=None)
             if parsed is None:
@@ -643,12 +806,15 @@ class MemoryCore:
         conversation_id: str | None,
         user_id: str | None,
     ) -> dict[str, Any]:
+        from .decay import initial_stability
+
         data = {
             "memory_id": memory_id or str(uuid4()),
             "content": content,
             "summary": enrichment.summary,
             "memory_type": memory_type,
             "importance": importance,
+            "stability_seconds": initial_stability(memory_type, importance),
             "tags": list(tags),
             "context": context or {},
             "embedding": enrichment.embedding,
@@ -699,6 +865,203 @@ class MemoryCore:
             store_tasks.append(self.connect(memory.memory_id, related_to=references))
         await asyncio.gather(*store_tasks)
 
+        if self.auto_link_enabled and isinstance(self.store, SupportsKnowledgeGraph):
+            task = asyncio.create_task(self._auto_link_background(memory.memory_id))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+
+        if self.conflict_detection_enabled and self.conflict_detector is not None:
+            task = asyncio.create_task(self._detect_and_link_conflicts(memory))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+
+    async def _merge_into(
+        self,
+        *,
+        existing: MemoryItem,
+        new_content: str,
+        new_enrichment: EnrichmentResult,
+        new_tags: list[str] | None,
+        new_importance: float | None,
+        new_metadata: dict[str, Any] | None,
+    ) -> MemoryItem:
+        """Merge new_content into an existing memory (dedup path)."""
+        merged_content = existing.content + "\n---\n" + new_content
+        merged_enrichment = await self.enrichment.enrich(merged_content)
+
+        merged_tags = sorted(set(existing.tags) | set(new_tags or []))
+        merged_metadata = {**(existing.metadata or {}), **(new_metadata or {})}
+        merged_importance = max(existing.importance, new_importance or 0.0)
+
+        merged = existing.model_copy(
+            update={
+                "content": merged_content,
+                "embedding": merged_enrichment.embedding,
+                "entities": merged_enrichment.entities,
+                "entity_mentions": merged_enrichment.entity_mentions,
+                "tags": merged_tags,
+                "metadata": merged_metadata,
+                "importance": merged_importance,
+            }
+        )
+        await self.persistence.save(merged)
+        return merged
+
+    async def _auto_link_background(self, memory_id: str) -> None:
+        """Fire-and-forget: create SIMILAR_TO links for high-confidence neighbours."""
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+        try:
+            if not isinstance(self.store, SupportsKnowledgeGraph):
+                return
+            suggestions = await self.store.suggest_links(
+                memory_id, min_similarity=self.auto_link_threshold, limit=10
+            )
+            for target, link_type, score, _reason in suggestions:
+                await self.link(
+                    memory_id,
+                    target.memory_id,
+                    link_type,
+                    context=f"auto-linked score={score:.3f}",
+                )
+        except Exception:
+            _log.warning("Background auto-linking failed for %s", memory_id, exc_info=True)
+
+    async def _detect_and_link_conflicts(self, memory: MemoryItem) -> None:
+        """Fire-and-forget: detect contradictions and create CONTRADICTS links."""
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+        try:
+            if self.conflict_detector is None:
+                return
+            # Recall candidates in similarity range [conflict_similarity_min, dedup_threshold)
+            candidates = await self.retrieval.recall(
+                query=memory.content,
+                limit=10,
+                scoring=False,
+                update_access=False,
+            )
+            in_range: list[MemoryItem] = []
+            for c in candidates:
+                if c.memory_id == memory.memory_id or not c.embedding or not memory.embedding:
+                    continue
+                sim = cosine_similarity(memory.embedding, c.embedding)
+                if self.conflict_similarity_min <= sim < self.dedup_threshold:
+                    in_range.append(c)
+
+            conflicts = await self.conflict_detector.detect(memory, in_range)
+            conflict_ids: list[str] = []
+            for conflict_memory, reason in conflicts:
+                conflict_ids.append(conflict_memory.memory_id)
+                if isinstance(self.store, SupportsKnowledgeGraph):
+                    await self.link(
+                        memory.memory_id,
+                        conflict_memory.memory_id,
+                        LinkType.CONTRADICTS,
+                        context=reason,
+                    )
+            # Populate conflicts_with on the MemoryItem and persist
+            if conflict_ids:
+                existing = set(memory.conflicts_with)
+                new_conflicts = [cid for cid in conflict_ids if cid not in existing]
+                if new_conflicts:
+                    memory.conflicts_with = list(existing | set(new_conflicts))
+                    await self.persistence.save(memory)
+        except Exception:
+            _log.warning(
+                "Background conflict detection failed for %s",
+                memory.memory_id,
+                exc_info=True,
+            )
+
+    async def _decompose_and_store(
+        self,
+        content: str,
+        *,
+        memory_type: MemoryType | None = None,
+        importance: float | None = None,
+        tags: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+        analyze: bool | None = None,
+        summarize: bool | None = None,
+        references: list[str] | None = None,
+        memory_id: str | None = None,
+        timestamp: datetime | None = None,
+        source: str | None = None,
+        author: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        conversation_id: str | None = None,
+        user_id: str | None = None,
+    ) -> MemoryItem:
+        """Decompose compound content into atomic facts, store each, link via PART_OF."""
+        if self.fact_decomposer is None:
+            raise RuntimeError("fact_decomposer is not configured")
+        facts = await self.fact_decomposer.decompose(content)
+
+        if len(facts) <= 1:
+            # Not actually compound — fall through to normal path
+            return await self._remember_sync(
+                content,
+                memory_type=memory_type,
+                importance=importance,
+                tags=tags,
+                context=context,
+                analyze=analyze,
+                summarize=summarize,
+                references=references,
+                memory_id=memory_id,
+                timestamp=timestamp,
+                source=source,
+                author=author,
+                metadata=metadata,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                _skip_decompose=True,
+            )
+
+        # Store original content as semantic parent summary
+        parent = await self._remember_sync(
+            content,
+            memory_type=MemoryType.SEMANTIC,
+            importance=importance,
+            tags=tags,
+            context=context,
+            analyze=analyze,
+            summarize=summarize,
+            references=references,
+            memory_id=memory_id,
+            timestamp=timestamp,
+            source=source,
+            author=author,
+            metadata=metadata,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            _skip_decompose=True,
+        )
+
+        for fact in facts[: self.fact_decomposition_max_facts]:
+            child = await self._remember_sync(
+                fact,
+                memory_type=memory_type,
+                importance=importance,
+                tags=tags,
+                context=context,
+                analyze=analyze,
+                summarize=summarize,
+                timestamp=timestamp,
+                source=source,
+                author=author,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                _skip_decompose=True,
+            )
+            if isinstance(self.store, SupportsKnowledgeGraph):
+                await self.link(child.memory_id, parent.memory_id, LinkType.PART_OF)
+
+        return parent
+
     async def recall(
         self,
         query: str | MemoryQuery | MemoryQueryBuilder,
@@ -734,6 +1097,75 @@ class MemoryCore:
             options=options,
         )
 
+        # Namespace isolation: auto-inject default user_id/conversation_id filters
+        if self.default_user_id is not None or self.default_conversation_id is not None:
+            ns_user = self.default_user_id if self.default_user_id else None
+            ns_conv = self.default_conversation_id if self.default_conversation_id else None
+            if filters is None:
+                filters = RecallFilters(user_id=ns_user, conversation_id=ns_conv)
+            else:
+                updates: dict[str, Any] = {}
+                if filters.user_id is None and ns_user is not None:
+                    updates["user_id"] = ns_user
+                if filters.conversation_id is None and ns_conv is not None:
+                    updates["conversation_id"] = ns_conv
+                if updates:
+                    filters = dataclasses.replace(filters, **updates)
+
+        # SimpleMem: infer MemoryType from query intent and pre-filter results
+        if self._intent_classifier is not None and isinstance(query, str):
+            from .intent import INTENT_TO_TYPES, RetrievalIntent
+
+            intent = await self._intent_classifier.classify(query)
+            if intent != RetrievalIntent.UNKNOWN and intent in INTENT_TO_TYPES:
+                intent_types = INTENT_TO_TYPES[intent]
+                if filters is None:
+                    filters = RecallFilters(memory_types=intent_types)
+                elif filters.memory_types is None:
+                    filters = dataclasses.replace(filters, memory_types=intent_types)
+                # If caller already set memory_types, their explicit filter takes precedence
+
+        # MS-RAG: decompose compound queries and fuse sub-results
+        if self._query_decomposer is not None and isinstance(query, str):
+            from .query_decomposition import rrf_merge
+
+            sub_queries = await self._query_decomposer.decompose(query)
+            if len(sub_queries) > 1:
+                sub_results = await asyncio.gather(
+                    *[
+                        self._recall_single(
+                            q,
+                            limit=limit,
+                            scoring=scoring,
+                            update_access=update_access,
+                            filters=filters,
+                            candidate_limit=candidate_limit,
+                        )
+                        for q in sub_queries
+                    ]
+                )
+                return rrf_merge(list(sub_results), limit)
+
+        return await self._recall_single(
+            query,
+            limit=limit,
+            scoring=scoring,
+            update_access=update_access,
+            filters=filters,
+            candidate_limit=candidate_limit,
+        )
+
+    async def _recall_single(
+        self,
+        query: str | MemoryQuery | MemoryQueryBuilder,
+        *,
+        limit: int | None,
+        scoring: bool,
+        update_access: bool,
+        filters: RecallFilters | None,
+        candidate_limit: int | None,
+    ) -> list[MemoryItem]:
+        """Core single-query recall. Used directly and by MS-RAG sub-queries."""
         if filters:
             candidate_limit = self._resolve_candidate_limit(limit, candidate_limit)
             memories = await self.retrieval.recall(
@@ -755,6 +1187,160 @@ class MemoryCore:
             scoring=scoring,
             update_access=update_access,
         )
+
+    async def recall_ppr(
+        self,
+        query: str,
+        limit: int = 10,
+        ppr_cfg: Any | None = None,
+        *,
+        update_access: bool = False,
+    ) -> list[MemoryItem]:
+        """Graph-augmented recall using Personalized PageRank (HippoRAG 2 style).
+
+        Seeds retrieval results with cosine similarity, then propagates activation
+        through the knowledge-graph link structure to surface multi-hop relevant
+        memories.  Requires a store that implements ``SupportsKnowledgeGraph``
+        (e.g. SQLiteVecMemoryStore).
+
+        Args:
+            query: Natural language query.
+            limit: Maximum number of memories to return.
+            ppr_cfg: Optional ``PPRConfig`` instance.  Uses defaults if None.
+            update_access: If True, update last_accessed / access_count.
+
+        Returns:
+            Ranked list of MemoryItem objects.
+        """
+        from .ppr import PPRConfig
+        from .retrieval import PPRGraphRetriever
+
+        cfg = ppr_cfg if isinstance(ppr_cfg, PPRConfig) else PPRConfig()
+
+        retriever = PPRGraphRetriever(
+            store=self.store,
+            scoring_system=self.memory_scoring,
+            ner=self.ner,
+            keyword_extractor=self.keyword_extractor,
+            embedder=self.embedder,
+            index_manager=self.index_manager,
+            ppr_cfg=cfg,
+        )
+        return await retriever.recall(
+            query,
+            limit=limit,
+            scoring=True,
+            update_access=update_access,
+        )
+
+    async def recall_chain(
+        self,
+        query: str,
+        limit: int = 10,
+        max_hops: int = 4,
+        reasoning_hook: Any | None = None,
+        corag_cfg: Any | None = None,
+        *,
+        update_access: bool = False,
+    ) -> tuple[list[MemoryItem], list[str]]:
+        """Iterative Chain-of-Retrieval (CoRAG style).
+
+        Iteratively retrieves, reasons about gaps, and refines sub-queries for up
+        to ``max_hops`` rounds.  Requires a ``ReasoningHook`` (defaults to
+        ``OpenAIReasoningHook`` with environment-variable credentials).
+
+        Args:
+            query: Natural language query.
+            limit: Maximum number of memories to return.
+            max_hops: Maximum retrieval hops.
+            reasoning_hook: Optional ``ReasoningHook`` implementation.  Defaults
+                to ``OpenAIReasoningHook``.
+            corag_cfg: Optional ``CoRAGConfig`` instance.
+            update_access: If True, update last_accessed / access_count on results.
+
+        Returns:
+            Tuple of (memories, reasoning_trace) where trace is the list of
+            sub-queries generated at each hop.
+        """
+        from .corag import ChainOfRetrieval, CoRAGConfig, OpenAIReasoningHook
+
+        cfg = corag_cfg if isinstance(corag_cfg, CoRAGConfig) else CoRAGConfig(max_hops=max_hops)
+        hook = reasoning_hook if reasoning_hook is not None else OpenAIReasoningHook()
+
+        chain = ChainOfRetrieval(retriever=self.retrieval, hook=hook, cfg=cfg)
+        memories, trace = await chain.retrieve(query, limit=limit)
+
+        if update_access and memories:
+            await self._update_access_metadata(memories)
+
+        return memories, trace
+
+    async def consolidate(
+        self,
+        *,
+        user_id: str | None = None,
+        config: Any | None = None,
+    ) -> Any:
+        """Run memory consolidation (sleep-cycle-inspired episodic→semantic promotion).
+
+        Clusters similar episodic memories, generates semantic summaries, and
+        optionally deprecates low-signal memories.
+
+        Args:
+            user_id: Scope consolidation to this user's memories.
+            config: Optional ``ConsolidationConfig`` instance. Uses defaults if None.
+
+        Returns:
+            ``ConsolidationResult`` with statistics about the consolidation run.
+
+        Raises:
+            RuntimeError: If no LLM is configured (consolidation requires summarization).
+        """
+        from ..experimental.consolidation import ConsolidationConfig, MemoryConsolidator
+
+        if self.llm is None:
+            raise RuntimeError("consolidate() requires an LLM. Pass llm= to MemoryCore.")
+
+        consolidation_cfg = (
+            config if isinstance(config, ConsolidationConfig) else ConsolidationConfig()
+        )
+
+        consolidator = MemoryConsolidator(llm=self.llm, config=consolidation_cfg)
+
+        # Gather episodic memories via recall (broad fetch)
+        all_results = await self.retrieval.recall(
+            query="*",
+            limit=1000,
+            scoring=False,
+            update_access=False,
+        )
+        memories = [
+            m
+            for m in all_results
+            if m.memory_type in (MemoryType.EPISODIC, MemoryType.AUTOBIOGRAPHICAL)
+            and (user_id is None or m.user_id == user_id)
+        ]
+
+        if not memories:
+            from datetime import datetime as _dt
+
+            from ..experimental.consolidation import ConsolidationResult
+
+            now = _dt.now(timezone.utc)
+            return ConsolidationResult(
+                total_memories_processed=0,
+                clusters_formed=0,
+                semantic_memories_created=0,
+                memories_deprecated=0,
+                created_semantic_ids=[],
+                deprecated_memory_ids=[],
+                cluster_summaries=[],
+                started_at=now,
+                completed_at=now,
+                duration_seconds=0.0,
+            )
+
+        return await consolidator.consolidate(memories, user_id=user_id)
 
     def _resolve_recall_options(
         self,
@@ -849,9 +1435,24 @@ class MemoryCore:
     async def _update_access_metadata(self, memories: list[MemoryItem]) -> None:
         if not isinstance(self.store, SupportsMetadataUpdate):
             return
+        from .decay import MEMORY_TYPE_DEFAULTS, DecayConfig, ForgettingCurve
+
+        current_time = datetime.now(timezone.utc)
         update_tasks = []
         for memory in memories:
-            memory.update_access()
+            # Compute retrievability for spaced repetition boost
+            retrievability: float | None = None
+            if memory.stability_seconds is not None:
+                config = MEMORY_TYPE_DEFAULTS.get(memory.memory_type, DecayConfig())
+                curve = ForgettingCurve(
+                    decay_power=config.decay_power,
+                    target_retention=config.target_retention,
+                )
+                last = coerce_datetime(memory.last_accessed, default=current_time)
+                elapsed = max(0.0, (current_time - last).total_seconds())
+                retrievability = curve.retrievability(elapsed, memory.stability_seconds)
+
+            memory.update_access(retrievability=retrievability)
             update_tasks.append(
                 self.store.update_memory_metadata(
                     memory.memory_id,
@@ -859,11 +1460,12 @@ class MemoryCore:
                         "last_accessed": memory.last_accessed,
                         "access_count": memory.access_count,
                         "access_history": memory.access_history,
+                        "stability_seconds": memory.stability_seconds,
                     },
                 )
             )
         if update_tasks:
-            await asyncio.gather(*update_tasks)
+            await asyncio.gather(*update_tasks, return_exceptions=True)
 
     async def reflect(
         self, query_builder: MemoryQueryBuilder | None = None, min_importance: float = 0.7
@@ -905,6 +1507,88 @@ class MemoryCore:
 
         analysis = await self.analyzer.analyze_patterns("\n".join(memory_texts))
         return analysis
+
+    def judge_conflicts(
+        self,
+        memories: list[MemoryItem],
+        *,
+        similarity_threshold: float = 0.92,
+    ) -> dict[str, Any]:
+        """Detect conflicts among a set of recalled memories (AMA Judge pattern).
+
+        Uses fast cosine-threshold detection to find contradictions and
+        near-duplicates among the provided memories. No LLM calls required.
+
+        Args:
+            memories: List of memories to check pairwise.
+            similarity_threshold: Cosine similarity threshold for conflict detection.
+
+        Returns:
+            Dict mapping memory_id to conflict annotation info. Only memories
+            with detected conflicts are included.
+        """
+        from ._internal.conflict_judge import ConflictJudge, ConflictJudgeConfig
+
+        judge = ConflictJudge(config=ConflictJudgeConfig(similarity_threshold=similarity_threshold))
+        annotations = judge.detect_conflicts(memories)
+        return {
+            mid: {
+                "memory_id": ann.memory_id,
+                "conflicting_ids": ann.conflicting_ids,
+                "reasons": ann.reasons,
+            }
+            for mid, ann in annotations.items()
+        }
+
+    async def observe(
+        self,
+        content: str,
+        *,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[str]:
+        """Extract observations from a conversation turn and store them.
+
+        Follows the Mastra OM pattern: the Observer writes facts without
+        doing any per-turn retrieval, achieving write-only latency.
+
+        Args:
+            content: The conversation turn text.
+            user_id: Optional user ID for stored memories.
+            conversation_id: Optional conversation ID.
+            context: Optional context dict passed to the observer.
+
+        Returns:
+            List of memory IDs for stored observations.
+        """
+        from .observer import MemoryObserver
+
+        observer = MemoryObserver(llm=self.llm)
+        observations = await observer.observe(content, context=context, user_id=user_id)
+
+        memory_ids: list[str] = []
+        uid = user_id or self.default_user_id
+        cid = conversation_id or self.default_conversation_id
+        for obs in observations:
+            memory = await self.remember(
+                obs.content,
+                memory_type=obs.memory_type,
+                importance=obs.importance,
+                tags=obs.tags,
+                user_id=uid,
+                conversation_id=cid,
+                source=obs.source,
+            )
+            # Persist observation_date (set after remember, needs re-save)
+            if obs.observation_date and hasattr(memory, "observation_date"):
+                memory.observation_date = obs.observation_date
+                try:
+                    await self.store.store_memory(memory)
+                except Exception:
+                    logger.debug("Failed to persist observation_date", exc_info=True)
+            memory_ids.append(memory.memory_id)
+        return memory_ids
 
     async def connect(
         self,
@@ -950,6 +1634,80 @@ class MemoryCore:
             Success status
         """
         return await self.persistence.delete(memory_id, cascade=cascade)
+
+    async def evict(
+        self,
+        *,
+        max_memories: int | None = None,
+        min_importance: float | None = None,
+        alpha: float = 0.6,
+        importance_floor: float = 0.7,
+        dry_run: bool = False,
+    ) -> list[str]:
+        """Evict low-value memories using hybrid temporal + importance scoring.
+
+        Eviction score = (1-alpha)*(1-temporal_freshness) + alpha*(1-importance).
+        Higher score = evict first. Memories with importance >= importance_floor
+        are never evicted (safety floor).
+
+        Args:
+            max_memories: If set, evict until store has at most this many memories.
+            min_importance: If set, evict all active memories below this importance.
+            alpha: Weight for importance term (0.6 = importance-dominant).
+            importance_floor: Never evict memories at or above this importance.
+            dry_run: If True, return candidates without deleting.
+
+        Returns:
+            List of evicted (or would-be-evicted) memory IDs.
+        """
+        import math as _math
+
+        if not isinstance(self.store, SupportsMemoryListing):
+            raise RuntimeError("Store does not support list_memories() (SupportsMemoryListing).")
+
+        all_memories = await self.store.list_memories(
+            include_embeddings=False, include_invalidated=False
+        )
+        if not all_memories:
+            return []
+
+        current_time = datetime.now(timezone.utc)
+
+        def _eviction_score(m: MemoryItem) -> float:
+            last = coerce_datetime(m.last_accessed, default=current_time)
+            days = max(0.0, (current_time - last).total_seconds()) / 86400.0
+            temporal_freshness = 1.0 / (1.0 + _math.log1p(days))
+            return (1.0 - alpha) * (1.0 - temporal_freshness) + alpha * (1.0 - m.importance)
+
+        candidates = [
+            (m, _eviction_score(m)) for m in all_memories if m.importance < importance_floor
+        ]
+        candidates.sort(key=lambda x: x[1], reverse=True)
+
+        evict_set: set[str] = set()
+
+        if min_importance is not None:
+            for m, _ in candidates:
+                if m.importance < min_importance:
+                    evict_set.add(m.memory_id)
+
+        if max_memories is not None:
+            current_count = len(all_memories)
+            remaining_after = current_count - len(evict_set)
+            need_more = max(0, remaining_after - max_memories)
+            for m, _ in candidates:
+                if need_more <= 0:
+                    break
+                if m.memory_id not in evict_set:
+                    evict_set.add(m.memory_id)
+                    need_more -= 1
+
+        evicted_ids = list(evict_set)
+
+        if not dry_run and evicted_ids:
+            await asyncio.gather(*[self.persistence.delete(mid) for mid in evicted_ids])
+
+        return evicted_ids
 
     # Knowledge Graph Operations
 
@@ -1405,7 +2163,7 @@ class MemoryCore:
             Tuple of (memories, clustering_results)
         """
         if not self.clusterer:
-            raise RuntimeError("Clusterer not configured. Use mode='pro' or provide a summarizer.")
+            raise RuntimeError("Clusterer not configured. Use mode='pro' or provide a clusterer.")
 
         # Get memories to cluster
         if query is not None:
@@ -1482,7 +2240,7 @@ class MemoryCore:
                     )
 
         if update_tasks:
-            await asyncio.gather(*update_tasks)
+            await asyncio.gather(*update_tasks, return_exceptions=True)
 
         return stats
 
@@ -1529,6 +2287,17 @@ class MemoryCore:
         rerank_candidates: int,
         async_ingest: bool,
         ingestion_queue_size: int,
+        dedup_enabled: bool = True,
+        dedup_threshold: float = 0.88,
+        auto_link_enabled: bool = True,
+        auto_link_threshold: float = 0.80,
+        conflict_detection_enabled: bool = True,
+        conflict_similarity_min: float = 0.55,
+        fact_decomposition_enabled: bool = False,
+        fact_decomposition_min_length: int = 200,
+        fact_decomposition_max_facts: int = 10,
+        write_gate_enabled: bool = False,
+        write_gate_policy: str = "permissive",
     ) -> None:
         self.mode = mode
         self.retrieval_mode = retrieval_mode
@@ -1552,6 +2321,23 @@ class MemoryCore:
         self.async_ingest = async_ingest
         self.ingestion_queue_size = max(1, int(ingestion_queue_size))
         self._ingestion_queue: MemoryIngestionQueue | None = None
+        # Ingestion pipeline settings — helpers instantiated in _init_ingestion_helpers()
+        self.dedup_enabled = dedup_enabled
+        self.dedup_threshold = dedup_threshold
+        self.auto_link_enabled = auto_link_enabled
+        self.auto_link_threshold = auto_link_threshold
+        self.conflict_detection_enabled = conflict_detection_enabled
+        self.conflict_similarity_min = conflict_similarity_min
+        self.fact_decomposition_enabled = fact_decomposition_enabled
+        self.fact_decomposition_min_length = fact_decomposition_min_length
+        self.fact_decomposition_max_facts = fact_decomposition_max_facts
+        self.write_gate_enabled = write_gate_enabled
+        self.write_gate_policy = write_gate_policy
+        # Helper instances — set later by _init_ingestion_helpers() once retrieval/llm are ready
+        self.dedup_checker: DedupChecker | None = None
+        self.conflict_detector: InlineConflictDetector | None = None
+        self.fact_decomposer: FactDecomposer | None = None
+        self._write_gate: Any | None = None
 
     def _init_mode_defaults(
         self,
@@ -1585,15 +2371,20 @@ class MemoryCore:
         if keyword_extractor is not None:
             return keyword_extractor
         if enable_keywords:
-            return SpacyKeywordExtractor()
+            try:
+                return SpacyKeywordExtractor()
+            except OSError:
+                logger.debug("spaCy model not available, disabling keyword extraction")
+                return None
         return None
 
     def _init_embeddings_and_analysis(
         self,
         *,
-        llm: BaseLanguageModel | None,
-        embeddings: Embeddings | None,
+        llm: Any | None,
+        embeddings: Any | None,
     ) -> None:
+        self.llm = llm
         if embeddings is None:
             embeddings = self._resolve_embeddings(self.mode)
         self.embedder = embeddings
@@ -1605,7 +2396,14 @@ class MemoryCore:
 
     def _init_ner(self, *, ner: BaseNER | None, enable_ner: bool) -> None:
         if enable_ner:
-            self.ner: BaseNER | None = ner if ner is not None else SpacyNER()
+            if ner is not None:
+                self.ner: BaseNER | None = ner
+            else:
+                try:
+                    self.ner = SpacyNER()
+                except OSError:
+                    logger.debug("spaCy model not available, disabling NER")
+                    self.ner = None
         else:
             self.ner = None
 
@@ -1648,6 +2446,11 @@ class MemoryCore:
         enable_rrf_signal_rerank: bool,
         rerank_candidates: int,
         retriever: Retriever | None,
+        enable_intent_filter: bool = False,
+        intent_classifier_backend: Literal["keyword", "llm"] = "keyword",
+        enable_hyde: bool = False,
+        enable_ms_rag: bool = False,
+        ms_rag_max_sub_queries: int = 4,
     ) -> None:
         # _bm25_index/_bm25_cache are now managed by IndexManager
         # self._bm25_index and self._bm25_cache removed
@@ -1668,11 +2471,69 @@ class MemoryCore:
             analyzer=self.analyzer,
             summarizer=self.summarizer,
         )
+
+        # SimpleMem intent classifier
+        self._intent_classifier: IntentClassifier | None = None
+        if enable_intent_filter:
+            from .intent import KeywordIntentClassifier, LLMIntentClassifier
+
+            if intent_classifier_backend == "llm":
+                if self.llm is None:
+                    raise ValueError(
+                        "intent_classifier_backend='llm' requires an LLM. "
+                        "Pass llm= to MemoryCore or use intent_classifier_backend='keyword'."
+                    )
+                self._intent_classifier = LLMIntentClassifier(self.llm)
+            else:
+                self._intent_classifier = KeywordIntentClassifier()
+
+        # HyDE embedder
+        hyde_embedder = None
+        if enable_hyde:
+            if self.llm is None:
+                raise ValueError("enable_hyde=True requires an LLM. Pass llm= to MemoryCore.")
+            from .hyde import HyDEEmbedder
+
+            hyde_embedder = HyDEEmbedder(llm=self.llm, embedder=self.embedder)
+
         self.retrieval: Retriever = retriever or self._build_retriever(
             rrf_k=rrf_k,
             enable_rrf_signal_rerank=enable_rrf_signal_rerank,
             rerank_candidates=rerank_candidates,
+            hyde_embedder=hyde_embedder,
         )
+
+        # MS-RAG query decomposer
+        from .query_decomposition import QueryDecomposer
+
+        self._query_decomposer: QueryDecomposer | None = None
+        if enable_ms_rag:
+            if self.llm is None:
+                raise ValueError("enable_ms_rag=True requires an LLM. Pass llm= to MemoryCore.")
+            from .query_decomposition import QueryDecomposer
+
+            self._query_decomposer = QueryDecomposer(
+                llm=self.llm, max_sub_queries=ms_rag_max_sub_queries
+            )
+
+    def _init_ingestion_helpers(self, *, llm: Any) -> None:
+        """Instantiate dedup / conflict / fact-decomp / write-gate helpers."""
+        if self.dedup_enabled:
+            self.dedup_checker = DedupChecker(self.retrieval, self.dedup_threshold)
+        if self.conflict_detection_enabled:
+            self.conflict_detector = InlineConflictDetector(llm)
+        if self.fact_decomposition_enabled and llm is not None:
+            self.fact_decomposer = FactDecomposer(llm, self.fact_decomposition_max_facts)
+        if self.write_gate_enabled:
+            from ..experimental.write_gate import ContextAwareWriteGate, WritePolicy
+
+            policies = {
+                "permissive": WritePolicy.permissive,
+                "balanced": WritePolicy.balanced,
+                "strict": WritePolicy.strict,
+            }
+            policy_factory = policies.get(self.write_gate_policy, WritePolicy.permissive)
+            self._write_gate = ContextAwareWriteGate(policy=policy_factory())
 
     def _init_normalizer(self, config: NormalizationConfig) -> None:
         from ..normalization import create_normalization_pipeline
@@ -1689,6 +2550,7 @@ class MemoryCore:
         rrf_k: int,
         enable_rrf_signal_rerank: bool,
         rerank_candidates: int,
+        hyde_embedder: object | None = None,
     ) -> Retriever:
         common_retrieval_args = {
             "store": self.store,
@@ -1697,6 +2559,7 @@ class MemoryCore:
             "keyword_extractor": self.keyword_extractor,
             "embedder": self.embedder,
             "index_manager": self.index_manager,
+            "hyde_embedder": hyde_embedder,
         }
         if self.retrieval_mode == "hybrid":
             return RetrieverFactory.create_hybrid(
@@ -1708,13 +2571,15 @@ class MemoryCore:
             )
         return RetrieverFactory.create_basic(**common_retrieval_args)
 
-    def _resolve_embeddings(self, mode: MemoryMode) -> Embeddings:
+    def _resolve_embeddings(self, mode: MemoryMode) -> Any:
         if mode == "lite":
             lite_model = os.getenv(
                 "MNEMOTREE_LITE_EMBEDDING_MODEL",
                 "sentence-transformers/all-MiniLM-L6-v2",
             )
             return LocalSentenceTransformerEmbeddings(model_name=lite_model)
+
+        from langchain_openai import OpenAIEmbeddings
 
         openai_base_url = os.getenv("OPENAI_BASE_URL")
         openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
@@ -1725,23 +2590,28 @@ class MemoryCore:
 
     def _resolve_analyzer_and_summarizer(
         self,
-        llm: BaseLanguageModel | None,
-        embeddings: Embeddings,
+        llm: Any,
+        embeddings: Any,
     ) -> tuple[MemoryAnalyzer | None, Summarizer | None]:
         should_enable_llm_defaults = self.default_analyze or self.default_summarize
 
         if self.mode == "pro" and llm is None and should_enable_llm_defaults:
-            openai_base_url = os.getenv("OPENAI_BASE_URL")
-            openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-            openai_client_kwargs: dict[str, Any] = (
-                {"base_url": openai_base_url} if openai_base_url else {}
-            )
-            llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
+            try:
+                from langchain_openai import ChatOpenAI
+
+                openai_base_url = os.getenv("OPENAI_BASE_URL")
+                openai_model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+                openai_client_kwargs: dict[str, Any] = (
+                    {"base_url": openai_base_url} if openai_base_url else {}
+                )
+                llm = ChatOpenAI(model=openai_model, temperature=0, **openai_client_kwargs)
+            except ImportError:
+                pass
         if llm is None:
             return None, None
         return (
-            MemoryAnalyzer(llm=llm, embeddings=embeddings),
-            Summarizer(llm=llm),
+            MemoryAnalyzer(model=llm, embeddings=embeddings),
+            Summarizer(model=llm),
         )
 
     def _resolve_importance_and_type(

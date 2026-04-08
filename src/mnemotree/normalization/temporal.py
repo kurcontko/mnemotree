@@ -67,6 +67,8 @@ def _parse_date_string(date_str: str) -> datetime | None:
             return parsed
     except ImportError:
         pass
+    except Exception:
+        pass
 
     # Fallback: try common formats
     for fmt in (
@@ -123,6 +125,8 @@ class TemporalNormalizer(BaseNormalizer):
             if parsed and parsed != ref_date:
                 return parsed.strftime("%Y-%m-%d")
         except ImportError:
+            pass
+        except Exception:
             pass
 
         return None

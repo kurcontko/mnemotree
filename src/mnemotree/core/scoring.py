@@ -172,7 +172,7 @@ class MemoryScoring:
 
             base_importance = compute_decayed_importance(base_importance, time_since_access, config)
 
-        access_boost = min(0.2, math.log(memory.access_count + 1) * 0.05)
+        access_boost = min(0.2, math.log(max(1, memory.access_count + 1)) * 0.05)
         return min(1.0, max(0.0, base_importance + access_boost))
 
     def _calculate_recency_score(

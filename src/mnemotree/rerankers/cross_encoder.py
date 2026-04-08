@@ -76,7 +76,8 @@ class CrossEncoderReranker(BaseReranker):
     ) -> list[tuple[MemoryItem, float]]:
         """Synchronous reranking logic."""
         self._load_model()
-        assert self._model is not None
+        if self._model is None:
+            raise RuntimeError("CrossEncoder model failed to load")
 
         # Prepare query-candidate pairs
         pairs = [(query, mem.content) for mem in candidates]

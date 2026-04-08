@@ -82,8 +82,8 @@ class FlashRankReranker(BaseReranker):
     ) -> list[tuple[MemoryItem, float]]:
         """Synchronous reranking logic."""
         self._load()
-        assert self._ranker is not None
-        assert self._request_cls is not None
+        if self._ranker is None or self._request_cls is None:
+            raise RuntimeError("FlashRank model failed to load")
 
         # Prepare passages with indices for tracking
         passages = [{"id": idx, "text": mem.content} for idx, mem in enumerate(candidates)]

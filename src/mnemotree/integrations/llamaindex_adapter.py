@@ -108,7 +108,7 @@ class MnemotreeVectorMemory:
 
         messages = []
         for mem in memories:
-            role_str = mem.metadata.get("role", "user")
+            role_str = (mem.metadata or {}).get("role", "user")
             role = MessageRole.USER if role_str == "user" else MessageRole.ASSISTANT
 
             messages.append(
@@ -155,6 +155,8 @@ class MnemotreeVectorMemory:
         import asyncio
 
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return
         loop.run_until_complete(self.aput(message))
 
     async def areset(self) -> None:
@@ -173,6 +175,8 @@ class MnemotreeVectorMemory:
         import asyncio
 
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return
         loop.run_until_complete(self.areset())
 
 

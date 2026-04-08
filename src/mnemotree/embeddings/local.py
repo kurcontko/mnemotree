@@ -3,10 +3,9 @@ from __future__ import annotations
 import asyncio
 
 import numpy as np
-from langchain_core.embeddings.embeddings import Embeddings
 
 
-class LocalSentenceTransformerEmbeddings(Embeddings):
+class LocalSentenceTransformerEmbeddings:
     def __init__(
         self,
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",

@@ -1,6 +1,9 @@
 """Tests for configuration module."""
 
+import importlib.util
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from mnemotree.configs import (
     ConfiguredMemorySystem,
@@ -179,11 +182,15 @@ class TestPreConfiguredSetups:
         assert config.consolidation_config.min_cluster_size == 2
 
 
+_has_langchain_openai = importlib.util.find_spec("langchain_openai") is not None
+
+
+@pytest.mark.skipif(not _has_langchain_openai, reason="langchain_openai not installed")
 class TestBuildMemorySystem:
     """Tests for MemorySystemConfig.build_memory_system()."""
 
-    @patch("mnemotree.configs.ChatOpenAI")
-    @patch("mnemotree.configs.OpenAIEmbeddings")
+    @patch("langchain_openai.ChatOpenAI")
+    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
     def test_build_creates_memory_core(self, mock_core_cls, mock_embeddings_cls, mock_llm_cls):
         """build_memory_system creates MemoryCore with provided store."""
@@ -203,8 +210,8 @@ class TestBuildMemorySystem:
         call_kwargs = mock_core_cls.call_args[1]
         assert call_kwargs["store"] is mock_store
 
-    @patch("mnemotree.configs.ChatOpenAI")
-    @patch("mnemotree.configs.OpenAIEmbeddings")
+    @patch("langchain_openai.ChatOpenAI")
+    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
     @patch("mnemotree.configs.RetrieverFactory.create_hybrid")
     def test_build_creates_hybrid_retriever(
@@ -227,8 +234,8 @@ class TestBuildMemorySystem:
         mock_create_hybrid.assert_called_once()
         assert system.retriever is not None
 
-    @patch("mnemotree.configs.ChatOpenAI")
-    @patch("mnemotree.configs.OpenAIEmbeddings")
+    @patch("langchain_openai.ChatOpenAI")
+    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
     def test_build_skips_hybrid_retriever_when_disabled(
         self, mock_core_cls, mock_embeddings_cls, mock_llm_cls
@@ -248,8 +255,8 @@ class TestBuildMemorySystem:
 
         assert system.retriever is None
 
-    @patch("mnemotree.configs.ChatOpenAI")
-    @patch("mnemotree.configs.OpenAIEmbeddings")
+    @patch("langchain_openai.ChatOpenAI")
+    @patch("langchain_openai.OpenAIEmbeddings")
     @patch("mnemotree.configs.MemoryCore")
     def test_build_uses_provided_llm_and_embeddings(
         self, mock_core_cls, mock_embeddings_cls, mock_llm_cls

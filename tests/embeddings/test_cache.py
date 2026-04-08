@@ -165,3 +165,27 @@ class TestCachedEmbeddings:
         # Should have at most one miss (first caller computes)
         # Due to lock, some may get cache hits
         assert cached._hits + cached._misses == 5
+
+    def test_embed_documents_preserves_order(self, mock_embedder):
+        """embed_documents must return results aligned with input order."""
+        cached = CachedEmbeddings(mock_embedder, max_size=10, ttl_seconds=60)
+
+        # Pre-cache "b" so it hits, "a" and "c" miss
+        emb_b = cached.embed_query("b")
+
+        results = cached.embed_documents(["a", "b", "c"])
+        assert len(results) == 3
+        # "b" should be at index 1, matching its cached value
+        assert results[1] == emb_b
+
+    @pytest.mark.asyncio
+    async def test_aembed_documents_preserves_order(self, mock_embedder):
+        """aembed_documents must return results aligned with input order."""
+        cached = CachedEmbeddings(mock_embedder, max_size=10, ttl_seconds=60)
+
+        # Pre-cache "b"
+        emb_b = await cached.aembed_query("b")
+
+        results = await cached.aembed_documents(["a", "b", "c"])
+        assert len(results) == 3
+        assert results[1] == emb_b

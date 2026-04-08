@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import sqlite3
 from collections.abc import Iterable
 from typing import Any
@@ -11,6 +12,20 @@ import numpy as np
 from ..core.models import MemoryItem, MemoryType
 from ..utils.serialization import json_dumps_safe, json_loads_dict
 from .serialization import safe_load_context, serialize_datetime, serialize_datetime_list
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_json_list(raw: str | None) -> list:
+    """Parse JSON list, returning [] on None or malformed input."""
+    if not raw:
+        return []
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, list) else []
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Corrupted JSON list in stored data, returning []")
+        return []
 
 
 def build_neo4j_memory_payload(
@@ -52,6 +67,14 @@ def build_neo4j_memory_payload(
         "entities": json_dumps_safe(valid_entities),
         "entity_mentions": json_dumps_safe(memory.entity_mentions),
         "stability_seconds": memory.stability_seconds,
+        "event_time": serialize_datetime(memory.event_time),
+        "valid_from": serialize_datetime(memory.valid_from),
+        "valid_until": serialize_datetime(memory.valid_until),
+        "observation_date": serialize_datetime(memory.observation_date),
+        "referenced_date": serialize_datetime(memory.referenced_date),
+        "temporal_offset": memory.temporal_offset,
+        "contextual_intent": memory.contextual_intent,
+        "is_hot": memory.is_hot,
     }
     return payload, valid_entities
 
@@ -96,6 +119,17 @@ def chroma_metadata_from_memory(memory: MemoryItem) -> dict[str, str]:
         "conflicts_with": ",".join(memory.conflicts_with) if memory.conflicts_with else "",
         "previous_event_id": memory.previous_event_id if memory.previous_event_id else "",
         "next_event_id": memory.next_event_id if memory.next_event_id else "",
+        "stability_seconds": str(memory.stability_seconds)
+        if memory.stability_seconds is not None
+        else "",
+        "event_time": serialize_datetime(memory.event_time) or "",
+        "valid_from": serialize_datetime(memory.valid_from) or "",
+        "valid_until": serialize_datetime(memory.valid_until) or "",
+        "observation_date": serialize_datetime(memory.observation_date) or "",
+        "referenced_date": serialize_datetime(memory.referenced_date) or "",
+        "temporal_offset": memory.temporal_offset or "",
+        "contextual_intent": memory.contextual_intent or "",
+        "is_hot": str(int(memory.is_hot)),
     }
 
 
@@ -115,16 +149,16 @@ def chroma_memory_from_record(
     memory_data = {
         "memory_id": memory_id,
         "content": document,
-        "memory_type": MemoryType(metadata["memory_type"]),
-        "timestamp": metadata["timestamp"],
-        "last_accessed": metadata.get("last_accessed", metadata["timestamp"]),
+        "memory_type": MemoryType(metadata.get("memory_type", "episodic")),
+        "timestamp": metadata.get("timestamp"),
+        "last_accessed": metadata.get("last_accessed", metadata.get("timestamp")),
         "access_count": int(metadata.get("access_count") or 0),
-        "access_history": json.loads(metadata.get("access_history") or "[]"),
-        "importance": float(metadata["importance"]),
-        "confidence": float(metadata["confidence"]),
-        "tags": metadata["tags"].split(",") if metadata["tags"] else [],
-        "emotions": metadata["emotions"].split(",") if metadata["emotions"] else [],
-        "source": metadata["source"] if metadata["source"] else None,
+        "access_history": _safe_json_list(metadata.get("access_history")),
+        "importance": float(metadata.get("importance", 0.5)),
+        "confidence": float(metadata.get("confidence", 0.5)),
+        "tags": metadata.get("tags", "").split(",") if metadata.get("tags") else [],
+        "emotions": metadata.get("emotions", "").split(",") if metadata.get("emotions") else [],
+        "source": metadata.get("source") or None,
         "context": safe_load_context(metadata.get("context", "")),
         "embedding": embedding,
         "entities": entities,
@@ -140,6 +174,25 @@ def chroma_memory_from_record(
         "previous_event_id": metadata.get("previous_event_id") or None,
         "next_event_id": metadata.get("next_event_id") or None,
     }
+    # Phase 1 fields — may be absent in older ChromaDB collections
+    _stability = metadata.get("stability_seconds")
+    if _stability:
+        with contextlib.suppress(ValueError, TypeError):
+            memory_data["stability_seconds"] = float(_stability)
+    for field in ("event_time", "valid_from", "valid_until", "observation_date", "referenced_date"):
+        val = metadata.get(field)
+        if val:
+            memory_data[field] = val
+    _offset = metadata.get("temporal_offset")
+    if _offset:
+        memory_data["temporal_offset"] = _offset
+    _intent = metadata.get("contextual_intent")
+    if _intent:
+        memory_data["contextual_intent"] = _intent
+    _hot = metadata.get("is_hot")
+    if _hot:
+        with contextlib.suppress(ValueError, TypeError):
+            memory_data["is_hot"] = bool(int(_hot))
     return MemoryItem(**memory_data)
 
 
@@ -181,6 +234,18 @@ def sqlite_record_from_memory(memory: MemoryItem) -> dict[str, Any]:
         "previous_event_id": memory.previous_event_id,
         "next_event_id": memory.next_event_id,
         "stability_seconds": memory.stability_seconds,
+        "event_time": serialize_datetime(memory.event_time) if memory.event_time else None,
+        "valid_from": serialize_datetime(memory.valid_from) if memory.valid_from else None,
+        "valid_until": serialize_datetime(memory.valid_until) if memory.valid_until else None,
+        "observation_date": serialize_datetime(memory.observation_date)
+        if memory.observation_date
+        else None,
+        "referenced_date": serialize_datetime(memory.referenced_date)
+        if memory.referenced_date
+        else None,
+        "temporal_offset": memory.temporal_offset,
+        "contextual_intent": memory.contextual_intent,
+        "is_hot": 1 if memory.is_hot else 0,
     }
 
 
@@ -203,11 +268,11 @@ def sqlite_memory_from_row(row: sqlite3.Row) -> MemoryItem:
         "timestamp": row["timestamp"],
         "last_accessed": row["last_accessed"] or row["timestamp"],
         "access_count": int(row["access_count"] or 0),
-        "access_history": json.loads(row["access_history"] or "[]"),
+        "access_history": _safe_json_list(row["access_history"]),
         "importance": float(row["importance"]),
         "decay_rate": row["decay_rate"] if row["decay_rate"] is not None else 0.01,
-        "confidence": float(row["confidence"] or 1.0),
-        "fidelity": float(row["fidelity"] or 1.0),
+        "confidence": float(row["confidence"]) if row["confidence"] is not None else 1.0,
+        "fidelity": float(row["fidelity"]) if row["fidelity"] is not None else 1.0,
         "emotional_valence": row["emotional_valence"],
         "emotional_arousal": row["emotional_arousal"],
         "emotions": _deserialize_list(row["emotions"]),
@@ -225,9 +290,25 @@ def sqlite_memory_from_row(row: sqlite3.Row) -> MemoryItem:
         "previous_event_id": row["previous_event_id"] or None,
         "next_event_id": row["next_event_id"] or None,
     }
-    # stability_seconds may not exist in old DBs
+    # Fields that may not exist in old DBs — graceful fallback
     with contextlib.suppress(IndexError, KeyError):
         memory_data["stability_seconds"] = row["stability_seconds"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["event_time"] = row["event_time"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["valid_from"] = row["valid_from"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["valid_until"] = row["valid_until"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["observation_date"] = row["observation_date"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["referenced_date"] = row["referenced_date"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["temporal_offset"] = row["temporal_offset"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["contextual_intent"] = row["contextual_intent"]
+    with contextlib.suppress(IndexError, KeyError):
+        memory_data["is_hot"] = bool(row["is_hot"])
     return MemoryItem(**memory_data)
 
 

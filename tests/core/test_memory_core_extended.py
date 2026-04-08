@@ -844,7 +844,6 @@ class TestModeConfiguration:
     @pytest.mark.asyncio
     async def test_pro_mode_with_env_vars_creates_llm(self, mock_embeddings):
         """Test pro mode creates LLM from environment variables."""
-        # TODO: Mock LLM creation to avoid external dependencies
         store = MockVectorStore()
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
@@ -855,6 +854,13 @@ class TestModeConfiguration:
                 ner_config=NerConfig(enable_ner=False),
             )
 
-            # Should have created analyzer and summarizer
-            assert memory_core.analyzer is not None
-            assert memory_core.summarizer is not None
+            # Analyzer/summarizer only created when langchain_openai is available
+            import importlib.util
+
+            if importlib.util.find_spec("langchain_openai") is not None:
+                assert memory_core.analyzer is not None
+                assert memory_core.summarizer is not None
+            else:
+                # Without langchain_openai, LLM creation is skipped gracefully
+                assert memory_core.analyzer is None
+                assert memory_core.summarizer is None

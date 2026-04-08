@@ -102,3 +102,13 @@ async def test_empty_content(normalizer):
     """Empty content should return empty."""
     result = await normalizer.normalize("")
     assert result == ""
+
+
+def test_parse_date_string_malformed():
+    """Malformed date strings should return None, not crash."""
+    from mnemotree.normalization.temporal import _parse_date_string
+
+    # These should all return None gracefully
+    assert _parse_date_string("not-a-date-at-all!!!") is None
+    assert _parse_date_string("") is None
+    assert _parse_date_string("   ") is None
