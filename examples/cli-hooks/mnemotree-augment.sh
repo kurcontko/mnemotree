@@ -1,57 +1,33 @@
 #!/usr/bin/env bash
 # mnemotree-augment.sh — Claude Code hook: augment prompts with relevant memories
 #
+# DEPRECATED: Use .claude/hooks/mnemotree-recall.sh instead, which handles
+# UserPromptSubmit recall via the unified mnemotree.hooks.handler module.
+#
 # Usage in .claude/settings.json:
 #   {
 #     "hooks": {
-#       "PreToolUse": [
-#         { "matcher": ".*", "command": "bash examples/cli-hooks/mnemotree-augment.sh" }
+#       "UserPromptSubmit": [
+#         { "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/mnemotree-recall.sh"}] }
 #       ]
 #     }
 #   }
 #
-# This hook runs before each tool use and injects relevant memories
-# into the context as system reminders. Helps Claude maintain long-term
-# project awareness across sessions.
+# This hook runs on each user prompt and injects relevant memories
+# into the context. Helps Claude maintain long-term project awareness.
 
 set -euo pipefail
 
-# Read the tool input from stdin
-INPUT=$(cat)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Extract the query/content from the input
-QUERY=$(echo "$INPUT" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-# Use tool input content as query, or the tool name as fallback
-content = data.get('tool_input', {}).get('content', '')
-if not content:
-    content = data.get('tool_input', {}).get('command', '')
-if not content:
-    content = data.get('tool_name', '')
-# Truncate for search
-print(content[:200])
-" 2>/dev/null || echo "")
-
-if [ -z "$QUERY" ]; then
-    exit 0
+if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
+    PYTHON="$PROJECT_DIR/.venv/bin/python"
+elif command -v python3 &>/dev/null; then
+    PYTHON="python3"
+else
+    PYTHON="python"
 fi
 
-# Recall relevant memories and print as context
-python3 -c "
-import asyncio
-from mnemotree.mcp.server import recall
-
-async def main():
-    query = '''$QUERY'''
-    if not query.strip():
-        return
-    memories = await recall(query=query, limit=3, compact=True)
-    if memories:
-        print('<mnemotree-context>')
-        for mem in memories:
-            print(f\"  [{mem.get('memory_type', '?')}] {mem.get('snippet', '')}\")
-        print('</mnemotree-context>')
-
-asyncio.run(main())
-" 2>/dev/null || true
+export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
+exec "$PYTHON" -m mnemotree.hooks.handler

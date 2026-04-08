@@ -1,51 +1,34 @@
 #!/usr/bin/env bash
 # mnemotree-capture.sh — Claude Code hook: capture conversation context as memory
 #
+# DEPRECATED: Use .claude/hooks/mnemotree-hook.sh instead, which handles all
+# hook events via the unified mnemotree.hooks.handler module.
+#
 # Usage in .claude/settings.json:
 #   {
 #     "hooks": {
 #       "PostToolUse": [
-#         { "matcher": "Write|Edit", "command": "bash examples/cli-hooks/mnemotree-capture.sh" }
+#         { "matcher": "Write|Edit", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/mnemotree-hook.sh", "async": true}] }
 #       ]
 #     }
 #   }
 #
 # This hook runs after each Write/Edit tool use and stores a brief memory
-# about the file change. Requires: mnemotree[mcp_server] or the Python package.
+# about the file change. Requires: mnemotree installed.
 
 set -euo pipefail
 
-# Read the tool result from stdin (Claude Code pipes JSON)
-INPUT=$(cat)
+# Delegate to the unified hook handler
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Extract file path from the tool result
-FILE_PATH=$(echo "$INPUT" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-# Adjust based on actual hook payload structure
-path = data.get('tool_input', {}).get('file_path', '')
-if not path:
-    path = data.get('file_path', 'unknown')
-print(path)
-" 2>/dev/null || echo "unknown")
-
-# Skip if no meaningful file path
-if [ "$FILE_PATH" = "unknown" ] || [ -z "$FILE_PATH" ]; then
-    exit 0
+if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
+    PYTHON="$PROJECT_DIR/.venv/bin/python"
+elif command -v python3 &>/dev/null; then
+    PYTHON="python3"
+else
+    PYTHON="python"
 fi
 
-# Store memory about this edit
-python3 -c "
-import asyncio
-from mnemotree.mcp.server import remember
-
-async def main():
-    await remember(
-        content='Edited file: $FILE_PATH',
-        memory_type='episodic',
-        tags=['code-edit', 'claude-code'],
-        context={'file': '$FILE_PATH', 'hook': 'PostToolUse'},
-    )
-
-asyncio.run(main())
-" 2>/dev/null || true
+export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
+exec "$PYTHON" -m mnemotree.hooks.handler

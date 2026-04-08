@@ -263,3 +263,4 @@ line_length = 100
 [project.scripts]
 mnemotree = "mnemotree.cli:main"
 mnemotree-mcp = "mnemotree.mcp.server:main"
+mnemotree-hook = "mnemotree.hooks.handler:main"

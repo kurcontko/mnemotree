@@ -170,3 +170,7 @@ cython_debug/
 /draft
 
 .serena
+
+# Claude Code local files (settings.local.json is per-machine, worktrees are ephemeral)
+.claude/settings.local.json
+.claude/worktrees/

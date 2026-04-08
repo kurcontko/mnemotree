@@ -1,61 +1,37 @@
 #!/usr/bin/env bash
 # mnemotree-reflect.sh — Claude Code hook: end-of-session reflection
 #
+# DEPRECATED: Use .claude/hooks/mnemotree-hook.sh instead, which handles
+# Stop events via the unified mnemotree.hooks.handler module.
+# The Stop hook now also includes a prompt-based continuation checker.
+#
 # Usage in .claude/settings.json:
 #   {
 #     "hooks": {
 #       "Stop": [
-#         { "command": "bash examples/cli-hooks/mnemotree-reflect.sh" }
+#         { "hooks": [
+#           {"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/mnemotree-hook.sh", "async": true},
+#           {"type": "prompt", "prompt": "Check if all tasks are complete..."}
+#         ]}
 #       ]
 #     }
 #   }
 #
 # This hook runs when a Claude Code session ends. It triggers memory
-# consolidation (if enough memories have accumulated) and stores a
-# session summary. Inspired by the "sleep consolidation" pattern from
-# RAPTOR/MAPLE research.
+# consolidation and stores a session summary.
 
 set -euo pipefail
 
-python3 -c "
-import asyncio
-from datetime import datetime, timezone
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-from mnemotree.mcp.server import recall, remember, reflect
+if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
+    PYTHON="$PROJECT_DIR/.venv/bin/python"
+elif command -v python3 &>/dev/null; then
+    PYTHON="python3"
+else
+    PYTHON="python"
+fi
 
-async def main():
-    # 1. Gather recent session memories
-    recent = await recall(
-        query='session activity code changes',
-        limit=10,
-        compact=True,
-    )
-
-    if not recent:
-        return
-
-    # 2. Create a session summary
-    snippets = [m.get('snippet', '') for m in recent if m.get('snippet')]
-    if snippets:
-        summary = 'Session summary: ' + '; '.join(snippets[:5])
-        await remember(
-            content=summary,
-            memory_type='semantic',
-            importance=0.7,
-            tags=['session-summary', 'consolidation'],
-            context={
-                'timestamp': datetime.now(timezone.utc).isoformat(),
-                'memory_count': len(recent),
-            },
-        )
-
-    # 3. Run reflection on high-importance memories
-    try:
-        reflection = await reflect(min_importance=0.7)
-        if reflection and reflection.get('summary'):
-            print(f\"Reflection: {reflection['summary'][:200]}\")
-    except Exception:
-        pass  # Reflection requires LLM, skip in lite mode
-
-asyncio.run(main())
-" 2>/dev/null || true
+export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
+exec "$PYTHON" -m mnemotree.hooks.handler
