@@ -60,7 +60,7 @@ ner_spark = [
 ]
 
 # Database backends
-neo4j = ["neo4j>=5.26.0"]
+neo4j = ["neo4j>=6.1.0"]
 milvus = ["pymilvus>=2.5.0"]
 chroma = ["chromadb>=0.5.23"]
 sqlite_vec = ["sqlite-vec>=0.1.0"]
@@ -118,7 +118,7 @@ huggingface = [
 ]
 
 all = [
-    "neo4j>=5.26.0",
+    "neo4j>=6.1.0",
     "chromadb>=0.5.23",
     "pymilvus>=2.2.0",
     "sqlite-vec>=0.1.0",
