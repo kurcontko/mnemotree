@@ -61,6 +61,8 @@ def create_app(memory: Memory, *, api_key: str, options: SearchOptions | None = 
     options = options or SearchOptions(mode="hybrid" if memory.embedder else "lexical")
     if options.mode != "lexical" and memory.embedder is None:
         raise ValueError("dense/hybrid service requires an embedder")
+    if options.representation != "raw" and memory.store.extractor_config is None:
+        raise ValueError("atom retrieval service requires an extracted corpus")
     app = FastAPI(title="Mnemotree evidence memory", docs_url=None, redoc_url=None)
 
     def authorize(authorization: Annotated[str | None, Header()] = None) -> None:

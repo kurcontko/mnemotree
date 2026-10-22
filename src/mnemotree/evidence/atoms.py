@@ -170,11 +170,13 @@ class OpenAIExtractor:
             revision=revision,
             prompt_hash=digest(EXTRACTION_PROMPT),
         )
+        self.usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "unreported_calls": 0}
 
     async def extract(self, passages: Sequence[Passage]) -> list[AtomDraft]:
         import httpx
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
+            self.usage["calls"] += 1
             response = await client.post(
                 self.base_url + "/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
@@ -195,6 +197,15 @@ class OpenAIExtractor:
                 },
             )
             response.raise_for_status()
+            usage = response.json().get("usage")
+            if isinstance(usage, dict) and all(
+                isinstance(usage.get(key), int) and usage[key] >= 0
+                for key in ("prompt_tokens", "completion_tokens")
+            ):
+                for key in ("prompt_tokens", "completion_tokens"):
+                    self.usage[key] += usage[key]
+            else:
+                self.usage["unreported_calls"] += 1
             choice = response.json()["choices"][0]
             if choice.get("finish_reason") != "stop":
                 raise ValueError("extraction did not complete normally")

@@ -73,4 +73,4 @@ jobs:
       - name: Verify minimal imports and evidence behavior
         run: |
           python -c 'import importlib.util; from mnemotree import Memory; assert importlib.util.find_spec("langchain") is None'
-          pytest tests/test_evidence.py tests/test_evidence_adapter.py --no-cov
+          pytest tests/test_evidence*.py --no-cov

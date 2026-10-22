@@ -61,6 +61,9 @@ evaluation format, and current limits. Every query requires an exact namespace;
 search spans all sessions within it. Existing MemoryCore databases are separate
 and require an explicit source export/reingestion for the new engine.
 
+This experimental branch also supports optional [atomic search projections](docs/ATOMIC_MEMORY.md)
+and a three-way `ablate` command. Raw-only behavior remains the default.
+
 ## Legacy MemoryCore and MCP
 
 The integrations below use the existing `MemoryCore` implementation. Install
