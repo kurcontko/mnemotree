@@ -112,7 +112,7 @@ python -c 'import tiktoken; tiktoken.get_encoding("cl100k_base")'
 
 ## Textual AML adapter
 
-The optional service exposes `POST /add`, `POST /search`, and unauthenticated
+The optional service exposes `POST /v1/memories/add`, `POST /v1/memories/search`, and unauthenticated
 `GET /health`. Add/Search require `Authorization: Bearer <MNEMOTREE_API_KEY>`.
 It implements the [public textual API contract](https://agentmemoryleaderboard.ai/api-guide):
 ordered user/assistant messages, optional Unix-millisecond timestamps, exact
