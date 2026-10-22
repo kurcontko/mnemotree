@@ -91,6 +91,31 @@ class Candidate(Record):
     rerank_score: float | None = None
 
 
+class ContextSpan(Record):
+    id: str
+    source_id: str
+    request_id: str
+    session_id: str
+    position: int
+    role: str
+    timestamp: datetime | None
+    start: int
+    end: int
+    text: str
+
+    def render_value(self) -> dict:
+        return {
+            "source_id": self.source_id,
+            "request_id": self.request_id,
+            "session_id": self.session_id,
+            "position": self.position,
+            "role": self.role,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "span": [self.start, self.end],
+            "text": self.text,
+        }
+
+
 class Evidence(Record):
     id: str
     source_id: str
@@ -103,18 +128,26 @@ class Evidence(Record):
     score: float
     channels: dict[str, ChannelScore]
     rerank_score: float | None = None
+    request_id: str | None = None
+    position: int | None = None
+    neighbors: tuple[ContextSpan, ...] = ()
 
     def render(self) -> str:
         """Dates and attribution live in content, not transport-only metadata."""
+        value: dict[str, object] = {
+            "source_id": self.source_id,
+            "session_id": self.session_id,
+            "role": self.role,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "span": [self.start, self.end],
+            "text": self.text,
+        }
+        if self.request_id is not None:
+            value.update(request_id=self.request_id, position=self.position)
+        if self.neighbors:
+            value["neighbors"] = [neighbor.render_value() for neighbor in self.neighbors]
         return json.dumps(
-            {
-                "source_id": self.source_id,
-                "session_id": self.session_id,
-                "role": self.role,
-                "timestamp": self.timestamp.isoformat() if self.timestamp else None,
-                "span": [self.start, self.end],
-                "text": self.text,
-            },
+            value,
             ensure_ascii=False,
             separators=(",", ":"),
         )
@@ -128,6 +161,8 @@ class SearchOptions(Record):
     candidate_limit: int = Field(default=100, ge=1, le=2000)
     token_budget: int = Field(default=8000, ge=0, le=117760)
     neighbor_chunks: int = Field(default=0, ge=0, le=2)
+    neighbor_messages: int = Field(default=0, ge=0, le=2)
+    neighbor_chars: int = Field(default=1200, ge=1, le=12000)
     rrf_k: int = Field(default=60, ge=1)
     lexical_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     dense_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
@@ -143,6 +178,8 @@ class SearchTrace(Record):
     mode: str
     candidates: tuple[Candidate, ...]
     atom_hits: tuple[dict, ...] = ()
+    context_candidates: tuple[ContextSpan, ...] = ()
+    omitted_context_ids: tuple[str, ...] = ()
     channel_counts: dict[str, int]
     packed_tokens: int
     tokenizer: str

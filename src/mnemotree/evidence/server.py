@@ -73,7 +73,7 @@ def create_app(memory: Memory, *, api_key: str, options: SearchOptions | None = 
     def health():
         return {"status": "ok"}
 
-    @app.post("/add", dependencies=[Depends(authorize)])
+    @app.post("/v1/memories/add", dependencies=[Depends(authorize)])
     async def add(request: AddRequest):
         try:
             messages = [message.source_message() for message in request.messages]
@@ -100,7 +100,7 @@ def create_app(memory: Memory, *, api_key: str, options: SearchOptions | None = 
             "session_id": request.session_id,
         }
 
-    @app.post("/search", dependencies=[Depends(authorize)])
+    @app.post("/v1/memories/search", dependencies=[Depends(authorize)])
     async def search(request: SearchRequest):
         if not request.query.strip():
             raise HTTPException(status_code=422, detail="query must not be blank")

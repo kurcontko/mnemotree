@@ -73,6 +73,23 @@ async def ablate(memory: Memory, corpus: Path, queries: Path, options: SearchOpt
     }
 
 
+async def ablate_context(
+    memory: Memory, corpus: Path, queries: Path, options: SearchOptions
+) -> dict:
+    ingestion = await ingest_corpus(memory, corpus)
+    reports = {}
+    for name, count in (("context_off", 0), ("context_on", options.neighbor_messages or 1)):
+        settings = SearchOptions.model_validate(
+            {**options.model_dump(), "neighbor_messages": count}
+        )
+        reports[name] = await score_queries(memory, corpus, queries, settings, ingestion)
+    return {
+        "summary": {key: report["summary"] for key, report in reports.items()},
+        "shared_ingestion": ingestion,
+        "reports": reports,
+    }
+
+
 async def ingest_corpus(memory: Memory, corpus: Path) -> dict:
     # Reject contaminated runs, including forgotten-source receipts.
     if memory.store.db.execute("SELECT 1 FROM evidence_requests LIMIT 1").fetchone():
@@ -121,9 +138,19 @@ async def score_queries(
                 raise ValueError(f"query {query.id} references an absent source: {source_id}")
         result = await memory.search(query.namespace, query.query, options=options)
         candidates = {item.chunk.source_id for item in result.trace.candidates}
-        packed = list(dict.fromkeys(item.source_id for item in result.evidence))
+        packed_anchors = {item.source_id for item in result.evidence}
+        packed = list(
+            dict.fromkeys(
+                source_id
+                for item in result.evidence
+                for source_id in (item.source_id, *(n.source_id for n in item.neighbors))
+            )
+        )
+        expanded = candidates | {span.source_id for span in result.trace.context_candidates}
         metrics = {
             "candidate_source_recall": len(gold & candidates) / len(gold) if gold else None,
+            "expanded_source_recall": len(gold & expanded) / len(gold) if gold else None,
+            "packed_anchor_source_recall": len(gold & packed_anchors) / len(gold) if gold else None,
             "packed_source_recall": len(gold & set(packed)) / len(gold) if gold else None,
             "packed_all_sources": int(gold <= set(packed)) if gold else None,
             "packed_reciprocal_rank": next(
@@ -141,6 +168,7 @@ async def score_queries(
                 "packed_source_ids": packed,
                 "candidate_count": len(result.trace.candidates),
                 "atom_hit_count": len(result.trace.atom_hits),
+                "packed_context_count": sum(len(item.neighbors) for item in result.evidence),
                 "packed_tokens": result.trace.packed_tokens,
                 "timings_ms": result.trace.timings_ms,
             }
@@ -158,6 +186,8 @@ async def score_queries(
                 key: mean(row[key] for row in answerable) if answerable else None
                 for key in (
                     "candidate_source_recall",
+                    "expanded_source_recall",
+                    "packed_anchor_source_recall",
                     "packed_source_recall",
                     "packed_all_sources",
                     "packed_reciprocal_rank",
