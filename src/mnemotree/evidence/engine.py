@@ -13,6 +13,7 @@ from .models import (
     Candidate,
     ChannelScore,
     Chunk,
+    ContextSpan,
     Evidence,
     IngestReceipt,
     Message,
@@ -205,6 +206,7 @@ class Memory:
         retrieval_start = perf_counter()
         channels: dict[str, list[tuple[Chunk, float]]] = {}
         windows: dict[str, tuple[Source, int, int]] = {}
+        neighbors: dict[str, tuple[ContextSpan, ...]] = {}
         atom_hits: list[AtomHit] = []
         atom_ranks: dict[str, dict[str, int]] = {}
         # A single snapshot covers all channels and source materialization.
@@ -255,6 +257,13 @@ class Memory:
                 windows[candidate.chunk.id] = self.store.window(
                     namespace, candidate.chunk, options.neighbor_chunks
                 )
+                source = windows[candidate.chunk.id][0]
+                neighbors[candidate.chunk.id] = self.store.conversation_context(
+                    namespace,
+                    source,
+                    neighbors=options.neighbor_messages,
+                    max_chars=options.neighbor_chars,
+                )
         retrieval_ms = (perf_counter() - retrieval_start) * 1000
         rerank_start = perf_counter()
         if self.reranker and candidates:
@@ -287,12 +296,17 @@ class Memory:
                     score=candidate.fusion_score,
                     channels=candidate.channels,
                     rerank_score=candidate.rerank_score,
+                    request_id=source.request_id if options.neighbor_messages else None,
+                    position=source.position if options.neighbor_messages else None,
+                    neighbors=neighbors[candidate.chunk.id],
                 )
             )
         packing_start = perf_counter()
         selected, context, tokens, omitted = pack(
             evidence, self.counter, budget=options.token_budget, limit=options.limit
         )
+        requested_context = {item.id: item for values in neighbors.values() for item in values}
+        included_context = {item.id for entry in selected for item in entry.neighbors}
         return SearchResult(
             evidence=selected,
             context=context,
@@ -300,6 +314,10 @@ class Memory:
                 mode=options.mode,
                 candidates=tuple(candidates),
                 atom_hits=tuple(hit.model_dump(mode="json") for hit in atom_hits),
+                context_candidates=tuple(requested_context.values()),
+                omitted_context_ids=tuple(
+                    id for id in requested_context if id not in included_context
+                ),
                 channel_counts={channel: len(items) for channel, items in channels.items()},
                 packed_tokens=tokens,
                 tokenizer=self.counter.signature,

@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from .engine import Memory
-from .evaluation import CorpusRecord, ablate, evaluate, read_jsonl
+from .evaluation import CorpusRecord, ablate, ablate_context, evaluate, read_jsonl
 from .models import Record, SearchOptions
 from .packing import TiktokenCounter
 from .protocols import Embedder
@@ -83,6 +83,12 @@ def main() -> None:
     ablation.add_argument("corpus", type=Path)
     ablation.add_argument("queries", type=Path)
     ablation.add_argument("--output", type=Path, required=True)
+    context_ablation = commands.add_parser(
+        "ablate-context", help="ingest once; compare neighboring messages off/on"
+    )
+    context_ablation.add_argument("corpus", type=Path)
+    context_ablation.add_argument("queries", type=Path)
+    context_ablation.add_argument("--output", type=Path, required=True)
     serve = commands.add_parser("serve", help="requires the serve extra and a bearer key")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
@@ -120,8 +126,10 @@ async def run(args, memory: Memory, options: SearchOptions) -> None:
     elif args.command == "search":
         result = await memory.search(args.namespace, args.query, options=options)
         print(result.model_dump_json(indent=2))
-    elif args.command in ("evaluate", "ablate"):
-        evaluator = ablate if args.command == "ablate" else evaluate
+    elif args.command in ("evaluate", "ablate", "ablate-context"):
+        evaluator = {"evaluate": evaluate, "ablate": ablate, "ablate-context": ablate_context}[
+            args.command
+        ]
         report = await evaluator(memory, args.corpus, args.queries, options)
         args.output.write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

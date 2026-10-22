@@ -1,0 +1,11 @@
+{
+  "search": {
+    "mode": "lexical",
+    "representation": "raw",
+    "neighbor_messages": 1,
+    "neighbor_chars": 1200,
+    "candidate_limit": 100,
+    "limit": 10,
+    "token_budget": 8000
+  }
+}

@@ -160,8 +160,11 @@ Exact dense scoring is linear in eligible corpus size, not ANN. Fixed character
 chunking can split sentences or code blocks. FTS BM25 statistics are global to
 the database even though result eligibility is scoped. SQLite work is synchronous
 and is intended for a modest local baseline; it can block an async event loop.
-There is no extraction, temporal contradiction resolution, automatic compaction,
-cross-message context expansion, or automatic migration of legacy databases.
+The parent baseline has no extraction or cross-message context expansion. The
+stacked experiments add [atomic projections](ATOMIC_MEMORY.md) and
+[neighboring-message context](CONVERSATION_CONTEXT.md), both optional. Temporal
+contradiction resolution, automatic compaction, and legacy database migration
+remain out of scope.
 
 The tests exercise actual FTS5/sqlite-vec, reopen visibility, namespace isolation,
 rollback after partial SQL writes, concurrent retries from separate connections,

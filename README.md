@@ -63,6 +63,8 @@ and require an explicit source export/reingestion for the new engine.
 
 This experimental branch also supports optional [atomic search projections](docs/ATOMIC_MEMORY.md)
 and a three-way `ablate` command. Raw-only behavior remains the default.
+The next stacked experiment adds [bounded neighboring-message context](docs/CONVERSATION_CONTEXT.md)
+and `ablate-context`; context expansion is disabled by default.
 
 ## Legacy MemoryCore and MCP
 
