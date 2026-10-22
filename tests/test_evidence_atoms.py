@@ -79,7 +79,7 @@ async def test_atom_search_resolves_to_original_sources_and_replays(tmp_path):
         assert len(combined.evidence) == 2
         assert len({item.id for item in combined.evidence}) == 2
         assert any(set(item.channels) == {"lexical", "atom_lexical"} for item in combined.evidence)
-        assert memory.counter.count(combined.context) <= 8000
+        assert combined.trace.packed_tokens <= 8000
     with Memory(path) as reopened:
         assert (
             await reopened.search(

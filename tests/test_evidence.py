@@ -6,7 +6,7 @@ import pytest
 
 from mnemotree import Memory, Message, SearchOptions
 from mnemotree.evidence import EmbeddingSpec, IngestConflict, IngestReceipt
-from mnemotree.evidence.engine import fuse
+from mnemotree.evidence.engine import QUERY_EMBED_CHARS, fuse
 from mnemotree.evidence.models import Chunk
 from mnemotree.evidence.store import vector_blob
 
@@ -52,7 +52,9 @@ async def test_persistence_scope_idempotency_and_forgetting(tmp_path):
             result = await memory.search("alice", "apple", options=SearchOptions(mode=mode))
             assert [item.source_id for item in result.evidence] == ["same"]
             assert result.evidence[0].text == "apple orchard"
-            assert memory.counter.count(result.context) == result.trace.packed_tokens
+            assert result.trace.packed_tokens == sum(
+                memory.counter.count(item.render()) for item in result.evidence
+            )
         assert memory.source("unknown", "same") is None
         assert not memory.forget("unknown", "same")
         assert memory.forget("alice", "same")
@@ -283,3 +285,74 @@ def test_stored_receipt_with_a_newer_field_still_replays():
         '"chunk_count":1,"atom_count":0}'
     )
     assert receipt.source_ids == ("x",)
+
+
+async def test_lexical_cjk_bigrams_stemming_and_stopwords(tmp_path):
+    with Memory(tmp_path / "m.db") as memory:
+        await memory.add(
+            "u",
+            [
+                Message(id="zh", content="我上周搬到了华沙，新公寓在市中心。"),
+                Message(id="en", content="Caroline moved to Warsaw after the marathon."),
+                Message(id="noise", content="What did you do? Where is it? Who was there?"),
+            ],
+            request_id="r",
+            session_id="s",
+        )
+
+        async def ids(query):
+            result = await memory.search("u", query, options=SearchOptions(mode="lexical"))
+            return [item.source_id for item in result.evidence]
+
+        assert await ids("华沙") == ["zh"]
+        assert (await ids("我搬到哪里了？"))[0] == "zh"
+        # Porter stemming matches "moving" to "moved"; stopwords do not match noise.
+        assert await ids("Where did Caroline end up moving?") == ["en"]
+        # A query of only stopwords still searches them.
+        assert "noise" in await ids("what is it")
+
+
+def test_rejects_previous_schema_version(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE evidence_config(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    db.execute("INSERT INTO evidence_config VALUES('schema_version', '1')")
+    db.commit()
+    db.close()
+    with pytest.raises(ValueError, match="rebuild"):
+        Memory(path)
+
+
+async def test_long_queries_are_clipped_for_the_embedder(tmp_path):
+    class Recording(ToyEmbedder):
+        async def embed_query(self, text):
+            self.query = text
+            return await super().embed_query(text)
+
+    embedder = Recording()
+    with Memory(tmp_path / "memory.db", embedder=embedder) as memory:
+        await add(memory)
+        query = "apple " + "filler " * 5000 + "orchard question"
+        result = await memory.search("alice", query, options=SearchOptions(mode="hybrid"))
+    assert result.evidence
+    assert len(embedder.query) <= QUERY_EMBED_CHARS + 5
+    assert embedder.query.startswith("apple ") and embedder.query.endswith("orchard question")
+
+
+async def test_lexical_search_reads_only_its_namespace(tmp_path):
+    from mnemotree.evidence.lexical import scope_token
+
+    # Digits only, so the Porter stemmer cannot merge two namespaces' tokens.
+    assert scope_token("alice")[0] == "n" and scope_token("alice")[1:].isdigit()
+    assert scope_token("alice") != scope_token("alicee")
+    with Memory(tmp_path / "m.db") as memory:
+        await add(memory, "apple orchard", namespace="alice", id="a")
+        await add(memory, "apple apple apple", namespace="alicee", id="b")
+        result = await memory.search("alice", "apple", options=SearchOptions(mode="lexical"))
+        assert [item.source_id for item in result.evidence] == ["a"]
+        assert memory.forget("alice", "a")
+        assert not (
+            await memory.search("alice", "apple", options=SearchOptions(mode="lexical"))
+        ).evidence

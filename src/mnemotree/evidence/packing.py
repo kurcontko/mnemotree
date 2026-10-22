@@ -5,12 +5,13 @@ from importlib.metadata import version
 
 import tiktoken
 
-from .models import Evidence
+from .models import ContextSpan, Evidence
 from .protocols import TokenCounter
 
 
 class TiktokenCounter:
-    def __init__(self, encoding: str = "cl100k_base") -> None:
+    # gpt-4o-family encoding; AML's answer model and its tokenizer are unpublished.
+    def __init__(self, encoding: str = "o200k_base") -> None:
         self.encoding = tiktoken.get_encoding(encoding)
         self.signature = f"tiktoken:{version('tiktoken')}:{encoding}"
 
@@ -19,51 +20,85 @@ class TiktokenCounter:
 
 
 def pack(
-    evidence: Sequence[Evidence], counter: TokenCounter, *, budget: int, limit: int
+    evidence: Sequence[Evidence],
+    counter: TokenCounter,
+    *,
+    budget: int,
+    limit: int,
+    merge_reach: int | None = None,
 ) -> tuple[tuple[Evidence, ...], str, int, tuple[str, ...]]:
+    """Select ranked anchors, then add their neighbors while the budget allows.
+
+    The budget is the sum of each returned item's exact token count: AML
+    receives items separately, and counting per item means a change re-counts
+    only that item. With ``merge_reach``, an anchor within that many messages
+    of a selected anchor in the same session joins its item instead of using
+    another slot of ``limit``. Blocks keep the rank of their best anchor.
+    """
     selected: list[Evidence] = []
+    counts: list[int] = []
+    covered: dict[str, list[tuple[int, int]]] = {}
     omitted = []
-    context = ""
-    tokens = 0
     by_id = {item.id: item for item in evidence}
+
+    def contained(source_id: str, start: int, end: int) -> bool:
+        return any(low <= start and high >= end for low, high in covered.get(source_id, ()))
+
+    def cover(*spans: Evidence | ContextSpan) -> None:
+        for span in spans:
+            covered.setdefault(span.source_id, []).append((span.start, span.end))
+
+    def touches(block: Evidence, item: Evidence) -> bool:
+        return merge_reach is not None and any(
+            member.session_id == item.session_id
+            and member.seq is not None
+            and item.seq is not None
+            and abs(member.seq - item.seq) <= merge_reach
+            for member in block.members()
+        )
+
     for original in evidence:
         # First reserve room for ranked anchors. Neighbor text only uses what
         # remains, so a large adjacent turn cannot evict its matching evidence.
         item = original.model_copy(update={"neighbors": ()}) if original.neighbors else original
-        duplicate = any(
-            old.source_id == item.source_id and old.start <= item.start and old.end >= item.end
-            for old in selected
-        )
-        if duplicate or len(selected) >= limit:
+        if contained(item.source_id, item.start, item.end):
             omitted.append(item.id)
             continue
-        proposed = "\n\n".join([*(entry.render() for entry in selected), item.render()])
-        count = counter.count(proposed)
-        if count > budget:
+        touching = [index for index, block in enumerate(selected) if touches(block, item)]
+        if not touching and len(selected) >= limit:
             omitted.append(item.id)
             continue
-        selected.append(item)
-        context, tokens = proposed, count
-    for index, item in enumerate(selected):
-        for neighbor in by_id[item.id].neighbors:
-            spans = [(entry.source_id, entry.start, entry.end) for entry in selected]
-            spans.extend(
-                (span.source_id, span.start, span.end)
-                for entry in selected
-                for span in entry.neighbors
-            )
-            if any(
-                source_id == neighbor.source_id and start <= neighbor.start and end >= neighbor.end
-                for source_id, start, end in spans
-            ):
-                continue
-            expanded = selected[index].model_copy(
-                update={"neighbors": (*selected[index].neighbors, neighbor)}
-            )
-            proposed_items = [*selected[:index], expanded, *selected[index + 1 :]]
-            proposed = "\n\n".join(entry.render() for entry in proposed_items)
-            count = counter.count(proposed)
-            if count <= budget:
-                selected[index] = expanded
-                context, tokens = proposed, count
-    return tuple(selected), context, tokens, tuple(omitted)
+        if touching:
+            members = [member for index in touching for member in selected[index].members()]
+            members.insert(len(selected[touching[0]].members()), item)
+            block = members[0].model_copy(update={"merged": tuple(members[1:])})
+        else:
+            block = item
+        count = counter.count(block.render())
+        if sum(counts) - sum(counts[index] for index in touching) + count > budget:
+            omitted.append(item.id)
+            continue
+        for index in reversed(touching[1:]):
+            del selected[index], counts[index]
+        if touching:
+            selected[touching[0]], counts[touching[0]] = block, count
+        else:
+            selected.append(block)
+            counts.append(count)
+        cover(item)
+    for index in range(len(selected)):
+        for position, member in enumerate(selected[index].members()):
+            for neighbor in by_id[member.id].neighbors:
+                if contained(neighbor.source_id, neighbor.start, neighbor.end):
+                    continue
+                members = list(selected[index].members())
+                members[position] = members[position].model_copy(
+                    update={"neighbors": (*members[position].neighbors, neighbor)}
+                )
+                block = members[0].model_copy(update={"merged": tuple(members[1:])})
+                count = counter.count(block.render())
+                if sum(counts) - counts[index] + count <= budget:
+                    selected[index], counts[index] = block, count
+                    cover(neighbor)
+    context = "\n\n".join(entry.render() for entry in selected)
+    return tuple(selected), context, sum(counts), tuple(omitted)
