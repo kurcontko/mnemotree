@@ -272,6 +272,26 @@ def test_relative_dates_resolve_against_the_message_time():
     assert resolve("yesterday", None) == []
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I left 1000000 days ago.",
+        "It began 999999999999 days ago.",
+        "That was 9999 years ago.",
+        "Maybe 99999 months ago.",
+    ],
+)
+def test_dates_out_of_range_get_no_note(text):
+    from datetime import datetime, timezone
+
+    from mnemotree.evidence.models import render_line
+    from mnemotree.evidence.temporal import resolve
+
+    said = datetime(2023, 5, 8, 13, 0, tzinfo=timezone.utc)
+    assert resolve(text + " See you tomorrow.", said) == ["tomorrow = Tuesday, 9 May 2023"]
+    assert render_line(said, "user", text).endswith(f"user: {text}")
+
+
 def test_render_appends_resolved_dates():
     from datetime import datetime, timezone
 
