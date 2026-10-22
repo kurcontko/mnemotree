@@ -54,6 +54,7 @@ class IngestReceipt(Record):
     session_id: str
     source_ids: tuple[str, ...]
     chunk_count: int
+    atom_count: int = 0
     replayed: bool = False
 
 
@@ -120,6 +121,8 @@ class Evidence(Record):
 
 
 class SearchOptions(Record):
+    representation: Literal["raw", "atoms", "combined"] = "raw"
+    atom_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     mode: Literal["lexical", "dense", "hybrid"] = "hybrid"
     limit: int = Field(default=10, ge=1, le=100)
     candidate_limit: int = Field(default=100, ge=1, le=2000)
@@ -139,6 +142,7 @@ class SearchOptions(Record):
 class SearchTrace(Record):
     mode: str
     candidates: tuple[Candidate, ...]
+    atom_hits: tuple[dict, ...] = ()
     channel_counts: dict[str, int]
     packed_tokens: int
     tokenizer: str

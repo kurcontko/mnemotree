@@ -14,7 +14,9 @@ from pathlib import Path
 
 import sqlite_vec
 
-from .models import Chunk, EmbeddingSpec, IngestReceipt, Source, scope
+from .atom_store import AtomStore
+from .atoms import Atom
+from .models import Chunk, EmbeddingSpec, IngestReceipt, Source, digest, scope
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS evidence_config(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -79,7 +81,13 @@ class SQLiteEvidenceStore:
     Each instance owns a connection; WAL permits independent readers and writers.
     """
 
-    def __init__(self, path: str | Path, *, embedding_spec: EmbeddingSpec | None = None):
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        embedding_spec: EmbeddingSpec | None = None,
+        extractor_config: dict | None = None,
+    ):
         self._lock = threading.RLock()
         self.db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
@@ -132,6 +140,11 @@ class SQLiteEvidenceStore:
                         "AFTER DELETE ON evidence_chunks BEGIN "
                         "DELETE FROM evidence_vec WHERE chunk_rowid=old.rowid; END"
                     )
+            self.atoms = AtomStore(
+                self.db, self.embedding_spec.dimensions if self.embedding_spec else None
+            )
+            with self.transaction():
+                self.extractor_config = self.atoms.configure(extractor_config)
         except BaseException:
             self.db.close()
             raise
@@ -182,6 +195,8 @@ class SQLiteEvidenceStore:
         sources: Sequence[Source],
         chunks: Sequence[Chunk],
         vectors: Sequence[Sequence[float]] | None,
+        atoms: Sequence[Atom] = (),
+        atom_vectors: Sequence[Sequence[float]] | None = None,
     ) -> IngestReceipt:
         scope(namespace)
         if not sources or len({source.id for source in sources}) != len(sources):
@@ -209,8 +224,39 @@ class SQLiteEvidenceStore:
             blobs = [vector_blob(vector, self.embedding_spec.dimensions) for vector in vectors]
         elif vectors is not None:
             raise ValueError("vectors supplied without an embedding specification")
+        atom_blobs: list[bytes] = []
+        for atom in atoms:
+            if self.extractor_config is None or atom.extractor_signature != digest(
+                self.extractor_config
+            ):
+                raise ValueError("atom extractor signature does not match the database")
+            if not atom.spans:
+                raise ValueError("atoms require source evidence")
+            for span in atom.spans:
+                source = source_map.get(span.source_id)
+                if source is None or not 0 <= span.start < span.end <= len(source.content):
+                    raise ValueError("atom evidence must belong to this ingestion request")
+        if self.embedding_spec and atoms:
+            if atom_vectors is None or len(atom_vectors) != len(atoms):
+                raise ValueError("every atom requires an embedding")
+            atom_blobs = [
+                vector_blob(vector, self.embedding_spec.dimensions) for vector in atom_vectors
+            ]
+        elif atom_vectors:
+            raise ValueError("unexpected atom vectors")
 
         with self.transaction():
+            current_embedding = self.db.execute(
+                "SELECT value FROM evidence_config WHERE key='embedding_spec'"
+            ).fetchone()
+            if (
+                EmbeddingSpec.model_validate_json(current_embedding[0])
+                if current_embedding
+                else None
+            ) != self.embedding_spec:
+                raise ValueError("database configuration changed; reopen this Memory instance")
+            if self.atoms.configure(self.extractor_config) != self.extractor_config:
+                raise ValueError("database configuration changed; reopen this Memory instance")
             replay = self.receipt(namespace, request_id, body_hash)
             if replay:
                 return replay
@@ -250,6 +296,7 @@ class SQLiteEvidenceStore:
                             "INSERT INTO evidence_vec(chunk_rowid,embedding) VALUES(?,?)",
                             (cursor.lastrowid, blobs[index]),
                         )
+                self.atoms.insert(namespace, atoms, atom_blobs)
             except sqlite3.IntegrityError as exc:
                 raise IngestConflict(
                     "source IDs must identify distinct occurrences within a namespace"
@@ -260,6 +307,7 @@ class SQLiteEvidenceStore:
                 session_id=session_id,
                 source_ids=tuple(source.id for source in sources),
                 chunk_count=len(chunks),
+                atom_count=len(atoms),
             )
             self.db.execute(
                 "INSERT INTO evidence_requests VALUES(?,?,?,?)",
