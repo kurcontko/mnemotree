@@ -274,7 +274,7 @@ class MemoryConsolidator:
         combined = "\n\n".join(contents)
 
         # Prompt for summarization
-        from langchain.prompts import PromptTemplate
+        from langchain_core.prompts import PromptTemplate
 
         prompt = PromptTemplate.from_template(
             """You are a memory consolidation system. Given a cluster of related episodic memories,

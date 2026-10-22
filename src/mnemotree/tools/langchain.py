@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from langchain.tools import Tool
+from langchain_core.tools import Tool
 from pydantic import BaseModel, Field
 
 from ..core.memory import MemoryCore

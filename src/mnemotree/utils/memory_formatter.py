@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Protocol
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from ..core.models import MemoryItem
 

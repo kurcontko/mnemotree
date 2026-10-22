@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain.schema import AIMessage, BaseMessage, HumanMessage
-from langchain.schema.memory import BaseChatMessageHistory, BaseMemory
+from langchain_classic.base_memory import BaseMemory
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from ..core import MemoryCore, RecallFilters
 from ..core.models import MemoryType
@@ -185,7 +186,7 @@ class LangChainMemoryAdapter(BaseMemory):
 
     Example:
         ```python
-        from langchain.chains import ConversationChain
+        from langchain_classic.chains import ConversationChain
         from mnemotree.integrations.langchain_adapter import LangChainMemoryAdapter
 
         memory = LangChainMemoryAdapter(

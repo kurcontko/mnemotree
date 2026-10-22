@@ -183,7 +183,7 @@ class ClaimsRegistry:
             ]
 
         # Use LLM to extract structured claims
-        from langchain.prompts import PromptTemplate
+        from langchain_core.prompts import PromptTemplate
 
         prompt = PromptTemplate.from_template(
             """Extract atomic, verifiable claims from the following text.
@@ -330,7 +330,7 @@ Claims:"""
 
     async def _assess_conflict_severity(self, claim1: Claim, claim2: Claim) -> ConflictSeverity:
         """Use LLM to assess conflict severity."""
-        from langchain.prompts import PromptTemplate
+        from langchain_core.prompts import PromptTemplate
 
         prompt = PromptTemplate.from_template(
             """Assess the severity of the conflict between these two claims:

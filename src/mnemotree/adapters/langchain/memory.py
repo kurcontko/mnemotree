@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from langchain_core.memory import BaseMemory
+from langchain_classic.base_memory import BaseMemory
 
 from ...core.memory import MemoryCore
 

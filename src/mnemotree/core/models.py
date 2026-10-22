@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Literal, overload
 from uuid import uuid4
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -478,7 +478,7 @@ class MemoryItem(BaseModel):
             Document: A LangChain Document containing the memory content and metadata
         """
         try:
-            from langchain.schema import Document
+            from langchain_core.documents import Document
         except ImportError as err:
             raise ImportError(
                 "langchain package is required to use this method. "
