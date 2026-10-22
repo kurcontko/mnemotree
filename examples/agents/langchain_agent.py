@@ -2,9 +2,9 @@ import asyncio
 import os
 import sys
 
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.tools import Tool
+from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 # Add project root to sys.path

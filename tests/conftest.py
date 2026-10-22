@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -12,7 +12,7 @@ def memory_item():
         content="Test content",
         memory_type=MemoryType.SEMANTIC,
         importance=0.5,
-        timestamp=str(datetime.now(timezone.utc)),
+        timestamp=str(datetime.now(UTC)),
         embedding=[0.1] * 1536,  # Mock embedding
     )
 

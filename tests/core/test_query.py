@@ -1,7 +1,7 @@
 """Tests for MemoryQuery and MemoryQueryBuilder."""
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -207,8 +207,8 @@ class TestMemoryQueryBuilder:
     @pytest.mark.asyncio
     async def test_in_timeframe(self):
         """in_timeframe() adds timestamp filters."""
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 12, 31, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 12, 31, tzinfo=UTC)
         query = await MemoryQueryBuilder().in_timeframe(start=start, end=end).build()
         assert len(query.filters) == 2
 

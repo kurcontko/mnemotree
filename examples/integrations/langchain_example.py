@@ -8,7 +8,7 @@ LangChain conversations semantic memory with FSRS-4.5 decay.
 import asyncio
 import os
 
-from langchain.chains import ConversationChain
+from langchain_classic.chains import ConversationChain
 from langchain_openai import ChatOpenAI
 
 from mnemotree import MemoryCore

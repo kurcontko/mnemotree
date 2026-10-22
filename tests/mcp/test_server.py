@@ -7,7 +7,7 @@ import re
 import runpy
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
@@ -16,7 +16,7 @@ from mnemotree.core.memory import ModeDefaultsConfig, NerConfig, RetrievalConfig
 from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.mcp import server
 
-DEFAULT_TIMESTAMP = datetime(2024, 1, 1, tzinfo=timezone.utc)
+DEFAULT_TIMESTAMP = datetime(2024, 1, 1, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -232,7 +232,7 @@ def test_parse_recall_filters_all_fields():
 def test_serialize_memory_excludes_embedding():
     memory = _make_memory(
         "mem-1",
-        datetime(2024, 1, 1, tzinfo=timezone.utc),
+        datetime(2024, 1, 1, tzinfo=UTC),
         embedding=[0.1, 0.2],
     )
     data = server._serialize_memory(memory, include_embedding=False)
@@ -243,7 +243,7 @@ def test_serialize_memory_excludes_embedding():
 def test_serialize_memory_with_fields_filter():
     memory = _make_memory(
         "mem-fields",
-        datetime(2024, 1, 1, tzinfo=timezone.utc),
+        datetime(2024, 1, 1, tzinfo=UTC),
         summary="test summary",
         embedding=[0.1, 0.2],
     )
@@ -260,7 +260,7 @@ def test_serialize_memory_with_fields_filter():
 def test_memory_snippet_uses_summary_and_truncates():
     memory = _make_memory(
         "mem-2",
-        datetime(2024, 1, 1, tzinfo=timezone.utc),
+        datetime(2024, 1, 1, tzinfo=UTC),
         summary="abcdefghij",
     )
     snippet = server._memory_snippet(memory, max_len=8)
@@ -268,7 +268,7 @@ def test_memory_snippet_uses_summary_and_truncates():
 
 
 def test_serialize_memory_index_fields():
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     memory = _make_memory("mem-3", ts, summary="summary")
     data = server._serialize_memory_index(memory, rank=2)
     assert data["memory_id"] == "mem-3"
@@ -290,8 +290,8 @@ async def test_timeline_requires_anchor():
 @pytest.mark.asyncio
 async def test_timeline_missing_memory_id_returns_empty(timeline_setup):
     memories = [
-        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
-        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
+        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=UTC)),
+        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=UTC)),
     ]
     timeline_setup(memories)
 
@@ -301,7 +301,7 @@ async def test_timeline_missing_memory_id_returns_empty(timeline_setup):
 
 @pytest.mark.asyncio
 async def test_timeline_invalid_timestamp_raises(timeline_setup):
-    memories = [_make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc))]
+    memories = [_make_memory("mem-1", datetime(2024, 1, 1, tzinfo=UTC))]
     timeline_setup(memories)
 
     with pytest.raises(ValueError, match="Invalid timestamp format"):
@@ -311,9 +311,9 @@ async def test_timeline_invalid_timestamp_raises(timeline_setup):
 @pytest.mark.asyncio
 async def test_timeline_offsets_and_embeddings(timeline_setup):
     memories = [
-        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc), embedding=[1.0]),
-        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc), embedding=[2.0]),
-        _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc), embedding=[3.0]),
+        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=UTC), embedding=[1.0]),
+        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=UTC), embedding=[2.0]),
+        _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=UTC), embedding=[3.0]),
     ]
     timeline_setup(memories)
 
@@ -336,9 +336,9 @@ async def test_timeline_offsets_and_embeddings(timeline_setup):
 @pytest.mark.asyncio
 async def test_timeline_excludes_anchor(timeline_setup):
     memories = [
-        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
-        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
-        _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc)),
+        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=UTC)),
+        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=UTC)),
+        _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=UTC)),
     ]
     timeline_setup(memories)
 
@@ -396,7 +396,7 @@ def test_get_mcp_registers_tools(monkeypatch):
 def test_memory_timestamp_fallbacks():
     dummy = types.SimpleNamespace(timestamp=object(), last_accessed=None)
     result = server._memory_timestamp(dummy)
-    assert result == datetime.min.replace(tzinfo=timezone.utc)
+    assert result == datetime.min.replace(tzinfo=UTC)
 
 
 @pytest.mark.asyncio
@@ -411,7 +411,7 @@ async def test_get_all_memories_requires_list_memories():
 
 @pytest.mark.asyncio
 async def test_get_all_memories_lists_memories():
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     memory = _make_memory("mem-list", ts)
 
     class DummyStore:
@@ -588,7 +588,7 @@ async def test_get_memory_core_import_error(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_remember_recall_compact(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     memory = _make_memory("mem-remember", ts, summary="summary", embedding=[0.3])
 
     memory_core = MagicMock()
@@ -637,7 +637,7 @@ async def test_remember_recall_compact(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_remember_with_metadata(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     memory = _make_memory("mem-meta", ts)
     memory.metadata = {"key": "value"}
 
@@ -659,7 +659,7 @@ async def test_remember_with_metadata(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_recall_with_filters(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     memory = _make_memory("mem-filtered", ts)
 
     memory_core = MagicMock()
@@ -683,7 +683,7 @@ async def test_recall_with_filters(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_update_memory_applies_patch_and_reembed(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     memory = _make_memory("mem-remember", ts, summary="summary", embedding=[0.3])
     memory.metadata = {"old": 1}
 
@@ -836,8 +836,8 @@ async def test_timeline_empty_memories_with_timestamp(timeline_setup):
 @pytest.mark.asyncio
 async def test_timeline_timestamp_after_all(timeline_setup):
     memories = [
-        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
-        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
+        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=UTC)),
+        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=UTC)),
     ]
     timeline_setup(memories)
 
@@ -851,9 +851,9 @@ async def test_timeline_timestamp_after_all(timeline_setup):
 @pytest.mark.asyncio
 async def test_timeline_timestamp_between(timeline_setup):
     memories = [
-        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=timezone.utc)),
-        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=timezone.utc)),
-        _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=timezone.utc)),
+        _make_memory("mem-1", datetime(2024, 1, 1, tzinfo=UTC)),
+        _make_memory("mem-2", datetime(2024, 1, 2, tzinfo=UTC)),
+        _make_memory("mem-3", datetime(2024, 1, 3, tzinfo=UTC)),
     ]
     timeline_setup(memories)
 
@@ -865,7 +865,7 @@ async def test_timeline_timestamp_between(timeline_setup):
 
 @pytest.mark.asyncio
 async def test_get_memories_filters_missing(monkeypatch):
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     memory = _make_memory("mem-keep", ts)
 
     store = MagicMock()

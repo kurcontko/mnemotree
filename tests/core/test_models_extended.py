@@ -15,7 +15,7 @@ This file adds tests for uncovered edge cases in:
 """
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -65,7 +65,7 @@ class TestCoerceDatetimeEdgeCases:
         """Naive datetime should get UTC timezone added."""
         naive = datetime(2024, 6, 15, 10, 30, 45)
         result = coerce_datetime(naive)
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
         assert result.year == 2024
         assert result.hour == 10
 
@@ -93,7 +93,7 @@ class TestCoerceDatetimeEdgeCases:
 
     def test_empty_string_with_default(self):
         """Empty string should return default."""
-        default = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        default = datetime(2025, 1, 1, tzinfo=UTC)
         result = coerce_datetime("", default=default)
         assert result == default
 
@@ -426,7 +426,7 @@ class TestMemoryItemAccessTrackingEdgeCases:
             decay_rate=0.02,
             last_accessed="2024-01-01T00:00:00Z",
         )
-        current = datetime(2024, 1, 1, 1, 0, 0, tzinfo=timezone.utc)  # 1 hour later
+        current = datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC)  # 1 hour later
         memory.decay_importance(current)
         # 3600 seconds * 0.02 = 72
         assert memory.importance < 0.8
@@ -440,7 +440,7 @@ class TestMemoryItemAccessTrackingEdgeCases:
             importance=0.9,
             decay_rate=0.01,
         )
-        far_future = datetime.now(timezone.utc) + timedelta(days=1000)
+        far_future = datetime.now(UTC) + timedelta(days=1000)
         memory.decay_importance(far_future)
         # With power-law decay, importance should drop significantly but floor at config.floor
         assert memory.importance < 0.9

@@ -11,7 +11,7 @@ Provides comprehensive evaluation framework for memory system quality:
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -90,7 +90,7 @@ class BenchmarkResult:
     query_results: list[EvaluationResult] = field(default_factory=list)
 
     # Metadata
-    evaluated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    evaluated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     total_queries: int = 0
     total_memories: int = 0
 
@@ -333,7 +333,7 @@ class MemoryEvaluator:
             return 0.0
 
         # Group memories by time windows
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         recent_memories = []
         old_memories = []
@@ -385,7 +385,7 @@ class MemoryEvaluator:
         if not memories:
             return 0.0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stale_count = 0
 
         for memory in memories:

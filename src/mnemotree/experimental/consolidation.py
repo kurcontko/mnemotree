@@ -9,7 +9,7 @@ Implements "sleep" cycles that:
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -110,7 +110,7 @@ class MemoryConsolidator:
         Returns:
             ConsolidationResult with statistics and created artifacts
         """
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
 
         # Filter to episodic memories suitable for consolidation
         episodic_memories = [m for m in memories if m.memory_type == MemoryType.EPISODIC]
@@ -129,7 +129,7 @@ class MemoryConsolidator:
         # Step 3: Identify memories to deprecate
         deprecated_ids = self._identify_deprecated_memories(episodic_memories, clusters)
 
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         duration = (completed_at - started_at).total_seconds()
 
         return ConsolidationResult(
@@ -241,7 +241,7 @@ class MemoryConsolidator:
                     "consolidated": True,
                     "source_memories": [m.memory_id for m in cluster],
                     "cluster_size": len(cluster),
-                    "consolidation_date": str(datetime.now(timezone.utc)),
+                    "consolidation_date": str(datetime.now(UTC)),
                 },
             )
 
@@ -274,7 +274,7 @@ class MemoryConsolidator:
         combined = "\n\n".join(contents)
 
         # Prompt for summarization
-        from langchain.prompts import PromptTemplate
+        from langchain_core.prompts import PromptTemplate
 
         prompt = PromptTemplate.from_template(
             """You are a memory consolidation system. Given a cluster of related episodic memories,
@@ -368,7 +368,7 @@ Summary:"""
         clustered_ids = {m.memory_id for cluster in clusters for m in cluster}
 
         # Calculate age threshold
-        age_threshold = datetime.now(timezone.utc) - timedelta(days=self.config.age_threshold_days)
+        age_threshold = datetime.now(UTC) - timedelta(days=self.config.age_threshold_days)
 
         for memory in all_memories:
             # Never deprecate high-importance memories
@@ -396,7 +396,7 @@ Summary:"""
 
     def _empty_result(self, started_at: datetime) -> ConsolidationResult:
         """Create an empty result when no consolidation occurs."""
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         return ConsolidationResult(
             total_memories_processed=0,
             clusters_formed=0,

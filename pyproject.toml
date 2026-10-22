@@ -11,18 +11,19 @@ dependencies = [
     "numpy>=1.26.0,<3.0.0",
     "scikit-learn>=1.6.0,<2.0.0",
     "networkx>=3.4.0,<4.0.0",
-    "spacy>=3.8.0,<4.0.0",
-    "urllib3>=2.6.0,<3.0.0",
+    "spacy>=3.8.14,<4.0.0",
+    "urllib3>=2.7.0,<3.0.0",
     "filelock>=3.20.3,<4.0.0",
 
     # Default store — SQLite with vector search (zero-infra)
     "sqlite-vec>=0.1.0",
 
     # Langchain
-    "langchain>=0.3.7,<0.4.0",
-    "langchain-openai>=0.2.14,<0.3.0",
-    "langchain-community>=0.3.7,<0.4.0",
-    "langchain-core>=0.3.19,<0.4.0",
+    "langchain>=1.2.15,<2.0.0",
+    "langchain-openai>=1.1.12,<2.0.0",
+    "langchain-community>=0.3.7,<0.5.0",
+    "langchain-core>=1.2.28,<2.0.0",
+    "langchain-classic>=1.0.0,<2.0.0",
 
     # Llama-index
     #"llama-index>=0.12.0,<0.13.0",
@@ -30,21 +31,21 @@ dependencies = [
     # LLMs
     "openai>=1.0.0",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "aiofiles>=24.1.0",
-    "mypy>=1.10.0",
-    "ruff>=0.5.0",
+    "mypy>=1.20.0",
+    "ruff>=0.15.10",
     "pre-commit>=3.7.0",
     "pyright>=1.1.330",
-    "virtualenv>=20.36.1,<21.0.0",
+    "virtualenv>=21.14.9,<22.0.0",
 ]
 
 # NER backends
@@ -60,7 +61,7 @@ ner_spark = [
 ]
 
 # Database backends
-neo4j = ["neo4j>=5.26.0"]
+neo4j = ["neo4j>=6.1.0"]
 milvus = ["pymilvus>=2.5.0"]
 chroma = ["chromadb>=0.5.23"]
 sqlite_vec = ["sqlite-vec>=0.1.0"]
@@ -108,7 +109,7 @@ google = [
     "langchain-google-genai>=2.0.7"
 ]
 anthropic = [
-    "langchain-anthropic>=0.3.0"
+    "langchain-anthropic>=1.4.6"
 ]
 aws = [
     "langchain-aws>=0.2.0"
@@ -118,7 +119,7 @@ huggingface = [
 ]
 
 all = [
-    "neo4j>=5.26.0",
+    "neo4j>=6.1.0",
     "chromadb>=0.5.23",
     "pymilvus>=2.2.0",
     "sqlite-vec>=0.1.0",
@@ -127,7 +128,7 @@ all = [
     "streamlit>=1.40.0",
     "fastmcp<4",
     "langchain-google-genai>=2.0.7",
-    "langchain-anthropic>=0.3.0",
+    "langchain-anthropic>=1.4.6",
     "langchain-aws>=0.2.0",
     "langchain-huggingface>=0.1.0"
 ]
@@ -165,11 +166,11 @@ markers = [
 
 [tool.black]
 line-length = 100
-target-version = ["py310", "py311", "py312"]
+target-version = ["py311", "py312", "py313"]
 include = '\.pyi?$'
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
 extend-exclude = [
@@ -182,7 +183,8 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "PIE"]
-ignore = ["E501", "B008"]
+# UP042: StrEnum changes str()/format() output of enum members, which would alter serialized values
+ignore = ["E501", "B008", "UP042"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["mnemotree"]
@@ -196,7 +198,7 @@ line-ending = "auto"
 indent-style = "space"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = [
     "src/mnemotree/core",
     "src/mnemotree/store/protocols.py",

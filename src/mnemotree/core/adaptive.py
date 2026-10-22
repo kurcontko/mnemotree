@@ -12,7 +12,7 @@ Key integration point:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .decay import DecayConfig, compute_decayed_importance
@@ -69,7 +69,7 @@ class FSRSSchedule:
 
     def schedule_next_review(self, grade: int, current_time: datetime | None = None):
         """Schedule next review based on recall grade (1-4)."""
-        now = current_time or datetime.now(timezone.utc)
+        now = current_time or datetime.now(UTC)
         self.last_review = now
 
         if grade == 1:
@@ -237,7 +237,7 @@ class AdaptiveDecaySystem:
 
     def assess_novelty(self, memory: MemoryItem) -> str:
         """Assess novelty using cosine similarity against recent embeddings."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(days=self.novelty_window_days)
         self._recent_embeddings = [
             (mid, ts, emb) for mid, ts, emb in self._recent_embeddings if ts > cutoff
@@ -268,7 +268,7 @@ class AdaptiveDecaySystem:
     def update_importance(self, memory: MemoryItem, current_time: datetime | None = None) -> float:
         """Update memory importance using the power-law decay engine."""
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
 
         from .decay import MEMORY_TYPE_DEFAULTS
 
@@ -304,7 +304,7 @@ class AdaptiveDecaySystem:
 
     def get_due_reviews(self, current_time: datetime | None = None) -> list[str]:
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
         return [
             mid
             for mid, schedule in self.sr_schedules.items()

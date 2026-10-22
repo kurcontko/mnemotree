@@ -1,6 +1,6 @@
 """Tests for ContextAwareWriteGate and WritePolicy."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -29,7 +29,7 @@ def _make_memory(
         memory_type=memory_type,
         importance=importance,
         confidence=confidence,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         embedding=embedding or [0.1] * 10,
     )
 

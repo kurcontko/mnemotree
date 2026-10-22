@@ -2,7 +2,7 @@ import asyncio
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 from uuid import uuid4
 
@@ -407,7 +407,7 @@ class MemoryCore:
         queue = self._ingestion_queue
         assert queue is not None
         memory_id = memory_id or str(uuid4())
-        timestamp = timestamp or datetime.now(timezone.utc)
+        timestamp = timestamp or datetime.now(UTC)
         await queue.enqueue(
             IngestionRequest(
                 memory_id=memory_id,
@@ -1435,7 +1435,7 @@ class MemoryCore:
         """
         from .decay import MEMORY_TYPE_DEFAULTS, DecayConfig, compute_decayed_importance
 
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
         # Fetch all memories via structured query if supported
         if not isinstance(self.store, SupportsStructuredQuery):
@@ -1833,7 +1833,7 @@ class MemoryCore:
             "tags": tags or [],
             "context": context or {},
             "metadata": queued_metadata,
-            "timestamp": timestamp or datetime.now(timezone.utc),
+            "timestamp": timestamp or datetime.now(UTC),
         }
         if source is not None:
             memory_kwargs["source"] = source

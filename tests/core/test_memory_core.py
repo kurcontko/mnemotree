@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -232,7 +232,7 @@ async def test_recall_scoring_filters_by_relevance(
         mode_defaults=ModeDefaultsConfig(enable_keywords=False),
     )
 
-    now = datetime(2024, 1, 2, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 2, tzinfo=UTC)
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S.%f%z")
     memory_match = MemoryItem(
         memory_id="match",
@@ -293,7 +293,7 @@ def test_rrf_post_rerank_uses_similarity_and_rrf_scores():
         content="m1",
         memory_type=MemoryType.SEMANTIC,
         importance=0.1,
-        timestamp=datetime(2024, 1, 2, tzinfo=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f%z"),
+        timestamp=datetime(2024, 1, 2, tzinfo=UTC).strftime("%Y-%m-%d %H:%M:%S.%f%z"),
         embedding=[0.0, 1.0],
         tags=["alpha"],
     )
@@ -302,7 +302,7 @@ def test_rrf_post_rerank_uses_similarity_and_rrf_scores():
         content="m2",
         memory_type=MemoryType.SEMANTIC,
         importance=0.1,
-        timestamp=datetime(2024, 1, 2, tzinfo=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f%z"),
+        timestamp=datetime(2024, 1, 2, tzinfo=UTC).strftime("%Y-%m-%d %H:%M:%S.%f%z"),
         embedding=[1.0, 0.0],
         tags=["beta"],
     )
