@@ -13,19 +13,22 @@ or its L2 scene layer.
 ## Behavior
 
 Set `neighbor_messages` to 1 or 2 in `SearchOptions` or CLI search configuration.
-Zero is the default and preserves the previous branch's rendered evidence.
+Zero is the library default; the AML service defaults to one.
 `neighbor_chunks` still means adjacent chunks within the matching message;
-`neighbor_messages` means adjacent messages within its original Add batch.
+`neighbor_messages` means adjacent messages within the same session.
 
-Namespace, session, and request must all match. Message positions preserve the
-input sequence. We deliberately do not guess order across Add batches, even
-when their session IDs match. An ingestion batch boundary therefore limits
-available context. Deleted messages are not restored or bridged over.
+Namespace and session must match. Order is acknowledged ingestion order within
+the session, so context continues across Add requests: AML splits a session into
+requests of at most 20 messages and sends them in source order. Concurrent Adds
+to one session are ordered by commit, not payload. Deleted messages are not
+restored; the next surviving message becomes the neighbor. (The first version
+stopped at request boundaries, which dropped one side for every request's edge
+turns and all context for single-message streaming Adds.)
 
 Each neighbor is bounded by `neighbor_chars` (default 1,200). A preceding message
 contributes its ending; a following message contributes its beginning. These
-are exact spans, with their source IDs, roles, timestamps, request positions,
-and offsets rendered inside the evidence JSON. They are not summaries.
+are exact spans, rendered as transcript lines around the anchor; their source
+IDs and offsets are in the trace. They are not summaries.
 
 The packer reserves room for ranked retrieval anchors first, then adds neighbor
 spans if the complete rendered context stays within the token budget. Fully

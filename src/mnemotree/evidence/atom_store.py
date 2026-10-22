@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 from collections.abc import Sequence
 
 from .atoms import Atom
+from .lexical import FTS_TOKENIZER, index_text, scope_token, scoped_match
 from .models import Chunk, scope
 
 SCHEMA = """
@@ -21,12 +21,9 @@ CREATE TABLE IF NOT EXISTS evidence_atom_spans(
  FOREIGN KEY(namespace,atom_id) REFERENCES evidence_atoms(namespace,id) ON DELETE CASCADE,
  FOREIGN KEY(namespace,source_id) REFERENCES evidence_sources(namespace,id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS evidence_atom_source ON evidence_atom_spans(namespace,source_id);
-CREATE VIRTUAL TABLE IF NOT EXISTS evidence_atom_fts USING fts5(
- text, content='evidence_atoms', content_rowid='rowid', tokenize='unicode61');
-CREATE TRIGGER IF NOT EXISTS evidence_atom_insert AFTER INSERT ON evidence_atoms BEGIN
- INSERT INTO evidence_atom_fts(rowid,text) VALUES(new.rowid,new.text); END;
+CREATE VIRTUAL TABLE IF NOT EXISTS evidence_atom_fts USING fts5(text, scope, tokenize='{tokenizer}');
 CREATE TRIGGER IF NOT EXISTS evidence_atom_delete AFTER DELETE ON evidence_atoms BEGIN
- INSERT INTO evidence_atom_fts(evidence_atom_fts,rowid,text) VALUES('delete',old.rowid,old.text); END;
+ DELETE FROM evidence_atom_fts WHERE rowid=old.rowid; END;
 CREATE TRIGGER IF NOT EXISTS evidence_source_atoms_delete BEFORE DELETE ON evidence_sources BEGIN
  DELETE FROM evidence_atoms WHERE namespace=old.namespace AND id IN
  (SELECT atom_id FROM evidence_atom_spans WHERE namespace=old.namespace AND source_id=old.id); END;
@@ -38,11 +35,12 @@ class AtomStore:
 
     def __init__(self, db: sqlite3.Connection, dimensions: int | None):
         self.db = db
-        db.executescript(SCHEMA)
+        db.executescript(SCHEMA.format(tokenizer=FTS_TOKENIZER))
         if dimensions is not None:
             db.execute(
                 f"CREATE VIRTUAL TABLE IF NOT EXISTS evidence_atom_vec USING vec0("
-                f"atom_rowid INTEGER PRIMARY KEY, embedding float[{dimensions}] distance_metric=cosine)"
+                f"atom_rowid INTEGER PRIMARY KEY, namespace TEXT PARTITION KEY, "
+                f"embedding float[{dimensions}] distance_metric=cosine)"
             )
             db.execute(
                 "CREATE TRIGGER IF NOT EXISTS evidence_atom_vectors_delete "
@@ -71,6 +69,10 @@ class AtomStore:
                 "INSERT INTO evidence_atoms(namespace,id,text,payload) VALUES(?,?,?,?)",
                 (namespace, atom.id, atom.text, atom.model_dump_json()),
             )
+            self.db.execute(
+                "INSERT INTO evidence_atom_fts(rowid,text,scope) VALUES(?,?,?)",
+                (cursor.lastrowid, index_text(atom.text), scope_token(namespace)),
+            )
             for span in atom.spans:
                 self.db.execute(
                     "INSERT INTO evidence_atom_spans VALUES(?,?,?,?,?)",
@@ -78,18 +80,17 @@ class AtomStore:
                 )
             if blobs:
                 self.db.execute(
-                    "INSERT INTO evidence_atom_vec(atom_rowid,embedding) VALUES(?,?)",
-                    (cursor.lastrowid, blobs[index]),
+                    "INSERT INTO evidence_atom_vec(atom_rowid,namespace,embedding) VALUES(?,?,?)",
+                    (cursor.lastrowid, namespace, blobs[index]),
                 )
 
     def lexical(self, namespace: str, query: str, limit: int) -> list[tuple[Atom, float]]:
         scope(namespace)
-        terms = list(dict.fromkeys(re.findall(r"[^\W_]+", query, flags=re.UNICODE)))[:64]
-        if not terms:
+        match = scoped_match(namespace, query)
+        if match is None:
             return []
-        match = " OR ".join('"' + term + '"' for term in terms)
         rows = self.db.execute(
-            "SELECT a.payload, bm25(evidence_atom_fts) AS score FROM evidence_atom_fts "
+            "SELECT a.payload, bm25(evidence_atom_fts, 1.0, 0.0) AS score FROM evidence_atom_fts "
             "JOIN evidence_atoms a ON a.rowid=evidence_atom_fts.rowid "
             "WHERE evidence_atom_fts MATCH ? AND a.namespace=? ORDER BY score,a.id LIMIT ?",
             (match, namespace, limit),
@@ -99,9 +100,9 @@ class AtomStore:
     def dense(self, namespace: str, blob: bytes, limit: int) -> list[tuple[Atom, float]]:
         scope(namespace)
         rows = self.db.execute(
-            "SELECT a.payload, vec_distance_cosine(v.embedding, ?) AS distance "
-            "FROM evidence_atoms a JOIN evidence_atom_vec v ON v.atom_rowid=a.rowid "
-            "WHERE a.namespace=? ORDER BY distance,a.id LIMIT ?",
+            "SELECT a.payload, v.distance FROM (SELECT atom_rowid, distance FROM evidence_atom_vec "
+            "WHERE embedding MATCH ? AND namespace=? AND k=?) v "
+            "JOIN evidence_atoms a ON a.rowid=v.atom_rowid ORDER BY v.distance,a.id",
             (blob, namespace, limit),
         ).fetchall()
         return [(Atom.model_validate_json(row[0]), 1.0 - float(row[1])) for row in rows]
