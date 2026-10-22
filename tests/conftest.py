@@ -2,11 +2,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from mnemotree.core.models import MemoryItem, MemoryType
-
 
 @pytest.fixture
 def memory_item():
+    from mnemotree.core.models import MemoryItem, MemoryType
+
     return MemoryItem(
         memory_id="test-id",
         content="Test content",

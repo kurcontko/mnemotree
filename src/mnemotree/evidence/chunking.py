@@ -6,7 +6,7 @@ from .models import Chunk, digest
 def chunk_source(source_id: str, text: str, *, size: int, overlap: int) -> list[Chunk]:
     if size < 1 or not 0 <= overlap < size:
         raise ValueError("chunk size must be positive and 0 <= overlap < size")
-    chunks = []
+    chunks: list[Chunk] = []
     start = 0
     while start < len(text):
         end = min(start + size, len(text))
