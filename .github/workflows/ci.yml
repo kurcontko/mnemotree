@@ -30,7 +30,7 @@ jobs:
       - name: Install project with dev dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,legacy]"
 
       - name: Run lint
         run: |
@@ -60,3 +60,17 @@ jobs:
           name: junit-report-${{ matrix.python-version }}
           path: pytest-report.xml
           if-no-files-found: warn
+
+  evidence-minimal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install lean core and adapter test dependencies
+        run: python -m pip install -e ".[dev,serve]"
+      - name: Verify minimal imports and evidence behavior
+        run: |
+          python -c 'import importlib.util; from mnemotree import Memory; assert importlib.util.find_spec("langchain") is None'
+          pytest tests/test_evidence.py tests/test_evidence_adapter.py --no-cov

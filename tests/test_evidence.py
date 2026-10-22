@@ -5,6 +5,8 @@ import pytest
 
 from mnemotree import Memory, Message, SearchOptions
 from mnemotree.evidence import EmbeddingSpec, IngestConflict
+from mnemotree.evidence.engine import fuse
+from mnemotree.evidence.models import Chunk
 from mnemotree.evidence.store import vector_blob
 
 
@@ -141,7 +143,10 @@ async def test_filter_before_cap_and_retrieve_beyond_200(tmp_path):
 async def test_independent_connections_and_concurrent_retries(tmp_path):
     path = tmp_path / "m.db"
     with Memory(path) as first, Memory(path) as second:
-        receipts = await asyncio.gather(add(first), add(second))
+        receipts = await asyncio.gather(
+            asyncio.to_thread(asyncio.run, add(first)),
+            asyncio.to_thread(asyncio.run, add(second)),
+        )
         assert sum(receipt.replayed for receipt in receipts) == 1
         assert second.store.stats("alice")["sources"] == 1
         assert (await second.search("alice", 'apple OR "*" - ()')).evidence
@@ -210,6 +215,29 @@ async def test_embedding_signature_and_lexical_reopen(tmp_path):
 def test_invalid_vectors(vector):
     with pytest.raises(ValueError):
         vector_blob(vector, 2)
+
+
+def test_cosine_is_stable_for_large_finite_vectors(tmp_path):
+    with Memory(tmp_path / "large.db") as memory:
+        distance = memory.store.db.execute(
+            "SELECT vec_distance_cosine(?, ?)",
+            (vector_blob([1e38, 1e38], 2), vector_blob([1, 1], 2)),
+        ).fetchone()[0]
+        assert distance == pytest.approx(0, abs=1e-6)
+
+
+def test_rrf_uses_ranks_and_retains_both_channels():
+    a = Chunk(id="a", source_id="a", index=0, start=0, end=1, text="a")
+    b = Chunk(id="b", source_id="b", index=0, start=0, end=1, text="b")
+    candidates = fuse(
+        {"lexical": [(a, 999), (b, 0.001)], "dense": [(b, 0.9)]},
+        weights={"lexical": 1, "dense": 1},
+        k=60,
+    )
+    assert candidates[0].chunk.id == "b"
+    assert candidates[0].fusion_score == pytest.approx(1 / 62 + 1 / 61)
+    assert candidates[0].channels["lexical"].score == 0.001
+    assert candidates[0].channels["dense"].rank == 1
 
 
 def test_input_validation():

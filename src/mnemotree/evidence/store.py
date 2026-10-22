@@ -66,7 +66,10 @@ def vector_blob(values: Sequence[float], dimensions: int) -> bytes:
     floats = struct.unpack(f"<{dimensions}f", blob)
     if not all(math.isfinite(value) for value in floats) or not any(floats):
         raise ValueError("cosine embeddings must be finite and nonzero in float32")
-    return blob
+    # sqlite-vec accumulates cosine products in float32. Unit-normalizing here
+    # prevents finite large values from overflowing those products.
+    norm = math.hypot(*floats)
+    return struct.pack(f"<{dimensions}f", *(value / norm for value in floats))
 
 
 class SQLiteEvidenceStore:

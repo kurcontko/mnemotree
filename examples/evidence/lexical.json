@@ -1,0 +1,11 @@
+{
+  "chunk_size": 1200,
+  "chunk_overlap": 200,
+  "tokenizer": "cl100k_base",
+  "search": {
+    "mode": "lexical",
+    "candidate_limit": 100,
+    "limit": 10,
+    "token_budget": 8000
+  }
+}

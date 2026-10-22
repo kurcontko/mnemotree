@@ -1,6 +1,6 @@
 # 🌳 Mnemotree
 
-Memory module for LLMs and Agents with MCP
+Local evidence memory for LLM agents: SQLite, FTS5, and sqlite-vec.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
@@ -12,7 +12,62 @@ Memory module for LLMs and Agents with MCP
   <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
 </p>
 
-Mnemotree gives LLM agents biologically-inspired memory. Store, retrieve, and analyze structured knowledge with semantic search, importance scoring, and relationship tracking. Integrates with LangChain, Autogen, and any MCP-compliant tool.
+The new `Memory` API preserves original messages and retrieves attributed source
+spans. It provides transactional ingestion, persistent lexical/vector indexes,
+hybrid rank fusion, optional reranking, token-budget packing, and retrieval traces.
+This is a baseline for measured experiments, with no benchmark-quality claim yet.
+
+## Evidence core quickstart
+
+```bash
+pip install -e .
+```
+
+```python
+import asyncio
+from mnemotree import Memory, Message
+
+async def main():
+    with Memory("memory.sqlite") as memory:  # lexical-only without an embedder
+        await memory.add(
+            "alice", [Message(content="I grow orchids on my balcony.")],
+            request_id="request-1", session_id="conversation-1",
+        )
+        result = await memory.search("alice", "orchids")
+        print(result.context)
+        print(result.trace.packed_tokens)
+
+asyncio.run(main())
+```
+
+The default install needs Pydantic, sqlite-vec, and tiktoken. Python must support
+SQLite loadable extensions and FTS5. Tiktoken downloads its vocabulary once;
+prewarm and preserve `TIKTOKEN_CACHE_DIR` when running offline.
+
+```bash
+# Small plumbing demonstration; requires a fresh database path.
+mnemotree-evidence --db demo.sqlite --config examples/evidence/lexical.json \
+  evaluate examples/evidence/corpus.jsonl examples/evidence/queries.jsonl \
+  --output demo-results.json
+
+# Textual AML Add/Search service, authenticated with a bearer key.
+pip install -e '.[serve]'
+export MNEMOTREE_API_KEY='replace-with-your-service-key'
+mnemotree-evidence --db service.sqlite serve
+```
+
+See [the evidence core guide](docs/EVIDENCE_CORE.md) for embeddings, API contracts,
+evaluation format, and current limits. Every query requires an exact namespace;
+search spans all sessions within it. Existing MemoryCore databases are separate
+and require an explicit source export/reingestion for the new engine.
+
+## Legacy MemoryCore and MCP
+
+The integrations below use the existing `MemoryCore` implementation. Install
+`mnemotree[legacy]` along with any chosen backend/provider extra (for example,
+`pip install -e '.[legacy,lite,chroma]'`). The `mcp_server` extra includes legacy
+dependencies. The `mnemotree` and `mnemotree-mcp` commands continue to use that API;
+`mnemotree-evidence` uses the new core.
 
 ## ⚡ MCP Quickstart
 
