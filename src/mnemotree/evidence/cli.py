@@ -18,7 +18,7 @@ from .protocols import Embedder
 class Config(Record):
     chunk_size: int = 1200
     chunk_overlap: int = 200
-    tokenizer: str = "cl100k_base"
+    tokenizer: str = "o200k_base"
     embedding: dict | None = None
     extraction: dict | None = None
     extraction_batch_chars: int = 12000
@@ -93,22 +93,36 @@ def main() -> None:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     serve.add_argument("--key-env", default="MNEMOTREE_API_KEY")
+    serve.add_argument(
+        "--sample-payloads",
+        type=Path,
+        help="append the first 50 Add/Search payloads as JSONL (Smoke inspection only)",
+    )
     args = parser.parse_args()
     config = Config.model_validate_json(args.config.read_text()) if args.config else Config()
     with open_memory(args.db, config) as memory:
-        options = config.search or SearchOptions(mode="hybrid" if memory.embedder else "lexical")
         if args.command == "serve":
             import uvicorn
 
-            from .server import create_app
+            from .server import aml_options, create_app
+
+            options = config.search or aml_options(memory)
 
             uvicorn.run(
-                create_app(memory, api_key=os.environ[args.key_env], options=options),
+                create_app(
+                    memory,
+                    api_key=os.environ[args.key_env],
+                    options=options,
+                    sample_path=args.sample_payloads,
+                ),
                 host=args.host,
                 port=args.port,
                 access_log=False,
             )
         else:
+            options = config.search or SearchOptions(
+                mode="hybrid" if memory.embedder else "lexical"
+            )
             asyncio.run(run(args, memory, options))
 
 

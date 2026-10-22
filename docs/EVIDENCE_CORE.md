@@ -90,24 +90,30 @@ silently resurrect a forgotten source. This is logical deletion, not a secure
 erasure guarantee for SQLite files, WAL, or backups.
 
 Chunks are fixed character spans within one message, with configurable overlap.
-Retrieval filters namespace before each channel's candidate cap. FTS5 uses
-sanitized OR query terms and BM25. Dense search uses exact cosine distance over
+Retrieval filters namespace before each channel's candidate cap. FTS5 uses a
+Porter-stemmed `unicode61` index and BM25 over OR-ed distinct query terms,
+with English stopwords removed (unless nothing else remains). Unspaced CJK runs
+are indexed and queried as overlapping character bigrams, so `华沙` matches
+`我搬到了华沙`. Changing tokenization bumps the schema version; older databases
+must be rebuilt. Dense search uses exact cosine distance over
 all eligible rows stored in sqlite-vec. The union is fused with weighted RRF,
 optionally reranked, then packed. `limit` controls returned evidence count;
 `candidate_limit` independently controls depth per retrieval channel.
 
 `neighbor_chunks` expands a hit within its source message. The packer skips fully
 contained duplicate spans and evidence that does not fit, then continues down
-the ranking. It counts the exact rendered JSON evidence plus separators using
-the selected tiktoken encoding. Partial overlapping spans can still repeat text.
-Source ID, session, role, timestamp, and character offsets are inside each
-rendered evidence block. Search does not update importance or access counters.
+the ranking. The budget is the sum of each returned item's exact token count (AML receives
+items separately), using the selected tiktoken encoding (default `o200k_base`, the gpt-4o family's). Partial overlapping spans can still repeat text.
+Each rendered block is plain transcript text, one line per message:
+`[2024-01-01 Mon 00:00 UTC] user: text`, with neighboring messages in order.
+Source IDs, sessions, and offsets stay in the trace rather than spending answer
+tokens. Search does not update importance or access counters.
 
 The first tokenizer use may download its public vocabulary. To prewarm a cache:
 
 ```bash
 export TIKTOKEN_CACHE_DIR=/path/to/persistent/tokenizer-cache
-python -c 'import tiktoken; tiktoken.get_encoding("cl100k_base")'
+python -c 'import tiktoken; tiktoken.get_encoding("o200k_base")'
 ```
 
 ## Textual AML adapter
@@ -117,14 +123,20 @@ The optional service exposes `POST /v1/memories/add`, `POST /v1/memories/search`
 It implements the [public textual API contract](https://agentmemoryleaderboard.ai/api-guide):
 ordered user/assistant messages, optional Unix-millisecond timestamps, exact
 ID echoes, synchronous durable acknowledgement, `user_id` isolation, optional
-multiple-choice options, and ranked `{id, content}` results capped by `top_k`.
+multiple-choice options, and ranked `{id, content, score, created_at}` results
+capped by `top_k` (`created_at` only when the source has a timestamp). Blank
+messages are skipped rather than rejected: a 422 is never retried and would
+stop the evaluation stage.
 Multiple-choice options are appended to the retrieval query. Multimodal payloads
 receive validation errors. No answer generation is performed.
 
-The default evidence budget is 8,000 tokens. This counts returned content only;
-the platform's final prompt also includes question, options, instructions, and
-wrapping. The 117,760 input-token ceiling is not an evidence-only allowance.
-Choose a budget with headroom and the correct answer tokenizer for a real run.
+Without a `search` config, the service uses `aml_options`: up to 100 results,
+one neighboring message each side, merged passages, and a 100,000-token
+evidence budget. The
+platform keeps a 117,760-token prefix in returned order, and that allowance also
+holds the question, options, instructions, and per-item wrapping; the headroom
+covers those and an answer tokenizer other than `o200k_base`. The library
+default remains 8,000 tokens.
 Smoke/deployment, model eligibility checks, and formal competition submission
 remain separate steps. This branch has not been submitted or deployed.
 

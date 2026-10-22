@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from mnemotree.evidence.temporal import annotate
+
 
 class Record(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -68,6 +70,8 @@ class Source(Record):
     role: str
     timestamp: datetime | None
     ingested_at: datetime
+    # Assigned by the store at ingestion; ordering within the session.
+    session_seq: int | None = None
 
 
 class Chunk(Record):
@@ -97,23 +101,14 @@ class ContextSpan(Record):
     request_id: str
     session_id: str
     position: int
+    seq: int | None
+    # Messages before (<0) or after (>0) the anchor in session ingestion order.
+    offset: int
     role: str
     timestamp: datetime | None
     start: int
     end: int
     text: str
-
-    def render_value(self) -> dict:
-        return {
-            "source_id": self.source_id,
-            "request_id": self.request_id,
-            "session_id": self.session_id,
-            "position": self.position,
-            "role": self.role,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
-            "span": [self.start, self.end],
-            "text": self.text,
-        }
 
 
 class Evidence(Record):
@@ -130,27 +125,65 @@ class Evidence(Record):
     rerank_score: float | None = None
     request_id: str | None = None
     position: int | None = None
+    seq: int | None = None
     neighbors: tuple[ContextSpan, ...] = ()
+    # Lower-ranked anchors from the same stretch of conversation, returned as
+    # one item so a top_k cap counts passages rather than individual turns.
+    merged: tuple[Evidence, ...] = ()
+
+    def members(self) -> tuple[Evidence, ...]:
+        return (self.model_copy(update={"merged": ()}), *self.merged)
+
+    def source_ids(self) -> list[str]:
+        return list(
+            dict.fromkeys(
+                source_id
+                for member in self.members()
+                for source_id in (member.source_id, *(n.source_id for n in member.neighbors))
+            )
+        )
 
     def render(self) -> str:
-        """Dates and attribution live in content, not transport-only metadata."""
-        value: dict[str, object] = {
-            "source_id": self.source_id,
-            "session_id": self.session_id,
-            "role": self.role,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
-            "span": [self.start, self.end],
-            "text": self.text,
-        }
-        if self.request_id is not None:
-            value.update(request_id=self.request_id, position=self.position)
-        if self.neighbors:
-            value["neighbors"] = [neighbor.render_value() for neighbor in self.neighbors]
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
+        """Plain transcript lines; dates and roles live in content for the reader.
+
+        Identifiers and offsets stay in the trace: they cost answer tokens and
+        give the answer model nothing to reason with. Overlapping spans of one
+        message are joined, and "..." marks skipped messages within a block.
+        """
+        by_source: dict[str, list[Evidence | ContextSpan]] = {}
+        for member in self.members():
+            for span in (member, *member.neighbors):
+                by_source.setdefault(span.source_id, []).append(span)
+        lines: list[tuple[tuple[int, int], int | None, str]] = []
+        for spans in by_source.values():
+            spans.sort(key=lambda span: (span.start, -span.end))
+            joined: list[tuple[Evidence | ContextSpan, int, int, str]] = []
+            for span in spans:
+                if joined and span.start <= joined[-1][2]:
+                    head, start, end, text = joined[-1]
+                    if span.end > end:
+                        joined[-1] = (head, start, span.end, text + span.text[end - span.start :])
+                else:
+                    joined.append((span, span.start, span.end, span.text))
+            for head, start, _, text in joined:
+                order = (head.seq if head.seq is not None else 0, start)
+                lines.append((order, head.seq, render_line(head.timestamp, head.role, text)))
+        lines.sort(key=lambda line: line[0])
+        rendered: list[str] = []
+        for index, (_, seq, line) in enumerate(lines):
+            previous = lines[index - 1][1] if index else None
+            if seq is not None and previous is not None and seq - previous > 1:
+                rendered.append("...")
+            rendered.append(line)
+        return "\n".join(rendered)
+
+
+def render_line(timestamp: datetime | None, role: str, text: str) -> str:
+    if timestamp is None:
+        return f"{role}: {text}"
+    # Weekday helps resolve "last Friday"; computed directly to stay locale-free.
+    day = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[timestamp.weekday()]
+    return f"[{timestamp:%Y-%m-%d} {day} {timestamp:%H:%M} UTC] {role}: {annotate(text, timestamp)}"
 
 
 class SearchOptions(Record):
@@ -163,6 +196,11 @@ class SearchOptions(Record):
     neighbor_chunks: int = Field(default=0, ge=0, le=2)
     neighbor_messages: int = Field(default=0, ge=0, le=2)
     neighbor_chars: int = Field(default=1200, ge=1, le=12000)
+    # Return anchors within reach of each other in one session as a single item.
+    merge_blocks: bool = False
+    # Order of the returned items: by relevance, or chronologically. Selection is
+    # by relevance either way; "time" only changes how the reader sees them.
+    order: Literal["rank", "time"] = "rank"
     rrf_k: int = Field(default=60, ge=1)
     lexical_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     dense_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
