@@ -26,22 +26,27 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          activate-environment: true
 
-      - name: Install project with dev dependencies (from uv.lock)
-        run: uv sync --locked --extra dev
+      # Wheels only from uv.lock: no third-party build scripts run in CI.
+      # The project itself is imported from src/ via PYTHONPATH instead of being built.
+      - name: Install dev dependencies (from uv.lock)
+        run: uv sync --locked --no-build --no-install-project --extra dev
 
       - name: Run lint
         run: |
-          uv run --no-sync ruff check src tests
-          uv run --no-sync ruff format --check src tests
+          ruff check src tests
+          ruff format --check src tests
 
       - name: Run typecheck
         run: |
-          uv run --no-sync mypy src
+          mypy src
 
       - name: Run tests
+        env:
+          PYTHONPATH: src
         run: |
-          uv run --no-sync pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
+          pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7
