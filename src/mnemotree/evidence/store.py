@@ -246,6 +246,17 @@ class SQLiteEvidenceStore:
             raise ValueError("unexpected atom vectors")
 
         with self.transaction():
+            current_embedding = self.db.execute(
+                "SELECT value FROM evidence_config WHERE key='embedding_spec'"
+            ).fetchone()
+            if (
+                EmbeddingSpec.model_validate_json(current_embedding[0])
+                if current_embedding
+                else None
+            ) != self.embedding_spec:
+                raise ValueError("database configuration changed; reopen this Memory instance")
+            if self.atoms.configure(self.extractor_config) != self.extractor_config:
+                raise ValueError("database configuration changed; reopen this Memory instance")
             replay = self.receipt(namespace, request_id, body_hash)
             if replay:
                 return replay

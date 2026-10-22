@@ -5,6 +5,7 @@ import pytest
 
 from mnemotree.evidence import Memory, Message, SearchOptions
 from mnemotree.evidence.atoms import AtomDraft, Citation, ExtractorSpec, OpenAIExtractor
+from mnemotree.evidence.evaluation import ablate
 from mnemotree.evidence.models import EmbeddingSpec
 
 
@@ -195,3 +196,55 @@ async def test_openai_extractor_transport_and_strict_output(monkeypatch, tmp_pat
         with pytest.raises(ValueError, match="complete normally"):
             await ingest(memory, namespace="v")
         assert memory.store.stats("v")["sources"] == 0
+        assert extractor.usage["calls"] == 2
+        assert extractor.usage["unreported_calls"] == 2
+
+
+async def test_same_corpus_ablation_only_extracts_once(tmp_path):
+    corpus = tmp_path / "corpus.jsonl"
+    queries = tmp_path / "queries.jsonl"
+    corpus.write_text(
+        json.dumps(
+            {
+                "namespace": "u",
+                "request_id": "r",
+                "session_id": "s",
+                "messages": [{"id": "job", "content": "I am a doctor."}],
+            }
+        )
+    )
+    queries.write_text(
+        json.dumps(
+            {"id": "q", "namespace": "u", "query": "physician", "relevant_source_ids": ["job"]}
+        )
+    )
+    extractor = Extractor()
+    with Memory(tmp_path / "m.db", extractor=extractor) as memory:
+        report = await ablate(memory, corpus, queries, SearchOptions(mode="lexical"))
+        assert extractor.calls == 1
+        assert report["summary"]["raw"]["packed_source_recall"] == 0
+        assert report["summary"]["atoms"]["packed_source_recall"] == 1
+        assert report["summary"]["combined"]["packed_source_recall"] == 1
+        assert report["shared_ingestion"]["atoms"] == 1
+        assert report["reports"]["atoms"]["manifest"]["extraction"]["extractor"]["revision"] == "1"
+
+
+async def test_stale_connection_cannot_bypass_projection_configuration(tmp_path):
+    path = tmp_path / "m.db"
+    with Memory(path) as stale, Memory(path, extractor=Extractor()) as configured:
+        with pytest.raises(ValueError, match="configuration changed"):
+            await ingest(stale)
+        assert (await ingest(configured)).atom_count == 1
+
+
+async def test_citations_cannot_refer_to_another_batch(tmp_path):
+    class Invalid(Extractor):
+        async def extract(self, passages):
+            return [
+                AtomDraft(text="fact", citations=(Citation(passage_id="outside", quote="fact"),))
+            ]
+
+    with Memory(tmp_path / "m.db", extractor=Invalid()) as memory:
+        with pytest.raises(ValueError, match="outside its extraction batch"):
+            await ingest(memory)
+        assert memory.store.stats("u")["sources"] == 0

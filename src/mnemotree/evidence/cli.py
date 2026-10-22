@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 from .engine import Memory
-from .evaluation import CorpusRecord, evaluate, read_jsonl
+from .evaluation import CorpusRecord, ablate, evaluate, read_jsonl
 from .models import Record, SearchOptions
 from .packing import TiktokenCounter
 from .protocols import Embedder
@@ -20,10 +20,23 @@ class Config(Record):
     chunk_overlap: int = 200
     tokenizer: str = "cl100k_base"
     embedding: dict | None = None
+    extraction: dict | None = None
+    extraction_batch_chars: int = 12000
     search: SearchOptions | None = None
 
 
 def open_memory(path: Path, config: Config) -> Memory:
+    from .atoms import OpenAIExtractor
+
+    extractor = None
+    if config.extraction is not None:
+        settings = dict(config.extraction)
+        if settings.pop("kind") != "openai":
+            raise ValueError("extraction kind must be openai")
+        if "api_key" in settings:
+            raise ValueError("use api_key_env instead of storing a secret in configuration")
+        key_env = settings.pop("api_key_env", "EXTRACTION_API_KEY")
+        extractor = OpenAIExtractor(api_key=os.environ[key_env], **settings)
     embedder: Embedder | None = None
     if config.embedding is not None:
         from .providers import OpenAIEmbedder, SentenceTransformerEmbedder
@@ -45,6 +58,8 @@ def open_memory(path: Path, config: Config) -> Memory:
         chunk_size=config.chunk_size,
         chunk_overlap=config.chunk_overlap,
         token_counter=TiktokenCounter(config.tokenizer),
+        extractor=extractor,
+        extraction_batch_chars=config.extraction_batch_chars,
     )
 
 
@@ -62,6 +77,12 @@ def main() -> None:
     evaluation.add_argument("corpus", type=Path)
     evaluation.add_argument("queries", type=Path)
     evaluation.add_argument("--output", type=Path, required=True)
+    ablation = commands.add_parser(
+        "ablate", help="ingest once; compare raw, atoms, and combined retrieval"
+    )
+    ablation.add_argument("corpus", type=Path)
+    ablation.add_argument("queries", type=Path)
+    ablation.add_argument("--output", type=Path, required=True)
     serve = commands.add_parser("serve", help="requires the serve extra and a bearer key")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
@@ -99,8 +120,9 @@ async def run(args, memory: Memory, options: SearchOptions) -> None:
     elif args.command == "search":
         result = await memory.search(args.namespace, args.query, options=options)
         print(result.model_dump_json(indent=2))
-    elif args.command == "evaluate":
-        report = await evaluate(memory, args.corpus, args.queries, options)
+    elif args.command in ("evaluate", "ablate"):
+        evaluator = ablate if args.command == "ablate" else evaluate
+        report = await evaluator(memory, args.corpus, args.queries, options)
         args.output.write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
