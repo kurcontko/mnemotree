@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import MAXYEAR, MINYEAR, datetime, timedelta
 
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 NUMBERS = {
@@ -60,9 +60,15 @@ def _week(d: datetime) -> str:
     return f"week of {start.day} {_MONTHS[start.month - 1]} {start.year}"
 
 
+def _year(year: int) -> int:
+    if not MINYEAR <= year <= MAXYEAR:
+        raise ValueError(f"year {year} is out of range")
+    return year
+
+
 def _month(d: datetime, shift: int = 0) -> str:
     index = d.month - 1 + shift
-    return f"{_MONTHS[index % 12]} {d.year + index // 12}"
+    return f"{_MONTHS[index % 12]} {_year(d.year + index // 12)}"
 
 
 def _n(match: re.Match[str]) -> int:
@@ -106,7 +112,7 @@ RULES: list[tuple[re.Pattern[str], Rule]] = [
         lambda m, t, s: _week(t - timedelta(weeks=_n(m))),
     ),
     (re.compile(rf"\b{_NUM} months? ago\b", re.I), lambda m, t, s: _month(t, -_n(m))),
-    (re.compile(rf"\b{_NUM} years? ago\b", re.I), lambda m, t, s: str(t.year - _n(m))),
+    (re.compile(rf"\b{_NUM} years? ago\b", re.I), lambda m, t, s: str(_year(t.year - _n(m)))),
     (
         re.compile(rf"\b(?:last|this past) {_WEEKDAY}\b", re.I),
         lambda m, t, s: _day(_weekday(t, m.group(1), -1)),
@@ -126,7 +132,8 @@ def resolve(text: str, anchor: datetime | None) -> list[str]:
     """Notes like "yesterday = Sunday, 7 May 2023" for relative phrases, in text order.
 
     A phrase inside a longer one ("yesterday" in "the day before yesterday") is skipped,
-    and each phrase is noted once.
+    and each phrase is noted once. A phrase whose date falls outside years 1-9999
+    ("1000000 days ago") gets no note; the text itself is kept as written.
     """
     if anchor is None:
         return []
@@ -136,7 +143,11 @@ def resolve(text: str, anchor: datetime | None) -> list[str]:
             start, end = match.span()
             if any(start < taken_end and taken_start < end for taken_start, taken_end, _ in found):
                 continue
-            found.append((start, end, f"{match.group(0).lower()} = {rule(match, anchor, text)}"))
+            try:
+                note = rule(match, anchor, text)
+            except (OverflowError, ValueError):
+                continue
+            found.append((start, end, f"{match.group(0).lower()} = {note}"))
     return list(dict.fromkeys(note for _, _, note in sorted(found)))
 
 
