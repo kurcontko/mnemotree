@@ -21,29 +21,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
+          enable-cache: true
 
-      - name: Install project with dev dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+      - name: Install project with dev dependencies (from uv.lock)
+        run: uv sync --locked --extra dev
 
       - name: Run lint
         run: |
-          ruff check src tests
-          ruff format --check src tests
+          uv run --no-sync ruff check src tests
+          uv run --no-sync ruff format --check src tests
 
       - name: Run typecheck
         run: |
-          mypy src
+          uv run --no-sync mypy src
 
       - name: Run tests
         run: |
-          pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
+          uv run --no-sync pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7
