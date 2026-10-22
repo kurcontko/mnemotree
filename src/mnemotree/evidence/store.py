@@ -16,7 +16,7 @@ import sqlite_vec
 
 from .atom_store import AtomStore
 from .atoms import Atom
-from .models import Chunk, EmbeddingSpec, IngestReceipt, Source, digest, scope
+from .models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS evidence_config(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -387,6 +387,50 @@ class SQLiteEvidenceStore:
                 "DELETE FROM evidence_sources WHERE namespace=? AND id=?", (namespace, source_id)
             )
             return cursor.rowcount > 0
+
+    def conversation_context(
+        self, namespace: str, source: Source, *, neighbors: int, max_chars: int
+    ) -> tuple[ContextSpan, ...]:
+        scope(namespace)
+        if source.namespace != namespace:
+            raise ValueError("source is outside this namespace")
+        if neighbors == 0:
+            return ()
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT * FROM evidence_sources WHERE namespace=? AND request_id=? AND session_id=? "
+                "AND position BETWEEN ? AND ? AND id<>? ORDER BY position",
+                (
+                    namespace,
+                    source.request_id,
+                    source.session_id,
+                    source.position - neighbors,
+                    source.position + neighbors,
+                    source.id,
+                ),
+            ).fetchall()
+        result = []
+        for row in rows:
+            other = Source.model_validate({key: row[key] for key in Source.model_fields})
+            start = (
+                max(0, len(other.content) - max_chars) if other.position < source.position else 0
+            )
+            end = min(len(other.content), start + max_chars)
+            result.append(
+                ContextSpan(
+                    id=digest(["context", other.id, start, end]),
+                    source_id=other.id,
+                    request_id=other.request_id,
+                    session_id=other.session_id,
+                    position=other.position,
+                    role=other.role,
+                    timestamp=other.timestamp,
+                    start=start,
+                    end=end,
+                    text=other.content[start:end],
+                )
+            )
+        return tuple(result)
 
     def stats(self, namespace: str) -> dict[str, int]:
         scope(namespace)
