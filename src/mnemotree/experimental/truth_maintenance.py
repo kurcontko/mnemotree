@@ -10,7 +10,7 @@ Implements:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -76,8 +76,8 @@ class Claim(BaseModel):
     source_memory_ids: list[str] = Field(default_factory=list)
 
     # Temporal validity
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     valid_from: datetime | None = None
     valid_until: datetime | None = None
 
@@ -117,7 +117,7 @@ class Conflict:
     winner_claim_id: str | None = None
 
     # Metadata
-    detected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -401,7 +401,7 @@ Severity:"""
             # Weighted combination
             scores = []
             for claim in claims:
-                recency_days = (datetime.now(timezone.utc) - claim.updated_at).days
+                recency_days = (datetime.now(UTC) - claim.updated_at).days
                 recency_score = 1.0 / (1.0 + recency_days / 30.0)
 
                 score = (
@@ -423,7 +423,7 @@ Severity:"""
         # Mark conflict as resolved
         conflict.resolved = True
         conflict.resolution_strategy = strategy
-        conflict.resolved_at = datetime.now(timezone.utc)
+        conflict.resolved_at = datetime.now(UTC)
         conflict.winner_claim_id = winner.claim_id
 
         return winner.claim_id
@@ -436,7 +436,7 @@ Severity:"""
             List of claim IDs that are potentially stale
         """
         stale_ids = []
-        threshold = datetime.now(timezone.utc) - timedelta(days=self.staleness_threshold_days)
+        threshold = datetime.now(UTC) - timedelta(days=self.staleness_threshold_days)
 
         for claim_id, claim in self.claims.items():
             if claim.status != ClaimStatus.ACTIVE:

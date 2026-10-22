@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -40,7 +40,7 @@ def test_build_neo4j_where_clause_contains_on_list_uses_in():
 
 
 def test_build_neo4j_where_clause_normalizes_datetimes():
-    ts = datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
     where, params = build_neo4j_where_clause([MemoryFilter("timestamp", FilterOperator.GTE, ts)])
     assert where == "WHERE m.timestamp >= $filter_0"
     assert params == {"filter_0": ts.isoformat()}

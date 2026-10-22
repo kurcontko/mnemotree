@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -39,7 +39,7 @@ def test_recency_monotonic():
         recency_stability_seconds=3600,
         recency_power=-0.5,
     )
-    now = datetime(2024, 1, 2, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 2, tzinfo=UTC)
     recent = _memory(now - timedelta(hours=1))
     old = _memory(now - timedelta(hours=10))
 
@@ -55,7 +55,7 @@ def test_relevance_positive_cosine():
         recency_weight=0.0,
         relevance_weight=1.0,
     )
-    now = datetime(2024, 1, 2, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 2, tzinfo=UTC)
 
     memory_match = _memory(now, embedding=[1.0, 0.0])
     score_match = scoring.calculate_memory_score(
@@ -80,7 +80,7 @@ def test_importance_access_boost():
         recency_weight=0.0,
         relevance_weight=0.0,
     )
-    now = datetime(2024, 1, 2, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 2, tzinfo=UTC)
 
     base = _memory(now, access_count=0, importance=0.5)
     boosted = _memory(now, access_count=100, importance=0.5)
@@ -103,7 +103,7 @@ def test_decay_reduces_importance_over_time():
         decay_stability_seconds=86400.0,  # 1 day
         decay_floor=0.1,
     )
-    now = datetime(2024, 1, 10, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 10, tzinfo=UTC)
 
     recent = _memory(now, importance=0.8, last_accessed=now - timedelta(hours=1))
     old = _memory(now, importance=0.8, last_accessed=now - timedelta(days=7))
@@ -124,7 +124,7 @@ def test_decay_respects_floor():
         decay_stability_seconds=86400.0,
         decay_floor=0.2,
     )
-    now = datetime(2024, 1, 10, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 10, tzinfo=UTC)
 
     # Very old memory should hit the floor
     very_old = _memory(
@@ -154,7 +154,7 @@ def test_decay_disabled_uses_raw_importance():
         enable_decay=True,
         decay_stability_seconds=86400.0,
     )
-    now = datetime(2024, 1, 10, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 10, tzinfo=UTC)
 
     old = _memory(now, importance=0.8, last_accessed=now - timedelta(days=30))
 
@@ -177,7 +177,7 @@ def test_decay_combined_with_access_boost():
         decay_stability_seconds=86400.0,
         decay_floor=0.1,
     )
-    now = datetime(2024, 1, 10, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 10, tzinfo=UTC)
 
     # Same memory with/without access count
     base = _memory(now, importance=0.5, last_accessed=now - timedelta(days=3), access_count=0)
@@ -200,7 +200,7 @@ def test_decay_floor_should_not_increase_importance():
         decay_stability_seconds=86400.0,
         decay_floor=0.3,  # Floor is higher than memory's importance
     )
-    now = datetime(2024, 1, 10, tzinfo=timezone.utc)
+    now = datetime(2024, 1, 10, tzinfo=UTC)
 
     # Memory with importance BELOW the decay_floor
     low_importance = _memory(

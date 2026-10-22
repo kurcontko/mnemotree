@@ -11,7 +11,7 @@ Implements intelligent filtering to avoid storing noise:
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -544,7 +544,7 @@ class ContextAwareWriteGate:
         if user_id not in self._write_timestamps:
             self._write_timestamps[user_id] = []
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(hours=1)
 
         # Clean old timestamps

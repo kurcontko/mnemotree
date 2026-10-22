@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
 
@@ -20,16 +20,16 @@ def test_coerce_datetime_parses_iso_and_normalizes_timezone():
     iso = "2024-01-01T12:34:56Z"
     parsed = coerce_datetime(iso)
 
-    assert parsed == datetime(2024, 1, 1, 12, 34, 56, tzinfo=timezone.utc)
+    assert parsed == datetime(2024, 1, 1, 12, 34, 56, tzinfo=UTC)
 
     naive = datetime(2024, 2, 1, 9, 0, 0)
     normalized = coerce_datetime(naive)
 
-    assert normalized.tzinfo == timezone.utc
+    assert normalized.tzinfo == UTC
 
 
 def test_coerce_datetime_falls_back_to_default():
-    fallback = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    fallback = datetime(2024, 1, 1, tzinfo=UTC)
     assert coerce_datetime("not-a-date", default=fallback) == fallback
     assert coerce_datetime(None, default=None) is None
 
@@ -46,7 +46,7 @@ def test_update_access_tracks_history_and_caps_importance():
 
 def test_decay_importance_uses_last_accessed_value():
     last_accessed = "2024-01-01 00:00:00.000000+0000"
-    current_time = datetime(2024, 1, 1, 0, 0, 5, tzinfo=timezone.utc)
+    current_time = datetime(2024, 1, 1, 0, 0, 5, tzinfo=UTC)
     memory = _memory(importance=1.0, decay_rate=0.1, last_accessed=last_accessed)
 
     memory.decay_importance(current_time)
@@ -77,7 +77,7 @@ def test_to_str_includes_key_sections():
         credibility=0.9,
         context={"place": "home"},
         metadata={"topic": "test"},
-        timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        timestamp=datetime(2024, 1, 1, tzinfo=UTC),
     )
 
     rendered = memory.to_str()

@@ -58,7 +58,7 @@ class LspClient:
                 self.process.terminate()
                 try:
                     await asyncio.wait_for(self.process.wait(), timeout=2.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning("LSP process did not terminate, killing...")
                     try:
                         self.process.kill()
@@ -73,7 +73,7 @@ class LspClient:
             if task:
                 try:
                     await asyncio.wait_for(task, timeout=2.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await task

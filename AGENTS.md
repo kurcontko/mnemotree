@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-Mnemotree is a Python 3.10+ library for giving LLM agents biologically-inspired, persistent memory. The core API (`MemoryCore`) supports storing memories, recalling them via semantic similarity + filters, and optional analysis/enrichment (importance scoring, emotions, entities/keywords). It also ships a ready-to-run MCP server (`mnemotree-mcp`) so tools like Codex CLI / Claude Desktop can use the memory store over stdio or HTTP.
+Mnemotree is a Python 3.11+ library for giving LLM agents biologically-inspired, persistent memory. The core API (`MemoryCore`) supports storing memories, recalling them via semantic similarity + filters, and optional analysis/enrichment (importance scoring, emotions, entities/keywords). It also ships a ready-to-run MCP server (`mnemotree-mcp`) so tools like Codex CLI / Claude Desktop can use the memory store over stdio or HTTP.
 
 Key locations:
 - Core API: `src/mnemotree/core/` (`MemoryCore`, models, retrieval/scoring)

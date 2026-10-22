@@ -1,6 +1,6 @@
 # core/models.py
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Literal, overload
 from uuid import uuid4
@@ -117,7 +117,7 @@ def coerce_datetime(
         return None
 
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -199,10 +199,10 @@ class MemoryItem(BaseModel):
     )  # entity -> contexts where it appears
     author: str | None = None
     memory_type: MemoryType
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Access information
-    last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_accessed: datetime = Field(default_factory=lambda: datetime.now(UTC))
     access_count: int = 0
     access_history: list[datetime] = Field(default_factory=list)
 
@@ -248,7 +248,7 @@ class MemoryItem(BaseModel):
 
     def update_access(self, retrievability: float | None = None):
         self.access_count += 1
-        self.last_accessed = datetime.now(timezone.utc)
+        self.last_accessed = datetime.now(UTC)
         self.access_history.append(self.last_accessed)
         self.importance = min(
             1.0, self.importance + self.reinforcement_rate
@@ -545,8 +545,8 @@ class MemoryLink(BaseModel):
     link_type: LinkType
     strength: float = Field(default=1.0, ge=0.0, le=1.0)
     context: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    last_accessed: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_accessed: datetime = Field(default_factory=lambda: datetime.now(UTC))
     access_count: int = 0
     created_by: Literal["user", "auto_similarity", "auto_entity", "llm"] = "user"
     similarity_score: float | None = Field(None, ge=0.0, le=1.0)
@@ -555,7 +555,7 @@ class MemoryLink(BaseModel):
     def update_access(self):
         """Update access tracking when link is traversed."""
         self.access_count += 1
-        self.last_accessed = datetime.now(timezone.utc)
+        self.last_accessed = datetime.now(UTC)
         # Strengthen link slightly on access (similar to memory reinforcement)
         self.strength = min(1.0, self.strength + 0.05)
 

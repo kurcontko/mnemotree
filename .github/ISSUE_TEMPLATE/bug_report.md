@@ -24,7 +24,7 @@ If applicable, add screenshots to help explain your problem.
 
 **Environment (please complete the following information):**
  - OS: [e.g. macOS]
- - Python Version: [e.g. 3.10]
+ - Python Version: [e.g. 3.12]
  - Mnemotree Version: [e.g. 0.3.0]
 
 **Additional context**

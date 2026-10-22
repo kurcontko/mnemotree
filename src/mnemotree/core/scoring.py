@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
@@ -112,9 +112,9 @@ class MemoryScoring:
             decayed_importance = importance (raw stored value)
         """
         if current_time is None:
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
         elif current_time.tzinfo is None:
-            current_time = current_time.replace(tzinfo=timezone.utc)
+            current_time = current_time.replace(tzinfo=UTC)
 
         memory_time = coerce_datetime(memory.timestamp, default=current_time)
 
@@ -211,7 +211,7 @@ class MemoryScoring:
         query_embedding: list[float] | None = None,
     ) -> list[MemoryItem]:
         """Filter memories based on score threshold."""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         filtered_memories = []
         for memory in memories:
             score = self.calculate_memory_score(

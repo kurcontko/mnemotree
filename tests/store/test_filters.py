@@ -1,6 +1,6 @@
 """Tests for store filter clause builders."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -20,7 +20,7 @@ class TestNormalizeFilterValue:
 
     def test_datetime_to_isoformat(self):
         """datetime becomes ISO format string."""
-        dt = datetime(2024, 6, 15, 12, 30, tzinfo=timezone.utc)
+        dt = datetime(2024, 6, 15, 12, 30, tzinfo=UTC)
         assert normalize_filter_value(dt) == "2024-06-15T12:30:00+00:00"
 
     def test_string_passthrough(self):
@@ -235,7 +235,7 @@ class TestBuildSqliteFilterClauses:
 
     def test_datetime_normalized(self):
         """datetime is normalized to ISO format."""
-        dt = datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc)
+        dt = datetime(2024, 1, 15, 10, 30, tzinfo=UTC)
         filters = [MemoryFilter(field="timestamp", operator=FilterOperator.GTE, value=dt)]
         clauses, params = build_sqlite_filter_clauses(filters)
         assert params == ["2024-01-15T10:30:00+00:00"]

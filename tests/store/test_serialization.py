@@ -1,6 +1,6 @@
 """Tests for store serialization helpers."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 
 from mnemotree.store.serialization import (
@@ -21,7 +21,7 @@ class TestSerializeDatetime:
 
     def test_datetime_returns_isoformat(self):
         """datetime object returns ISO format string."""
-        dt = datetime(2024, 6, 15, 12, 30, 45, tzinfo=timezone.utc)
+        dt = datetime(2024, 6, 15, 12, 30, 45, tzinfo=UTC)
         result = serialize_datetime(dt)
         assert result == "2024-06-15T12:30:45+00:00"
 
@@ -43,7 +43,7 @@ class TestSerializeDatetimeList:
 
     def test_mixed_list(self):
         """Mixed datetime and string values."""
-        dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        dt = datetime(2024, 1, 1, tzinfo=UTC)
         result = serialize_datetime_list([dt, "2024-02-02"])
         assert result == ["2024-01-01T00:00:00+00:00", "2024-02-02"]
 
@@ -117,7 +117,7 @@ class TestNormalizeFilterValue:
 
     def test_datetime_to_isoformat(self):
         """datetime becomes ISO format string."""
-        dt = datetime(2024, 3, 15, 10, 20, 30, tzinfo=timezone.utc)
+        dt = datetime(2024, 3, 15, 10, 20, 30, tzinfo=UTC)
         result = normalize_filter_value(dt)
         assert result == "2024-03-15T10:20:30+00:00"
 
@@ -128,7 +128,7 @@ class TestNormalizeFilterValue:
 
     def test_list_recursive(self):
         """List elements are recursively normalized."""
-        dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        dt = datetime(2024, 1, 1, tzinfo=UTC)
         result = normalize_filter_value([dt, SampleEnum.FOO, "plain"])
         assert result == ["2024-01-01T00:00:00+00:00", "foo_value", "plain"]
 
@@ -141,6 +141,6 @@ class TestNormalizeFilterValue:
 
     def test_nested_list(self):
         """Nested lists are recursively normalized."""
-        dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        dt = datetime(2024, 1, 1, tzinfo=UTC)
         result = normalize_filter_value([[dt], [SampleEnum.FOO]])
         assert result == [["2024-01-01T00:00:00+00:00"], ["foo_value"]]

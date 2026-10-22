@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -83,7 +83,7 @@ async def test_sqlite_vec_query_memories(tmp_path, memory_item):
 
     try:
         # Store memories with various attributes
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mem1 = memory_item.model_copy(
             update={
                 "memory_id": "mem-1",

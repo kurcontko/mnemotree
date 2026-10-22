@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -23,7 +23,7 @@ def _memory(
     last_accessed: datetime | None = None,
     embedding: list[float] | None = None,
 ) -> MemoryItem:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return MemoryItem(
         content="Test content",
         memory_type=memory_type,
@@ -39,7 +39,7 @@ class TestAdaptiveDecaySystem:
         system = AdaptiveDecaySystem()
         memory = _memory()
         base = DecayConfig()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = system.adjust_decay_config(memory, base, now)
         assert isinstance(result, DecayConfig)
 
@@ -47,7 +47,7 @@ class TestAdaptiveDecaySystem:
         """Frequently accessed memories should get higher stability."""
         system = AdaptiveDecaySystem()
         base = DecayConfig(stability_seconds=604800)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         low_access = _memory(access_count=0, last_accessed=now)
         high_access = _memory(access_count=100, last_accessed=now)
@@ -61,7 +61,7 @@ class TestAdaptiveDecaySystem:
         """Recently accessed memories should decay slower."""
         system = AdaptiveDecaySystem()
         base = DecayConfig(stability_seconds=604800)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         recent = _memory(last_accessed=now - timedelta(hours=1))
         old = _memory(last_accessed=now - timedelta(days=60))
@@ -74,7 +74,7 @@ class TestAdaptiveDecaySystem:
     def test_high_importance_slows_decay(self):
         system = AdaptiveDecaySystem()
         base = DecayConfig(stability_seconds=604800)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         high_imp = _memory(importance=0.9, last_accessed=now)
         low_imp = _memory(importance=0.1, last_accessed=now)
@@ -86,7 +86,7 @@ class TestAdaptiveDecaySystem:
 
     def test_update_importance_decreases_over_time(self):
         system = AdaptiveDecaySystem()
-        past = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        past = datetime(2024, 1, 1, tzinfo=UTC)
         memory = _memory(importance=0.8, last_accessed=past)
         future = past + timedelta(days=30)
         new_imp = system.update_importance(memory, current_time=future)
@@ -141,7 +141,7 @@ class TestFSRSSchedule:
 
     def test_next_review_is_set(self):
         schedule = FSRSSchedule(memory_id="m1")
-        now = datetime(2024, 6, 1, tzinfo=timezone.utc)
+        now = datetime(2024, 6, 1, tzinfo=UTC)
         schedule.schedule_next_review(grade=3, current_time=now)
         assert schedule.next_review is not None
         assert schedule.next_review > now
@@ -153,7 +153,7 @@ class TestSpacedRepetitionIntegration:
         memory = _memory()
         system.register_for_spaced_repetition(memory, initial_grade=3)
 
-        future = datetime.now(timezone.utc) + timedelta(days=30)
+        future = datetime.now(UTC) + timedelta(days=30)
         due = system.get_due_reviews(current_time=future)
         assert memory.memory_id in due
 

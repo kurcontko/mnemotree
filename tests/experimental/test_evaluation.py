@@ -1,6 +1,6 @@
 """Tests for experimental evaluation module."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -25,7 +25,7 @@ def memory_items():
             content="Python is a programming language",
             memory_type=MemoryType.SEMANTIC,
             importance=0.8,
-            timestamp=str(datetime(2024, 1, 1, tzinfo=timezone.utc)),
+            timestamp=str(datetime(2024, 1, 1, tzinfo=UTC)),
             embedding=[0.1] * 128,
         ),
         MemoryItem(
@@ -33,7 +33,7 @@ def memory_items():
             content="I learned Python yesterday",
             memory_type=MemoryType.EPISODIC,
             importance=0.6,
-            timestamp=str(datetime(2024, 1, 2, tzinfo=timezone.utc)),
+            timestamp=str(datetime(2024, 1, 2, tzinfo=UTC)),
             embedding=[0.2] * 128,
         ),
         MemoryItem(
@@ -41,7 +41,7 @@ def memory_items():
             content="Machine learning uses Python",
             memory_type=MemoryType.SEMANTIC,
             importance=0.7,
-            timestamp=str(datetime(2024, 1, 3, tzinfo=timezone.utc)),
+            timestamp=str(datetime(2024, 1, 3, tzinfo=UTC)),
             embedding=[0.3] * 128,
         ),
     ]

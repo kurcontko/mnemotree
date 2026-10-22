@@ -2,7 +2,7 @@ import pytest
 
 pytest.importorskip("chromadb")
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from mnemotree.core.query import MemoryQuery
 from mnemotree.store.chromadb_store import ChromaMemoryStore
@@ -196,7 +196,7 @@ async def test_chroma_query_memories(temp_chroma_dir, memory_item):
 
     try:
         # Store memories with various attributes
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mem1 = memory_item.model_copy(
             update={
                 "memory_id": "mem-1",

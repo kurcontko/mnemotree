@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from mnemotree.core.memory import (
@@ -129,7 +129,7 @@ def _memory_timestamp(memory: MemoryItem) -> datetime:
     if timestamp is None:
         timestamp = coerce_datetime(memory.last_accessed, default=None)
     if timestamp is None:
-        timestamp = datetime.min.replace(tzinfo=timezone.utc)
+        timestamp = datetime.min.replace(tzinfo=UTC)
     return timestamp
 
 

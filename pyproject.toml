@@ -30,7 +30,7 @@ dependencies = [
     # LLMs
     "openai>=1.0.0",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 
@@ -165,11 +165,11 @@ markers = [
 
 [tool.black]
 line-length = 100
-target-version = ["py310", "py311", "py312"]
+target-version = ["py311", "py312", "py313"]
 include = '\.pyi?$'
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
 extend-exclude = [
@@ -182,7 +182,8 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "PIE"]
-ignore = ["E501", "B008"]
+# UP042: StrEnum changes str()/format() output of enum members, which would alter serialized values
+ignore = ["E501", "B008", "UP042"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["mnemotree"]
@@ -196,7 +197,7 @@ line-ending = "auto"
 indent-style = "space"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = [
     "src/mnemotree/core",
     "src/mnemotree/store/protocols.py",
