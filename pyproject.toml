@@ -11,17 +11,17 @@ dependencies = [
     "numpy>=1.26.0,<3.0.0",
     "scikit-learn>=1.6.0,<2.0.0",
     "networkx>=3.4.0,<4.0.0",
-    "spacy>=3.8.0,<4.0.0",
-    "urllib3>=2.6.0,<3.0.0",
+    "spacy>=3.8.14,<4.0.0",
+    "urllib3>=2.7.0,<3.0.0",
     "filelock>=3.20.3,<4.0.0",
 
     # Default store — SQLite with vector search (zero-infra)
     "sqlite-vec>=0.1.0",
 
     # Langchain
-    "langchain>=0.3.7,<0.4.0",
+    "langchain>=0.3.30,<0.4.0",
     "langchain-openai>=0.2.14,<0.3.0",
-    "langchain-community>=0.3.7,<0.4.0",
+    "langchain-community>=0.3.7,<0.5.0",
     "langchain-core>=0.3.19,<0.4.0",
 
     # Llama-index
@@ -36,15 +36,15 @@ license = { text = "MIT" }
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
     "aiofiles>=24.1.0",
-    "mypy>=1.10.0",
-    "ruff>=0.5.0",
+    "mypy>=1.20.0",
+    "ruff>=0.15.10",
     "pre-commit>=3.7.0",
     "pyright>=1.1.330",
-    "virtualenv>=20.36.1,<21.0.0",
+    "virtualenv>=21.2.1,<22.0.0",
 ]
 
 # NER backends
@@ -60,7 +60,7 @@ ner_spark = [
 ]
 
 # Database backends
-neo4j = ["neo4j>=5.26.0"]
+neo4j = ["neo4j>=6.1.0"]
 milvus = ["pymilvus>=2.5.0"]
 chroma = ["chromadb>=0.5.23"]
 sqlite_vec = ["sqlite-vec>=0.1.0"]
@@ -118,7 +118,7 @@ huggingface = [
 ]
 
 all = [
-    "neo4j>=5.26.0",
+    "neo4j>=6.1.0",
     "chromadb>=0.5.23",
     "pymilvus>=2.2.0",
     "sqlite-vec>=0.1.0",
