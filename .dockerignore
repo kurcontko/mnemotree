@@ -19,3 +19,4 @@ coverage.xml
 coverage.json
 dist
 build
+**/.env

@@ -7,7 +7,7 @@ authors = [
 ]
 dependencies = [
     "pydantic>=2.0.0,<3.0.0",
-    "sqlite-vec>=0.1.6,<0.2.0",
+    "sqlite-vec>=0.1.9,<0.2.0",
     "tiktoken>=0.7.0,<1.0.0",
 ]
 requires-python = ">=3.11"

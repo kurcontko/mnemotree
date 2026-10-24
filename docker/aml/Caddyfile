@@ -1,0 +1,13 @@
+{$AML_DOMAIN} {
+	encode gzip
+	reverse_proxy memory:8000 {
+		# Adds may wait on embedding retries; AML allows calls of up to 30 minutes.
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+	request_body {
+		max_size 10MB
+	}
+}
