@@ -7,7 +7,7 @@ from mnemotree.evidence.lexical import index_text, match_expression, scoped_matc
 
 def terms(query: str, **kwargs: object) -> list[str]:
     expression = match_expression(query, **kwargs)  # type: ignore[arg-type]
-    return [] if expression is None else [term.strip('"') for term in expression.split(' OR ')]
+    return [] if expression is None else [term.strip('"') for term in expression.split(" OR ")]
 
 
 def test_long_query_retains_distinctive_tail_and_head() -> None:
@@ -26,7 +26,9 @@ def test_explicit_options_share_slots_after_long_question() -> None:
     selected = terms(query, options=options)
     assert len(selected) == len(set(selected)) == 64
     assert sum(term.startswith("question") for term in selected) == 32
-    counts = [sum(term.startswith(f"choice{option}term") for term in selected) for option in range(6)]
+    counts = [
+        sum(term.startswith(f"choice{option}term") for term in selected) for option in range(6)
+    ]
     assert max(counts) - min(counts) <= 1
     assert min(counts) >= 5
     for option in range(6):
@@ -49,7 +51,9 @@ def test_short_queries_preserve_existing_order_and_fallback() -> None:
     assert match_expression("") is None
     assert match_expression("zebra", max_terms=0) is None
     assert terms("zebra", options=["APPLE zebra", "the and", "apple pear"]) == [
-        "zebra", "apple", "pear"
+        "zebra",
+        "apple",
+        "pear",
     ]
     assert terms("the", options=["and the"]) == ["the", "and"]
 
@@ -60,14 +64,21 @@ def test_cjk_option_tail_is_searchable_and_namespace_stays_scoped() -> None:
     assert expression is not None
     assert '"华沙"' in expression
     connection = sqlite3.connect(":memory:")
-    connection.execute('CREATE VIRTUAL TABLE evidence USING fts5(scope, text, tokenize="porter unicode61")')
+    connection.execute(
+        'CREATE VIRTUAL TABLE evidence USING fts5(scope, text, tokenize="porter unicode61")'
+    )
     from mnemotree.evidence.lexical import scope_token
 
-    connection.executemany("INSERT INTO evidence VALUES (?, ?)", [
-        (scope_token("tenant"), index_text("华沙")),
-        (scope_token("other"), index_text("华沙")),
-    ])
-    assert connection.execute("SELECT count(*) FROM evidence WHERE evidence MATCH ?", (expression,)).fetchone() == (1,)
+    connection.executemany(
+        "INSERT INTO evidence VALUES (?, ?)",
+        [
+            (scope_token("tenant"), index_text("华沙")),
+            (scope_token("other"), index_text("华沙")),
+        ],
+    )
+    assert connection.execute(
+        "SELECT count(*) FROM evidence WHERE evidence MATCH ?", (expression,)
+    ).fetchone() == (1,)
     connection.close()
 
 

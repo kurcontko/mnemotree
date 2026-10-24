@@ -9,6 +9,7 @@ import json
 import logging
 import secrets
 from collections import Counter
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -91,6 +92,26 @@ def failure(exc: BaseException) -> dict[str, Any]:
             break
         current = current.__cause__ or current.__context__
     return info
+
+
+def returned_role_chars(evidence: Sequence[Evidence]) -> dict[str, int]:
+    """Unique source characters by actual role, including merged spans and neighbors.
+
+    Count source offsets, excluding rendered role/date headers and derived date notes.
+    Overlaps between returned blocks count once as well as overlaps within a block.
+    """
+    spans: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for item in evidence:
+        for member in item.members():
+            for span in (member, *member.neighbors):
+                spans.setdefault((span.source_id, span.role), []).append((span.start, span.end))
+    counts: Counter[str] = Counter()
+    for (_, role), ranges in spans.items():
+        end = 0
+        for start, stop in sorted(ranges):
+            counts[role] += max(0, stop - max(start, end))
+            end = max(end, stop)
+    return dict(counts)
 
 
 class Request(BaseModel):
@@ -367,17 +388,19 @@ def create_app(
         )
         if not request.query.strip():
             raise HTTPException(status_code=422, detail="query must not be blank")
-        # Options are supplied by the benchmark, not gold labels. Retain their
-        # ordering and include them in the retrieval query for lexical coverage.
-        query = request.query
-        if request.options:
-            query += "\n" + "\n".join(request.options)
+        # Keep explicit option boundaries for the bounded lexical term allocation.
+        # Memory still combines the stem and options in order for model inputs.
         # Returning fewer than top_k is valid; returning more is a contract error.
         search_options = options.model_copy(
             update={"limit": limit, "candidate_limit": max(options.candidate_limit, limit)}
         )
         try:
-            result = await memory.search(request.user_id, query, options=search_options)
+            result = await memory.search(
+                request.user_id,
+                request.query,
+                options=search_options,
+                query_options=request.options,
+            )
         except Exception as exc:
             note(http, **failure(exc))
             raise HTTPException(
@@ -394,9 +417,16 @@ def create_app(
             chunk_density=(
                 round(trace.chunk_density, 3) if trace.chunk_density is not None else None
             ),
+            original_model_query_tokens=trace.original_model_query_tokens,
+            model_query_tokens=trace.model_query_tokens,
+            model_query_truncated=trace.model_query_truncated,
+            tokenizer=trace.tokenizer,
+            assistant_share=trace.assistant_share,
+            role_first_applied=trace.role_first_applied,
             channel_counts=trace.channel_counts,
             timings_ms={key: round(value, 1) for key, value in trace.timings_ms.items()},
             returned_roles=dict(Counter(item.role for item in result.evidence)),
+            returned_role_chars=returned_role_chars(result.evidence),
             ids_digest=hashlib.sha256(json.dumps(ids).encode()).hexdigest()[:16],
         )
         return {"data": [response_item(item) for item in result.evidence]}

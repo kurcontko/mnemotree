@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -90,6 +93,42 @@ def configure_logging() -> None:
     service.propagate = False
 
 
+def code_identity() -> dict[str, str | None]:
+    """Identify the loaded evidence source even in installed packages without Git.
+
+    A container build may supply MNEMOTREE_BUILD_REVISION as a Git SHA. The source
+    digest also distinguishes uncommitted edits sharing the same revision.
+    """
+    package = Path(__file__).resolve().parent
+    root = package.parents[2]
+    revision = os.environ.get("MNEMOTREE_BUILD_REVISION", "")
+    if not re.fullmatch(r"[0-9a-fA-F]{7,40}", revision):
+        revision = ""
+        if (root / ".git").exists():
+            try:
+                result = subprocess.run(
+                    ["git", "-C", str(root), "rev-parse", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                    check=False,
+                )
+                value = result.stdout.strip()
+                if result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40}", value):
+                    revision = value
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+    source_hash = hashlib.sha256()
+    try:
+        for path in sorted(package.glob("*.py")):
+            source_hash.update(path.name.encode() + b"\0")
+            source_hash.update(path.read_bytes() + b"\0")
+        source_digest = source_hash.hexdigest()
+    except OSError:
+        source_digest = None
+    return {"code_revision": revision or None, "source_digest": source_digest}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", required=True, type=Path)
@@ -165,6 +204,7 @@ def main() -> None:
                     "event": "startup",
                     "ts": utc_now(),
                     "boot": BOOT,
+                    **code_identity(),
                     "db": str(args.db),
                     "mode": options.mode,
                     "search": options.model_dump(mode="json"),

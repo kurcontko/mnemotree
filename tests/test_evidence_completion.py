@@ -22,7 +22,9 @@ def completion_options():
 
 
 @pytest.mark.parametrize("length", [20_000, 80_000])
-async def test_completion_reads_each_source_once_and_preserves_output(tmp_path, monkeypatch, length):
+async def test_completion_reads_each_source_once_and_preserves_output(
+    tmp_path, monkeypatch, length
+):
     with Memory(tmp_path / "memory.db") as memory:
         text = "needle " + "ordinary words " * (length // 15)
         await memory.add(
