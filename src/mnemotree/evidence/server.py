@@ -14,7 +14,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi import Request as HTTPRequest
 from fastapi.exception_handlers import (
     http_exception_handler,
@@ -287,6 +287,13 @@ def create_app(
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    # The platform probes both routes with HEAD (and the key) before a run; a 405
+    # there is noise in its logs and ours, so the probe answers 200 with no body.
+    @app.api_route("/v1/memories/add", methods=["HEAD"], dependencies=[Depends(authorize)])
+    @app.api_route("/v1/memories/search", methods=["HEAD"], dependencies=[Depends(authorize)])
+    def probe() -> Response:
+        return Response(status_code=200)
 
     @app.post("/v1/memories/add", dependencies=[Depends(authorize)])
     async def add(request: AddRequest, http: HTTPRequest):

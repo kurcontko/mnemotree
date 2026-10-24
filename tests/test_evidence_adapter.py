@@ -19,6 +19,12 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             assert (await client.get("/health")).status_code == 200
+            # Pre-run probes: HEAD with the key is 200, without it 401, GET stays 405.
+            assert (await client.head("/v1/memories/add")).status_code == 401
+            for route in ("/v1/memories/add", "/v1/memories/search"):
+                probe = await client.head(route, headers={"Authorization": "Bearer test-key"})
+                assert probe.status_code == 200 and probe.content == b""
+            assert (await client.get("/v1/memories/add")).status_code == 405
             payload = {
                 "request_id": "r",
                 "user_id": "u",
