@@ -208,11 +208,24 @@ class SearchOptions(Record):
     rrf_k: int = Field(default=60, ge=1)
     lexical_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     dense_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    # Keep at most this many fused candidates per source message: long assistant
+    # turns otherwise occupy several candidate slots and several returned items.
+    chunks_per_source: int | None = Field(default=None, ge=1)
+    # Anchors of this role are selected before the others (each group keeps its
+    # fusion order). Labelled evidence in long assistant/user histories is mostly
+    # the user's short turns while most tokens are the assistant's.
+    role_first: str | None = None
+    # Use a deeper candidate pool when the user's history averages more than
+    # deep_history_density chunks per message (long assistant turns crowd the pool).
+    deep_candidate_limit: int | None = Field(default=None, ge=1, le=2000)
+    deep_history_density: float = Field(default=2.0, gt=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def enough_candidates(self) -> SearchOptions:
         if self.candidate_limit < self.limit:
             raise ValueError("candidate_limit must be at least limit")
+        if self.deep_candidate_limit is not None and self.deep_candidate_limit < self.limit:
+            raise ValueError("deep_candidate_limit must be at least limit")
         return self
 
 

@@ -77,6 +77,16 @@ def aml_options(memory: Memory) -> SearchOptions:
         token_budget=AML_TOKEN_BUDGET,
         neighbor_messages=1,
         merge_blocks=True,
+        # Role stack (24 Oct, gpt-4o-mini answers on the sweep contexts): one chunk per
+        # message and user turns first are neutral-to-positive on every public set; the
+        # deeper pool pays only where long assistant turns crowd the candidates (BEAM
+        # +2 to +3) and costs 3-6 points on short-session sets, so it is gated on the
+        # history's chunks per message (BEAM 2.1-3.7, LME <= 1.7, LoCoMo 1.0).
+        chunks_per_source=1,
+        role_first="user",
+        candidate_limit=100,
+        deep_candidate_limit=300,
+        deep_history_density=2.0,
     )
 
 

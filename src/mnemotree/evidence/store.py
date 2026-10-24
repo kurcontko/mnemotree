@@ -339,6 +339,18 @@ class SQLiteEvidenceStore:
             )
             return receipt
 
+    def chunk_density(self, namespace: str) -> float:
+        """Chunks per stored message in the namespace (0.0 when empty)."""
+        scope(namespace)
+        with self._lock:
+            row = self.db.execute(
+                "SELECT (SELECT COUNT(*) FROM evidence_chunks WHERE namespace=?), "
+                "(SELECT COUNT(*) FROM evidence_sources WHERE namespace=?)",
+                (namespace, namespace),
+            ).fetchone()
+        chunks, sources = int(row[0]), int(row[1])
+        return chunks / sources if sources else 0.0
+
     def get_source(self, namespace: str, source_id: str) -> Source | None:
         scope(namespace)
         with self._lock:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from time import perf_counter
 
@@ -74,6 +74,27 @@ def fuse(
         for id, contributions in scores.items()
     ]
     return sorted(candidates, key=lambda candidate: (-candidate.fusion_score, candidate.chunk.id))
+
+
+def cap_per_source(candidates: Sequence[Candidate], per_source: int) -> list[Candidate]:
+    """Keep the best `per_source` candidates of each source message, in the given order."""
+    seen: dict[str, int] = {}
+    kept = []
+    for candidate in candidates:
+        count = seen.get(candidate.chunk.source_id, 0)
+        if count < per_source:
+            kept.append(candidate)
+            seen[candidate.chunk.source_id] = count + 1
+    return kept
+
+
+def role_first(
+    candidates: Sequence[Candidate], roles: Mapping[str, str], role: str
+) -> list[Candidate]:
+    """Stable partition: candidates whose source has `role` first, then the rest."""
+    first = [c for c in candidates if roles.get(c.chunk.id) == role]
+    rest = [c for c in candidates if roles.get(c.chunk.id) != role]
+    return first + rest
 
 
 class Memory:
@@ -232,24 +253,28 @@ class Memory:
         # A single snapshot covers all channels and source materialization.
         # Concurrent writes cannot mix different versions in the returned evidence.
         with self.store.transaction(read=True):
+            candidate_limit = options.candidate_limit
+            if (
+                options.deep_candidate_limit is not None
+                and self.store.chunk_density(namespace) > options.deep_history_density
+            ):
+                candidate_limit = options.deep_candidate_limit
             if options.representation != "atoms" and options.mode in ("lexical", "hybrid"):
-                channels["lexical"] = self.store.lexical(namespace, query, options.candidate_limit)
+                channels["lexical"] = self.store.lexical(namespace, query, candidate_limit)
             if options.representation != "atoms" and query_vector is not None:
-                channels["dense"] = self.store.dense(
-                    namespace, query_vector, options.candidate_limit
-                )
+                channels["dense"] = self.store.dense(namespace, query_vector, candidate_limit)
             if options.representation != "raw":
                 atom_channels = {}
                 if options.mode in ("lexical", "hybrid"):
                     atom_channels["atom_lexical"] = self.store.atoms.lexical(
-                        namespace, query, options.candidate_limit
+                        namespace, query, candidate_limit
                     )
                 if query_vector is not None:
                     assert self.store.embedding_spec is not None
                     atom_channels["atom_dense"] = self.store.atoms.dense(
                         namespace,
                         vector_blob(query_vector, self.store.embedding_spec.dimensions),
-                        options.candidate_limit,
+                        candidate_limit,
                     )
                 for channel, hits in atom_channels.items():
                     expanded: dict[str, tuple[Chunk, float]] = {}
@@ -273,6 +298,8 @@ class Memory:
                 k=options.rrf_k,
                 ranks=atom_ranks,
             )
+            if options.chunks_per_source is not None:
+                candidates = cap_per_source(candidates, options.chunks_per_source)
             for candidate in candidates:
                 windows[candidate.chunk.id] = self.store.window(
                     namespace, candidate.chunk, options.neighbor_chunks
@@ -302,6 +329,10 @@ class Memory:
                 key=lambda item: (-(item.rerank_score or 0.0), -item.fusion_score, item.chunk.id)
             )
         rerank_ms = (perf_counter() - rerank_start) * 1000
+        if options.role_first is not None:
+            candidates = role_first(
+                candidates, {cid: windows[cid][0].role for cid in windows}, options.role_first
+            )
         evidence = []
         for candidate in candidates:
             source, start, end = windows[candidate.chunk.id]

@@ -378,3 +378,63 @@ async def test_lexical_search_reads_only_its_namespace(tmp_path):
         assert not (
             await memory.search("alice", "apple", options=SearchOptions(mode="lexical"))
         ).evidence
+
+
+async def test_role_stack_options(tmp_path):
+    """One chunk per message, user turns first, and the density-gated deep pool."""
+    long_reply = ("apple " * 30 + "\n") * 8  # several chunks, all matching "apple"
+    with Memory(tmp_path / "m.db", chunk_size=200, chunk_overlap=20) as memory:
+        messages = []
+        for i in range(6):
+            messages.append(Message(content=f"apple question {i}", role="user", id=f"u{i}"))
+            messages.append(Message(content=long_reply, role="assistant", id=f"a{i}"))
+        await memory.add("alice", messages, request_id="r", session_id="s")
+        assert memory.store.chunk_density("alice") > 2.0
+
+        base = await memory.search(
+            "alice", "apple", options=SearchOptions(mode="lexical", limit=100)
+        )
+        per_source = {}
+        for c in base.trace.candidates:
+            per_source[c.chunk.source_id] = per_source.get(c.chunk.source_id, 0) + 1
+        assert max(per_source.values()) > 1  # long replies take several slots by default
+
+        capped = await memory.search(
+            "alice",
+            "apple",
+            options=SearchOptions(
+                mode="lexical", limit=100, chunks_per_source=1, role_first="user"
+            ),
+        )
+        sources = [c.chunk.source_id for c in capped.trace.candidates]
+        assert len(sources) == len(set(sources)) == 12
+        roles = [item.role for item in capped.evidence]
+        assert roles[:6] == ["user"] * 6 and set(roles[6:]) == {"assistant"}
+
+        shallow = SearchOptions(mode="lexical", limit=4, candidate_limit=4)
+        deep = SearchOptions(
+            mode="lexical",
+            limit=4,
+            candidate_limit=4,
+            deep_candidate_limit=40,
+            deep_history_density=2.0,
+        )
+        assert (await memory.search("alice", "apple", options=shallow)).trace.channel_counts[
+            "lexical"
+        ] == 4
+        assert (await memory.search("alice", "apple", options=deep)).trace.channel_counts[
+            "lexical"
+        ] > 4
+        # A short-turn history stays on the shallow pool.
+        await memory.add(
+            "bob",
+            [Message(content="apple", role="user", id=f"b{i}") for i in range(30)],
+            request_id="r",
+            session_id="s",
+        )
+        assert memory.store.chunk_density("bob") == 1.0
+        assert (await memory.search("bob", "apple", options=deep)).trace.channel_counts[
+            "lexical"
+        ] == 4
+        with pytest.raises(ValueError, match="deep_candidate_limit"):
+            SearchOptions(limit=50, candidate_limit=50, deep_candidate_limit=10)
