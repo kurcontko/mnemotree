@@ -9,14 +9,23 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import Field, StrictInt, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from .engine import Memory
-from .models import Evidence, Message, Record, SearchOptions, scope
+from .models import Evidence, Message, SearchOptions, scope
 from .store import IngestConflict
 
+# The platform never retries a 4xx, so an additive contract field must not fail a
+# whole run: request models ignore unknown keys (internal Records stay strict), and
+# top_k above the contract maximum is clamped rather than rejected.
+MAX_TOP_K = 100
 
-class AddMessage(Record):
+
+class Request(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+
+class AddMessage(Request):
     role: Literal["user", "assistant"]
     # Public benchmark histories contain empty turns. Rejecting them with 422
     # would stop the evaluation stage (never retried), so they are skipped.
@@ -35,7 +44,7 @@ class AddMessage(Record):
         )
 
 
-class AddRequest(Record):
+class AddRequest(Request):
     request_id: str
     user_id: str
     session_id: str
@@ -47,11 +56,11 @@ class AddRequest(Record):
         return scope(value)
 
 
-class SearchRequest(Record):
+class SearchRequest(Request):
     user_id: str
     query: str = Field(min_length=1)
     options: list[str] | None = None
-    top_k: int = Field(ge=1, le=100, strict=True)
+    top_k: int = Field(ge=1, strict=True)
 
     @field_validator("user_id")
     @classmethod
@@ -108,7 +117,7 @@ def create_app(
     options = options or aml_options(memory)
     sampled = {"add": 0, "search": 0}
 
-    def sample(kind: str, payload: Record) -> None:
+    def sample(kind: str, payload: Request) -> None:
         if sample_path is None or sampled[kind] >= sample_limit:
             return
         sampled[kind] += 1
@@ -122,8 +131,16 @@ def create_app(
         raise ValueError("atom retrieval service requires an extracted corpus")
     app = FastAPI(title="Mnemotree evidence memory", docs_url=None, redoc_url=None)
 
-    def authorize(authorization: Annotated[str | None, Header()] = None) -> None:
-        if not hmac.compare_digest((authorization or "").encode(), f"Bearer {api_key}".encode()):
+    expected = api_key.encode()
+
+    def authorize(
+        authorization: Annotated[str | None, Header()] = None,
+        x_api_key: Annotated[str | None, Header()] = None,
+    ) -> None:
+        # AML sends the registered scheme: Bearer, Token or an X-Api-Key header.
+        scheme, _, token = (authorization or "").partition(" ")
+        presented = token if scheme.lower() in ("bearer", "token") else x_api_key
+        if not hmac.compare_digest((presented or "").encode(), expected):
             raise HTTPException(status_code=401, detail="invalid credentials")
 
     @app.get("/health")
@@ -171,11 +188,10 @@ def create_app(
         query = request.query
         if request.options:
             query += "\n" + "\n".join(request.options)
+        # Returning fewer than top_k is valid; returning more is a contract error.
+        limit = min(request.top_k, MAX_TOP_K)
         search_options = options.model_copy(
-            update={
-                "limit": request.top_k,
-                "candidate_limit": max(options.candidate_limit, request.top_k),
-            }
+            update={"limit": limit, "candidate_limit": max(options.candidate_limit, limit)}
         )
         try:
             result = await memory.search(request.user_id, query, options=search_options)

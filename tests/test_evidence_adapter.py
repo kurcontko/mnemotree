@@ -62,9 +62,26 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
             assert (
                 await client.post("/v1/memories/search", json={**request, "user_id": "other"})
             ).json() == {"data": []}
+            # Oversized top_k is clamped (a 4xx is never retried); unknown keys are ignored.
+            response = await client.post(
+                "/v1/memories/search", json={**request, "top_k": 500, "run_id": "x"}
+            )
+            assert response.status_code == 200 and len(response.json()["data"]) == 1
             assert (
-                await client.post("/v1/memories/search", json={**request, "top_k": 101})
+                await client.post("/v1/memories/search", json={**request, "top_k": 0})
             ).status_code == 422
+            replay = {**payload, "extra": {"ignored": True}}
+            assert (await client.post("/v1/memories/add", json=replay)).status_code == 200
+            for headers in ({"Authorization": "Token test-key"}, {"X-Api-Key": "test-key"}):
+                response = await client.post(
+                    "/v1/memories/search", json=request, headers={"Authorization": "", **headers}
+                )
+                assert response.status_code == 200
+            for headers in ({"Authorization": "Bearer wrong"}, {"X-Api-Key": "wrong"}):
+                response = await client.post(
+                    "/v1/memories/search", json=request, headers={"Authorization": "", **headers}
+                )
+                assert response.status_code == 401
             assert (
                 await client.post("/v1/memories/search", json={**request, "query": []})
             ).status_code == 422
