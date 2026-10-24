@@ -1,5 +1,6 @@
 import asyncio
-from datetime import UTC, datetime
+import random
+from datetime import UTC, datetime, timezone
 from importlib import import_module
 
 import pytest
@@ -8,6 +9,7 @@ from mnemotree import Memory, Message, SearchOptions
 from mnemotree.evidence import EmbeddingSpec, IngestConflict, IngestReceipt
 from mnemotree.evidence.engine import QUERY_EMBED_CHARS, fuse
 from mnemotree.evidence.models import Chunk
+from mnemotree.evidence.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
 from mnemotree.evidence.store import vector_blob
 
 
@@ -438,3 +440,14 @@ async def test_role_stack_options(tmp_path):
         ] == 4
         with pytest.raises(ValueError, match="deep_candidate_limit"):
             SearchOptions(limit=50, candidate_limit=50, deep_candidate_limit=10)
+
+
+@pytest.mark.parametrize("encoding", sorted(LINE_SAFE_ENCODINGS))
+def test_counter_by_piece_matches_whole_text(encoding):
+    counter = TiktokenCounter(encoding)
+    parts = ["\n", "\n\n", "\r\n", " ", "  ", "\t", "\u2028", "\xa0", "\u0085", "<|endoftext|>"]
+    parts += [".", "/", "[", "]", "-", ":", "'s", "'S", "word", "Word", "12345", "é", "日本"]
+    rng = random.Random(0)
+    for _ in range(3000):
+        text = "".join(rng.choice(parts) for _ in range(rng.randrange(1, 40)))
+        assert counter.count(text) == len(counter.encoding.encode(text, disallowed_special=()))

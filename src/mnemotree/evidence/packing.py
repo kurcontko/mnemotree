@@ -1,6 +1,8 @@
 """Exact token accounting and deterministic evidence selection."""
 
+import re
 from collections.abc import Sequence
+from functools import lru_cache
 from importlib.metadata import version
 
 import tiktoken
@@ -8,15 +10,29 @@ import tiktoken
 from .models import ContextSpan, Evidence
 from .protocols import TokenCounter
 
+# In these encodings no pre-token runs past a line break followed by anything but
+# whitespace or "/", so the pieces between such breaks count exactly as the whole.
+LINE_SAFE_ENCODINGS = frozenset({"o200k_base", "cl100k_base"})
+_PIECE_BREAK = re.compile(r"(?<=\n)(?=[^\s/])")
+
 
 class TiktokenCounter:
     # gpt-4o-family encoding; AML's answer model and its tokenizer are unpublished.
     def __init__(self, encoding: str = "o200k_base") -> None:
         self.encoding = tiktoken.get_encoding(encoding)
         self.signature = f"tiktoken:{version('tiktoken')}:{encoding}"
+        # Packing re-renders a block for every merge and neighbor it tries, so the
+        # same lines are counted many times; each piece is encoded once.
+        self._piece_count = lru_cache(maxsize=1 << 16)(self._encoded_length)
+        self._by_piece = encoding in LINE_SAFE_ENCODINGS
+
+    def _encoded_length(self, text: str) -> int:
+        return len(self.encoding.encode(text, disallowed_special=()))
 
     def count(self, text: str) -> int:
-        return len(self.encoding.encode(text, disallowed_special=()))
+        if not self._by_piece:
+            return self._encoded_length(text)
+        return sum(map(self._piece_count, _PIECE_BREAK.split(text)))
 
 
 def pack(
@@ -54,7 +70,7 @@ def pack(
             and member.seq is not None
             and item.seq is not None
             and abs(member.seq - item.seq) <= merge_reach
-            for member in block.members()
+            for member in (block, *block.merged)
         )
 
     for original in evidence:

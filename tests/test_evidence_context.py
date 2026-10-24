@@ -273,6 +273,27 @@ def test_relative_dates_resolve_against_the_message_time():
     assert resolve("yesterday", None) == []
 
 
+def test_every_rule_match_contains_one_of_its_keywords():
+    import random
+
+    from mnemotree.evidence.temporal import KEYWORDS, RULES
+
+    vocabulary = ["Yesterday", "LAST", "night", "today", "Tonight", "this", "past", "morning"]
+    vocabulary += ["tomorrow", "week", "weekend", "month", "year", "Next", "ago", "days", "weeks"]
+    vocabulary += ["months", "years", "on", "Saturday", "monday", "SUNDAY", "."]
+    vocabulary += ["the day before yesterday", "The Day After Tomorrow", "two days ago", "3 weeks"]
+    vocabulary += ["a couple of", "a month ago", "few years ago", "this past Friday"]
+    rng = random.Random(0)
+    matched = set()
+    for _ in range(5000):
+        text = " ".join(rng.choice(vocabulary) for _ in range(rng.randrange(1, 12)))
+        for index, ((pattern, _), keywords) in enumerate(zip(RULES, KEYWORDS, strict=True)):
+            for match in pattern.finditer(text):
+                matched.add(index)
+                assert any(word in match.group(0).lower() for word in keywords), text
+    assert matched == set(range(len(RULES)))
+
+
 @pytest.mark.parametrize(
     "text",
     [

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -155,7 +156,7 @@ class Evidence(Record):
         message are joined, and "..." marks skipped messages within a block.
         """
         by_source: dict[str, list[Evidence | ContextSpan]] = {}
-        for member in self.members():
+        for member in (self, *self.merged):
             for span in (member, *member.neighbors):
                 by_source.setdefault(span.source_id, []).append(span)
         lines: list[tuple[tuple[int, int], int | None, str]] = []
@@ -183,6 +184,17 @@ class Evidence(Record):
 
 
 def render_line(timestamp: datetime | None, role: str, text: str) -> str:
+    # Equal instants in different zones print differently, so the offset is part of the key.
+    offset = timestamp.utcoffset() if timestamp is not None else None
+    return _render_line(timestamp, offset, role, text)
+
+
+# Packing re-renders a block for every merge and neighbor it tries; the date notes are
+# the costly part of a line, so each line is rendered once.
+@lru_cache(maxsize=1 << 14)
+def _render_line(
+    timestamp: datetime | None, _offset: timedelta | None, role: str, text: str
+) -> str:
     if timestamp is None:
         return f"{role}: {text}"
     # Weekday helps resolve "last Friday"; computed directly to stay locale-free.

@@ -126,6 +126,21 @@ RULES: list[tuple[re.Pattern[str], Rule]] = [
         lambda m, t, s: _day(_weekday(t, m.group(1), 1 if _future(s, m.start()) else -1)),
     ),
 ]
+# Words every match of the rule at the same index contains (case aside); a rule whose words
+# are all absent from a message cannot match, so it is skipped.
+_LAST, _THIS, _NEXT = ("last",), ("this",), ("next",)
+KEYWORDS: list[tuple[str, ...]] = [
+    ("yesterday",),
+    ("yesterday", "night"),
+    ("today", "tonight", "this"),
+    ("tomorrow",),
+    ("tomorrow",),
+    *(_LAST, _THIS, _NEXT) * 3,
+    *(("ago",),) * 4,
+    WEEKDAYS,
+    WEEKDAYS,
+    WEEKDAYS,
+]
 
 
 def resolve(text: str, anchor: datetime | None) -> list[str]:
@@ -137,8 +152,12 @@ def resolve(text: str, anchor: datetime | None) -> list[str]:
     """
     if anchor is None:
         return []
+    # For ASCII text a lowercase substring test finds a keyword exactly where re.I would.
+    lowered = text.lower() if text.isascii() else None
     found: list[tuple[int, int, str]] = []
-    for pattern, rule in RULES:
+    for (pattern, rule), words in zip(RULES, KEYWORDS, strict=True):
+        if lowered is not None and not any(word in lowered for word in words):
+            continue
         for match in pattern.finditer(text):
             start, end = match.span()
             if any(start < taken_end and taken_start < end for taken_start, taken_end, _ in found):
