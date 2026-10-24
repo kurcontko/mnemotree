@@ -324,6 +324,16 @@ class Memory:
             overflow: list[Candidate] = []
             if options.chunks_per_source is not None:
                 candidates, overflow = cap_per_source(candidates, options.chunks_per_source)
+                # Complete each anchored message: the chunks of a long record that no
+                # channel retrieved follow its anchor, placed only into unused budget, so
+                # a trajectory or document is served whole when the budget allows.
+                known = {c.chunk.id for c in candidates} | {c.chunk.id for c in overflow}
+                anchored = list(dict.fromkeys(c.chunk.source_id for c in candidates))
+                for chunks in self.store.source_chunks(namespace, anchored).values():
+                    for chunk in chunks:
+                        if chunk.id not in known:
+                            known.add(chunk.id)
+                            overflow.append(Candidate(chunk=chunk, fusion_score=0.0, channels={}))
             for candidate in overflow:
                 windows[candidate.chunk.id] = self.store.window(
                     namespace, candidate.chunk, options.neighbor_chunks

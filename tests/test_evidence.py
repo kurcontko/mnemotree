@@ -535,3 +535,108 @@ def test_model_query_is_token_aware():
     cjk = "华沙是波兰的首都，也是最大的城市。" * 700
     assert counter.count(cjk) > QUERY_EMBED_TOKENS
     assert counter.count(model_query(cjk, counter=counter)) <= QUERY_EMBED_TOKENS
+
+
+def service_like(**overrides) -> SearchOptions:
+    """The AML service defaults (hybrid), for packaging tests with the toy embedder."""
+    values = {
+        "mode": "hybrid",
+        "limit": 100,
+        "token_budget": 8000,
+        "neighbor_messages": 1,
+        "merge_blocks": True,
+        "chunks_per_source": 1,
+        "role_first": "user",
+        "role_first_min_assistant_share": 0.65,
+        "candidate_limit": 100,
+        "deep_candidate_limit": 300,
+        "deep_history_density": 2.0,
+    }
+    values.update(overrides)
+    return SearchOptions(**values)
+
+
+async def test_packaging_does_not_decide_what_survives(tmp_path):
+    """The same information packaged as different transport messages yields the same evidence."""
+    steps = [
+        f"step {i}: open table t{i} and read column c{i}; observation: value v{i}."
+        for i in range(40)
+    ]
+    final = "final observation: the migration finished with 7 warnings and task 289 is complete."
+    trace = "\n".join(steps + [final])
+    with Memory(
+        tmp_path / "m.db", embedder=ToyEmbedder(), chunk_size=400, chunk_overlap=40
+    ) as memory:
+        # One trajectory message vs. the same ordered trace as several messages.
+        await memory.add(
+            "one", [Message(content=trace, role="user", id="t")], request_id="r", session_id="s"
+        )
+        parts = [
+            Message(content="\n".join(steps[i : i + 8]), role="user", id=f"p{i}")
+            for i in range(0, 40, 8)
+        ]
+        parts.append(Message(content=final, role="user", id="pf"))
+        await memory.add("many", parts, request_id="r", session_id="s")
+        for user in ("one", "many"):
+            result = await memory.search(user, "task 289 warnings", options=service_like())
+            assert "7 warnings" in result.context, user
+            assert "step 0:" in result.context, user  # the record, not just the matching line
+
+        # One document vs. its sections; the needed fact sits in the last section.
+        sections = [
+            f"Section {i}. " + f"Background material about topic {i}. " * 12 for i in range(6)
+        ]
+        sections.append("Section 6. Appendix: the reactor's rated output is 412 megawatts.")
+        await memory.add(
+            "doc",
+            [Message(content="\n\n".join(sections), role="user", id="d")],
+            request_id="r",
+            session_id="s",
+        )
+        await memory.add(
+            "secs",
+            [Message(content=text, role="user", id=f"s{i}") for i, text in enumerate(sections)],
+            request_id="r",
+            session_id="s",
+        )
+        for user in ("doc", "secs"):
+            result = await memory.search(user, "rated output megawatts", options=service_like())
+            assert "412 megawatts" in result.context, user
+
+        # A human/human chat as user/assistant pairs vs. all-user with names in content.
+        turns = [
+            (("Caroline", "Mel")[i % 2], f"chat line {i} about everyday things") for i in range(30)
+        ]
+        turns[17] = ("Mel", "I went to the LGBTQ support group yesterday and it was powerful.")
+        await memory.add(
+            "pairs",
+            [
+                Message(content=t, role=("user", "assistant")[i % 2], id=f"a{i}")
+                for i, (_, t) in enumerate(turns)
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        await memory.add(
+            "named",
+            [
+                Message(content=f"{who}: {t}", role="user", id=f"b{i}")
+                for i, (who, t) in enumerate(turns)
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        assert memory.store.assistant_share("pairs") < 0.65  # a person, so no role reordering
+        for user in ("pairs", "named"):
+            result = await memory.search(user, "support group", options=service_like())
+            assert "LGBTQ support group" in result.context, user
+            assert result.evidence[0].source_id in ("a17", "b17"), user
+
+        # A required observation at the end of a long source is not found only on its prefix.
+        long = " ".join(f"routine entry {i} with nothing notable." for i in range(300))
+        long += " Unexpected: the pressure valve failed at 03:14 and was replaced."
+        await memory.add(
+            "tail", [Message(content=long, role="user", id="l")], request_id="r", session_id="s"
+        )
+        result = await memory.search("tail", "pressure valve failed", options=service_like())
+        assert "03:14" in result.context
