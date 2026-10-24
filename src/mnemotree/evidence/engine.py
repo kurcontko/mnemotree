@@ -76,16 +76,23 @@ def fuse(
     return sorted(candidates, key=lambda candidate: (-candidate.fusion_score, candidate.chunk.id))
 
 
-def cap_per_source(candidates: Sequence[Candidate], per_source: int) -> list[Candidate]:
-    """Keep the best `per_source` candidates of each source message, in the given order."""
+def cap_per_source(
+    candidates: Sequence[Candidate], per_source: int
+) -> tuple[list[Candidate], list[Candidate]]:
+    """Split candidates into the best `per_source` of each source message and the rest.
+
+    Both lists keep the given order. The rest is not discarded: the packer adds it
+    once anchors and their neighbors have been placed, so a history that is one long
+    document is not served as a single chunk of it.
+    """
     seen: dict[str, int] = {}
-    kept = []
+    kept: list[Candidate] = []
+    overflow: list[Candidate] = []
     for candidate in candidates:
         count = seen.get(candidate.chunk.source_id, 0)
-        if count < per_source:
-            kept.append(candidate)
-            seen[candidate.chunk.source_id] = count + 1
-    return kept
+        (kept if count < per_source else overflow).append(candidate)
+        seen[candidate.chunk.source_id] = count + 1
+    return kept, overflow
 
 
 def role_first(
@@ -298,8 +305,13 @@ class Memory:
                 k=options.rrf_k,
                 ranks=atom_ranks,
             )
+            overflow: list[Candidate] = []
             if options.chunks_per_source is not None:
-                candidates = cap_per_source(candidates, options.chunks_per_source)
+                candidates, overflow = cap_per_source(candidates, options.chunks_per_source)
+            for candidate in overflow:
+                windows[candidate.chunk.id] = self.store.window(
+                    namespace, candidate.chunk, options.neighbor_chunks
+                )
             for candidate in candidates:
                 windows[candidate.chunk.id] = self.store.window(
                     namespace, candidate.chunk, options.neighbor_chunks
@@ -329,38 +341,42 @@ class Memory:
                 key=lambda item: (-(item.rerank_score or 0.0), -item.fusion_score, item.chunk.id)
             )
         rerank_ms = (perf_counter() - rerank_start) * 1000
-        if options.role_first is not None:
+        if options.role_first is not None and (
+            options.role_first_min_assistant_share is None
+            or self.store.assistant_share(namespace) >= options.role_first_min_assistant_share
+        ):
             candidates = role_first(
                 candidates, {cid: windows[cid][0].role for cid in windows}, options.role_first
             )
-        evidence = []
-        for candidate in candidates:
+
+        def to_evidence(candidate: Candidate, context: tuple[ContextSpan, ...]) -> Evidence:
             source, start, end = windows[candidate.chunk.id]
-            evidence.append(
-                Evidence(
-                    id=candidate.chunk.id,
-                    source_id=source.id,
-                    session_id=source.session_id,
-                    role=source.role,
-                    timestamp=source.timestamp,
-                    start=start,
-                    end=end,
-                    text=source.content[start:end],
-                    score=candidate.fusion_score,
-                    channels=candidate.channels,
-                    rerank_score=candidate.rerank_score,
-                    request_id=source.request_id if options.neighbor_messages else None,
-                    position=source.position if options.neighbor_messages else None,
-                    seq=source.session_seq,
-                    neighbors=neighbors[candidate.chunk.id],
-                )
+            return Evidence(
+                id=candidate.chunk.id,
+                source_id=source.id,
+                session_id=source.session_id,
+                role=source.role,
+                timestamp=source.timestamp,
+                start=start,
+                end=end,
+                text=source.content[start:end],
+                score=candidate.fusion_score,
+                channels=candidate.channels,
+                rerank_score=candidate.rerank_score,
+                request_id=source.request_id if options.neighbor_messages else None,
+                position=source.position if options.neighbor_messages else None,
+                seq=source.session_seq,
+                neighbors=context,
             )
+
+        evidence = [to_evidence(c, neighbors[c.chunk.id]) for c in candidates]
         packing_start = perf_counter()
         selected, context, tokens, omitted = pack(
             evidence,
             self.counter,
             budget=options.token_budget,
             limit=options.limit,
+            overflow=[to_evidence(c, ()) for c in overflow],
             # Anchors whose neighbor windows would touch share one item.
             merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
         )

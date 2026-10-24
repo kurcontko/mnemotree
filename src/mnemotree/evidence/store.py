@@ -339,6 +339,17 @@ class SQLiteEvidenceStore:
             )
             return receipt
 
+    def assistant_share(self, namespace: str) -> float:
+        """Share of the namespace's message characters carried by assistant turns."""
+        scope(namespace)
+        with self._lock:
+            row = self.db.execute(
+                "SELECT COALESCE(SUM(CASE WHEN role='assistant' THEN LENGTH(content) END), 0), "
+                "COALESCE(SUM(LENGTH(content)), 0) FROM evidence_sources WHERE namespace=?",
+                (namespace,),
+            ).fetchone()
+        return int(row[0]) / int(row[1]) if row[1] else 0.0
+
     def chunk_density(self, namespace: str) -> float:
         """Chunks per stored message in the namespace (0.0 when empty)."""
         scope(namespace)

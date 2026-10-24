@@ -164,6 +164,10 @@ def aml_options(memory: Memory) -> SearchOptions:
         # history's chunks per message (BEAM 2.1-3.7, LME <= 1.7, LoCoMo 1.0).
         chunks_per_source=1,
         role_first="user",
+        # Not in a human/human chat sent as user/assistant pairs: the "assistant" is a
+        # person there and ordering by role cost 1.3 LoCoMo coverage points. Those chats
+        # are 43-53% assistant text; every LLM-assistant set is 76% or more.
+        role_first_min_assistant_share=0.65,
         candidate_limit=100,
         deep_candidate_limit=300,
         deep_history_density=2.0,

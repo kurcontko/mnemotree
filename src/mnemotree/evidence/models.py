@@ -227,6 +227,11 @@ class SearchOptions(Record):
     # fusion order). Labelled evidence in long assistant/user histories is mostly
     # the user's short turns while most tokens are the assistant's.
     role_first: str | None = None
+    # Apply role_first only when at least this share of the history's characters is
+    # assistant text. In a human/human chat sent as user/assistant pairs the
+    # "assistant" is a person whose turns are evidence too; such chats sit at
+    # 0.43-0.53 while every LLM-assistant set measured is at 0.76 or above.
+    role_first_min_assistant_share: float | None = Field(default=None, ge=0, le=1)
     # Use a deeper candidate pool when the user's history averages more than
     # deep_history_density chunks per message (long assistant turns crowd the pool).
     deep_candidate_limit: int | None = Field(default=None, ge=1, le=2000)

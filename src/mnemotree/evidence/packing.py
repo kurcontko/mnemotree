@@ -42,8 +42,13 @@ def pack(
     budget: int,
     limit: int,
     merge_reach: int | None = None,
+    overflow: Sequence[Evidence] = (),
 ) -> tuple[tuple[Evidence, ...], str, int, tuple[str, ...]]:
     """Select ranked anchors, then add their neighbors while the budget allows.
+
+    ``overflow`` holds lower-priority spans (further chunks of messages already
+    anchored); they are placed last, only into budget the anchors and neighbors
+    left unused, so a long single-message history is not cut to one chunk.
 
     The budget is the sum of each returned item's exact token count: AML
     receives items separately, and counting per item means a change re-counts
@@ -55,7 +60,7 @@ def pack(
     counts: list[int] = []
     covered: dict[str, list[tuple[int, int]]] = {}
     omitted = []
-    by_id = {item.id: item for item in evidence}
+    by_id = {item.id: item for item in (*evidence, *overflow)}
 
     def contained(source_id: str, start: int, end: int) -> bool:
         return any(low <= start and high >= end for low, high in covered.get(source_id, ()))
@@ -73,35 +78,38 @@ def pack(
             for member in (block, *block.merged)
         )
 
-    for original in evidence:
-        # First reserve room for ranked anchors. Neighbor text only uses what
-        # remains, so a large adjacent turn cannot evict its matching evidence.
-        item = original.model_copy(update={"neighbors": ()}) if original.neighbors else original
-        if contained(item.source_id, item.start, item.end):
-            omitted.append(item.id)
-            continue
-        touching = [index for index, block in enumerate(selected) if touches(block, item)]
-        if not touching and len(selected) >= limit:
-            omitted.append(item.id)
-            continue
-        if touching:
-            members = [member for index in touching for member in selected[index].members()]
-            members.insert(len(selected[touching[0]].members()), item)
-            block = members[0].model_copy(update={"merged": tuple(members[1:])})
-        else:
-            block = item
-        count = counter.count(block.render())
-        if sum(counts) - sum(counts[index] for index in touching) + count > budget:
-            omitted.append(item.id)
-            continue
-        for index in reversed(touching[1:]):
-            del selected[index], counts[index]
-        if touching:
-            selected[touching[0]], counts[touching[0]] = block, count
-        else:
-            selected.append(block)
-            counts.append(count)
-        cover(item)
+    def place(items: Sequence[Evidence]) -> None:
+        for original in items:
+            item = original.model_copy(update={"neighbors": ()}) if original.neighbors else original
+            if contained(item.source_id, item.start, item.end):
+                omitted.append(item.id)
+                continue
+            touching = [index for index, block in enumerate(selected) if touches(block, item)]
+            if not touching and len(selected) >= limit:
+                omitted.append(item.id)
+                continue
+            if touching:
+                members = [member for index in touching for member in selected[index].members()]
+                members.insert(len(selected[touching[0]].members()), item)
+                block = members[0].model_copy(update={"merged": tuple(members[1:])})
+            else:
+                block = item
+            count = counter.count(block.render())
+            if sum(counts) - sum(counts[index] for index in touching) + count > budget:
+                omitted.append(item.id)
+                continue
+            for index in reversed(touching[1:]):
+                del selected[index], counts[index]
+            if touching:
+                selected[touching[0]], counts[touching[0]] = block, count
+            else:
+                selected.append(block)
+                counts.append(count)
+            cover(item)
+
+    # First reserve room for ranked anchors. Neighbor text only uses what
+    # remains, so a large adjacent turn cannot evict its matching evidence.
+    place(evidence)
     for index in range(len(selected)):
         for position, member in enumerate(selected[index].members()):
             for neighbor in by_id[member.id].neighbors:
@@ -116,5 +124,7 @@ def pack(
                 if sum(counts) - counts[index] + count <= budget:
                     selected[index], counts[index] = block, count
                     cover(neighbor)
+    # Last, the remaining chunks of already-anchored messages, into unused budget.
+    place(overflow)
     context = "\n\n".join(entry.render() for entry in selected)
     return tuple(selected), context, sum(counts), tuple(omitted)

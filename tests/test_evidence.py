@@ -440,6 +440,67 @@ async def test_role_stack_options(tmp_path):
         ] == 4
         with pytest.raises(ValueError, match="deep_candidate_limit"):
             SearchOptions(limit=50, candidate_limit=50, deep_candidate_limit=10)
+        # role_first applies only where the assistant carries most of the text.
+        gated = SearchOptions(
+            mode="lexical",
+            limit=100,
+            chunks_per_source=1,
+            role_first="user",
+            role_first_min_assistant_share=0.65,
+        )
+        assert memory.store.assistant_share("alice") > 0.9
+        roles = [
+            item.role for item in (await memory.search("alice", "apple", options=gated)).evidence
+        ]
+        assert roles[:6] == ["user"] * 6
+        await memory.add(
+            "carol",
+            [
+                Message(
+                    content=f"apple {i} for carol", role=("user", "assistant")[i % 2], id=f"c{i}"
+                )
+                for i in range(8)
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        roles = [
+            item.role for item in (await memory.search("carol", "apple", options=gated)).evidence
+        ]
+        assert 0.4 < memory.store.assistant_share("carol") < 0.6
+        assert "assistant" in roles[:2]  # a human/human chat keeps fusion order
+
+
+async def test_capped_chunks_fill_unused_budget(tmp_path):
+    with Memory(tmp_path / "m.db", chunk_size=300, chunk_overlap=50) as memory:
+        paragraphs = [
+            f"Paragraph {i}: the report discusses topic {i} in detail. " * 4 for i in range(8)
+        ]
+        document = "\n".join(paragraphs)
+        await memory.add(
+            "dana",
+            [Message(content=document, role="user", id="doc")],
+            request_id="r",
+            session_id="s",
+        )
+        assert memory.store.chunk_density("dana") > 5
+        capped = SearchOptions(
+            mode="lexical",
+            limit=100,
+            chunks_per_source=1,
+            token_budget=8000,
+            neighbor_messages=1,
+            merge_blocks=True,
+        )
+        result = await memory.search("dana", "report topic 7", options=capped)
+        # One message, one item, but the whole document rather than one chunk of it.
+        assert len(result.evidence) == 1
+        assert "Paragraph 0" in result.context and "Paragraph 7" in result.context
+        assert result.trace.packed_tokens > 400
+        tight = capped.model_copy(update={"token_budget": 120})
+        small = await memory.search("dana", "report topic 7", options=tight)
+        assert small.trace.packed_tokens <= 120 and "Paragraph 7" in small.context
+        assert small.context.count("Paragraph") < result.context.count("Paragraph")
 
 
 @pytest.mark.parametrize("encoding", sorted(LINE_SAFE_ENCODINGS))
