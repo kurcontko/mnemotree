@@ -261,6 +261,12 @@ class SearchTrace(Record):
     # measured chunks per message when that gate was evaluated.
     candidate_limit: int = 0
     chunk_density: float | None = None
+    # Counts use the configured local tokenizer, which may differ from the provider's.
+    original_model_query_tokens: int = 0
+    model_query_tokens: int = 0
+    model_query_truncated: bool = False
+    assistant_share: float | None = None
+    role_first_applied: bool = False
 
 
 class SearchResult(Record):
