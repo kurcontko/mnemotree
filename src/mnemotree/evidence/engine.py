@@ -29,7 +29,11 @@ from .protocols import Embedder, Reranker, TokenCounter
 from .store import SQLiteEvidenceStore, now, vector_blob
 
 # Embedding APIs cap their input (text-embedding-v4: 8,192 tokens), and an AML query can
-# be a whole reference document. 6,000 characters stay under the cap even for CJK text.
+# be a whole reference document. The query is sent whole while it counts at most
+# QUERY_EMBED_TOKENS with the service tokenizer (o200k, a close proxy with margin);
+# beyond that its start and end are kept. Without a counter, 6,000 characters stay
+# under the provider cap even for CJK text, where a character is about one token.
+QUERY_EMBED_TOKENS = 6000
 QUERY_EMBED_CHARS = 6000
 
 
@@ -41,10 +45,22 @@ def chronological(item: Evidence) -> tuple[int, float, int]:
     return (0, min(stamps), seq) if stamps else (1, 0.0, seq)
 
 
-def model_query(query: str, limit: int = QUERY_EMBED_CHARS) -> str:
-    """The query as sent to an embedder or reranker: its start and end when it is too long."""
+def model_query(
+    query: str, limit: int = QUERY_EMBED_CHARS, counter: TokenCounter | None = None
+) -> str:
+    """The query as sent to an embedder or reranker: its start and end when it is too long.
+
+    With a ``counter`` the limit is QUERY_EMBED_TOKENS tokens, so a long Latin-script
+    query (about four characters per token) is embedded whole far past ``limit`` chars.
+    """
     if len(query) <= limit:
         return query
+    if counter is not None:
+        tokens = counter.count(query)
+        if tokens <= QUERY_EMBED_TOKENS:
+            return query
+        # Keep the character budget that the token budget implies for this text.
+        limit = max(limit, int(len(query) * QUERY_EMBED_TOKENS / tokens * 0.95))
     half = limit // 2
     return query[:half] + "\n...\n" + query[-half:]
 
@@ -249,7 +265,7 @@ class Memory:
         if options.mode in ("dense", "hybrid"):
             if self.embedder is None:
                 raise ValueError("dense/hybrid retrieval requires the indexed embedder")
-            query_vector = await self.embedder.embed_query(model_query(query))
+            query_vector = await self.embedder.embed_query(model_query(query, counter=self.counter))
         embedding_ms = (perf_counter() - started) * 1000
         retrieval_start = perf_counter()
         channels: dict[str, list[tuple[Chunk, float]]] = {}
@@ -328,7 +344,8 @@ class Memory:
         if self.reranker and candidates:
             scores = list(
                 await self.reranker.score(
-                    model_query(query), [item.chunk.text for item in candidates]
+                    model_query(query, counter=self.counter),
+                    [item.chunk.text for item in candidates],
                 )
             )
             if len(scores) != len(candidates) or not all(math.isfinite(score) for score in scores):

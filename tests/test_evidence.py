@@ -7,7 +7,7 @@ import pytest
 
 from mnemotree import Memory, Message, SearchOptions
 from mnemotree.evidence import EmbeddingSpec, IngestConflict, IngestReceipt
-from mnemotree.evidence.engine import QUERY_EMBED_CHARS, fuse
+from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
 from mnemotree.evidence.models import Chunk
 from mnemotree.evidence.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
 from mnemotree.evidence.store import vector_blob
@@ -358,10 +358,12 @@ async def test_long_queries_are_clipped_for_the_embedder(tmp_path):
     embedder = Recording()
     with Memory(tmp_path / "memory.db", embedder=embedder) as memory:
         await add(memory)
-        query = "apple " + "filler " * 5000 + "orchard question"
+        query = "apple " + "filler " * 12000 + "orchard question"
         result = await memory.search("alice", query, options=SearchOptions(mode="hybrid"))
     assert result.evidence
-    assert len(embedder.query) <= QUERY_EMBED_CHARS + 5
+    # Clipped by tokens, not characters: well past the character cap, under the token cap.
+    assert QUERY_EMBED_CHARS < len(embedder.query) < len(query)
+    assert memory.counter.count(embedder.query) <= QUERY_EMBED_TOKENS
     assert embedder.query.startswith("apple ") and embedder.query.endswith("orchard question")
 
 
@@ -512,3 +514,24 @@ def test_counter_by_piece_matches_whole_text(encoding):
     for _ in range(3000):
         text = "".join(rng.choice(parts) for _ in range(rng.randrange(1, 40)))
         assert counter.count(text) == len(counter.encoding.encode(text, disallowed_special=()))
+
+
+def test_model_query_is_token_aware():
+    from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, model_query
+
+    counter = TiktokenCounter("o200k_base")
+    latin = (
+        "The committee reviewed the quarterly report and noted several open items. " * 160
+    ).strip()
+    assert len(latin) > QUERY_EMBED_CHARS and counter.count(latin) < QUERY_EMBED_TOKENS
+    # Without a counter the character cap applies; with one, the whole query is sent.
+    assert "\n...\n" in model_query(latin)
+    assert model_query(latin, counter=counter) == latin
+    huge = latin * 6
+    assert counter.count(huge) > QUERY_EMBED_TOKENS
+    cut = model_query(huge, counter=counter)
+    assert "\n...\n" in cut and counter.count(cut) <= QUERY_EMBED_TOKENS
+    assert cut.startswith(huge[:100]) and cut.endswith(huge[-100:])
+    cjk = "华沙是波兰的首都，也是最大的城市。" * 700
+    assert counter.count(cjk) > QUERY_EMBED_TOKENS
+    assert counter.count(model_query(cjk, counter=counter)) <= QUERY_EMBED_TOKENS
