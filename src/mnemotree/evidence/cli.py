@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from .engine import Memory
-from .evaluation import CorpusRecord, ablate, ablate_context, evaluate, read_jsonl
+from .evaluation import CorpusRecord, ablate, ablate_context, ablate_retrieval, evaluate, read_jsonl
 from .models import Record, SearchOptions
 from .packing import TiktokenCounter
 from .protocols import Embedder
@@ -83,6 +83,13 @@ def nonnegative(value: str) -> int:
     return number
 
 
+def positive(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be a positive count")
+    return number
+
+
 def configure_logging() -> None:
     """Print the service's JSON lines on stdout; uvicorn configures only its own loggers."""
     handler = logging.StreamHandler(sys.stdout)
@@ -139,10 +146,12 @@ def main() -> None:
     search = commands.add_parser("search")
     search.add_argument("namespace")
     search.add_argument("query")
+    search.add_argument("--option", action="append", help="an answer option; may be repeated")
     evaluation = commands.add_parser("evaluate", help="source recall; requires an empty database")
     evaluation.add_argument("corpus", type=Path)
     evaluation.add_argument("queries", type=Path)
     evaluation.add_argument("--output", type=Path, required=True)
+    evaluation.add_argument("--candidate-k", type=positive, default=100)
     ablation = commands.add_parser(
         "ablate", help="ingest once; compare raw, atoms, and combined retrieval"
     )
@@ -155,6 +164,14 @@ def main() -> None:
     context_ablation.add_argument("corpus", type=Path)
     context_ablation.add_argument("queries", type=Path)
     context_ablation.add_argument("--output", type=Path, required=True)
+    retrieval_ablation = commands.add_parser(
+        "ablate-retrieval",
+        help="ingest once; compare retrieval, role, query, context and budget policies",
+    )
+    retrieval_ablation.add_argument("corpus", type=Path)
+    retrieval_ablation.add_argument("queries", type=Path)
+    retrieval_ablation.add_argument("--output", type=Path, required=True)
+    retrieval_ablation.add_argument("--candidate-k", type=positive, default=100)
     serve = commands.add_parser("serve", help="requires the serve extra and a bearer key")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
@@ -243,13 +260,22 @@ async def run(args, memory: Memory, options: SearchOptions) -> None:
             )
             print(receipt.model_dump_json())
     elif args.command == "search":
-        result = await memory.search(args.namespace, args.query, options=options)
+        result = await memory.search(
+            args.namespace, args.query, options=options, query_options=args.option
+        )
         print(result.model_dump_json(indent=2))
-    elif args.command in ("evaluate", "ablate", "ablate-context"):
-        evaluator = {"evaluate": evaluate, "ablate": ablate, "ablate-context": ablate_context}[
-            args.command
-        ]
-        report = await evaluator(memory, args.corpus, args.queries, options)
+    elif args.command in ("evaluate", "ablate", "ablate-context", "ablate-retrieval"):
+        if args.command in ("evaluate", "ablate-retrieval"):
+            evaluator = evaluate if args.command == "evaluate" else ablate_retrieval
+            report = await evaluator(
+                memory, args.corpus, args.queries, options, candidate_k=args.candidate_k
+            )
+        else:
+            report = await (ablate if args.command == "ablate" else ablate_context)(
+                memory, args.corpus, args.queries, options
+            )
+        report["code_identity"] = code_identity()
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
