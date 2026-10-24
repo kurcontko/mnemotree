@@ -252,6 +252,10 @@ class SearchTrace(Record):
     tokenizer: str
     omitted_ids: tuple[str, ...]
     timings_ms: dict[str, float]
+    # Pool size each channel actually used (after the history-density gate), and the
+    # measured chunks per message when that gate was evaluated.
+    candidate_limit: int = 0
+    chunk_density: float | None = None
 
 
 class SearchResult(Record):

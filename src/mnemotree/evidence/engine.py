@@ -254,11 +254,11 @@ class Memory:
         # Concurrent writes cannot mix different versions in the returned evidence.
         with self.store.transaction(read=True):
             candidate_limit = options.candidate_limit
-            if (
-                options.deep_candidate_limit is not None
-                and self.store.chunk_density(namespace) > options.deep_history_density
-            ):
-                candidate_limit = options.deep_candidate_limit
+            chunk_density = None
+            if options.deep_candidate_limit is not None:
+                chunk_density = self.store.chunk_density(namespace)
+                if chunk_density > options.deep_history_density:
+                    candidate_limit = options.deep_candidate_limit
             if options.representation != "atoms" and options.mode in ("lexical", "hybrid"):
                 channels["lexical"] = self.store.lexical(namespace, query, candidate_limit)
             if options.representation != "atoms" and query_vector is not None:
@@ -393,6 +393,8 @@ class Memory:
                     "packing": (perf_counter() - packing_start) * 1000,
                     "total": (perf_counter() - started) * 1000,
                 },
+                candidate_limit=candidate_limit,
+                chunk_density=chunk_density,
             ),
         )
 

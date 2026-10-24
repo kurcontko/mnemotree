@@ -33,5 +33,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"
 
 # One process only: the SQLite store serialises access behind a single lock.
+# The request log (metadata only) is appended under /data/logs, created on startup.
 ENTRYPOINT ["mnemotree-evidence"]
-CMD ["--db", "/data/aml.sqlite", "--config", "/config/config.json", "serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["--db", "/data/aml.sqlite", "--config", "/config/config.json", "serve", "--host", "0.0.0.0", "--port", "8000", "--request-log", "/data/logs/requests.jsonl"]
