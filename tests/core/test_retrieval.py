@@ -255,6 +255,10 @@ async def test_vector_entity_recall_with_signals_and_updates():
 async def test_vector_entity_recall_structured_query_with_limit():
     m1 = _memory("m1", [1.0, 0.0])
     m2 = _memory("m2", [1.0, 0.0])
+    # Equal-scoring candidates retain store order; creation-time microseconds
+    # should not accidentally turn this limit test into a recency comparison.
+    m2.timestamp = m1.timestamp
+    m2.last_accessed = m1.last_accessed
     store = DummyStore(structured_memories=[m1, m2])
 
     retriever = VectorEntityRetriever(

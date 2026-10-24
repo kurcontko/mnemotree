@@ -859,6 +859,7 @@ class MemoryCore:
                         "last_accessed": memory.last_accessed,
                         "access_count": memory.access_count,
                         "access_history": memory.access_history,
+                        "importance": memory.importance,
                     },
                 )
             )

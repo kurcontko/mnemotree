@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Protocol, runtime_checkable
 
 from ..models import MemoryItem
@@ -42,10 +43,21 @@ class MemoryScorer:
         query_embedding: list[float] | None,
         _extra_signals: dict[str, Any] | None = None,
     ) -> list[MemoryItem]:
-        return self.scoring.filter_memories_by_score(
-            memories,
-            query_embedding=query_embedding,
-        )
+        current_time = datetime.now(timezone.utc)
+        scored = [
+            (
+                memory,
+                self.scoring.calculate_memory_score(
+                    memory,
+                    current_time=current_time,
+                    query_embedding=query_embedding,
+                ),
+            )
+            for memory in memories
+        ]
+        scored = [item for item in scored if item[1] >= self.scoring.score_threshold]
+        scored.sort(key=lambda item: item[1], reverse=True)
+        return [memory for memory, _score in scored]
 
 
 class SignalRanker:

@@ -98,13 +98,13 @@ class BM25Index:
     total_len: int = 0
 
     def add(self, memory_id: str, tokens: list[str]) -> None:
+        if memory_id in self.term_freqs:
+            self._remove(memory_id)
+
         if not tokens:
             self.term_freqs[memory_id] = Counter()
             self.doc_len[memory_id] = 0
             return
-
-        if memory_id in self.term_freqs:
-            self._remove(memory_id)
 
         term_freq = Counter(tokens)
         self.term_freqs[memory_id] = term_freq
@@ -115,9 +115,9 @@ class BM25Index:
             self.doc_freq[term] += 1
 
     def _remove(self, memory_id: str) -> None:
-        existing = self.term_freqs.get(memory_id)
-        if not existing:
+        if memory_id not in self.term_freqs:
             return
+        existing = self.term_freqs[memory_id]
         for term in existing:
             self.doc_freq[term] -= 1
             if self.doc_freq[term] <= 0:
