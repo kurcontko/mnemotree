@@ -2829,6 +2829,7 @@ all = [
     { name = "spacy" },
     { name = "sqlite-vec" },
     { name = "streamlit" },
+    { name = "tenacity" },
     { name = "urllib3" },
     { name = "uvicorn" },
     { name = "yake" },
@@ -2853,10 +2854,12 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "tenacity" },
     { name = "virtualenv" },
 ]
 embeddings = [
     { name = "httpx" },
+    { name = "tenacity" },
 ]
 google = [
     { name = "langchain-google-genai" },
@@ -3022,6 +3025,8 @@ requires-dist = [
     { name = "stanza", marker = "extra == 'ner-stanza'", specifier = ">=1.7.0" },
     { name = "streamlit", marker = "extra == 'all'", specifier = ">=1.40.0" },
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.40.0" },
+    { name = "tenacity", marker = "extra == 'dev'", specifier = ">=8.2,<10" },
+    { name = "tenacity", marker = "extra == 'embeddings'", specifier = ">=8.2,<10" },
     { name = "tiktoken", specifier = ">=0.7.0,<1.0.0" },
     { name = "torch", marker = "extra == 'ner-hf'", specifier = ">=2.0.0" },
     { name = "transformers", marker = "extra == 'ner-hf'", specifier = ">=4.38.0" },

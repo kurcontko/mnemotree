@@ -5,6 +5,15 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 
+from tenacity import (
+    AsyncRetrying,
+    RetryCallState,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+from tenacity.wait import wait_base
+
 from .models import EmbeddingSpec
 
 
@@ -21,11 +30,15 @@ class OpenAIEmbedder:
         timeout: float = 60.0,
         send_dimensions: bool = True,
         max_concurrency: int = 8,
+        max_attempts: int = 6,
+        backoff_seconds: float = 0.5,
     ) -> None:
         if not api_key or batch_size < 1 or timeout <= 0 or max_concurrency < 1:
             raise ValueError(
                 "api_key and positive batch_size, timeout, and max_concurrency are required"
             )
+        if max_attempts < 1 or backoff_seconds < 0:
+            raise ValueError("max_attempts must be positive and backoff_seconds non-negative")
         self.base_url = base_url.rstrip("/")
         self.spec = EmbeddingSpec(
             provider=self.base_url, model=model, dimensions=dimensions, revision=revision
@@ -35,23 +48,42 @@ class OpenAIEmbedder:
         # Batches of one call run concurrently; sequential batches made
         # ingestion of long histories latency-bound.
         self.max_concurrency = max_concurrency
+        # A rate limit, a provider outage or a dropped connection on one batch would
+        # otherwise fail the whole Add or Search; the platform retries only some of those.
+        self.max_attempts, self.backoff_seconds = max_attempts, backoff_seconds
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         import httpx
 
         limit = asyncio.Semaphore(self.max_concurrency)
 
+        retrying = AsyncRetrying(
+            retry=retry_if_exception(_retryable),
+            stop=stop_after_attempt(self.max_attempts),
+            wait=_RetryAfterOrBackoff(
+                wait_exponential_jitter(initial=self.backoff_seconds, max=16)
+            ),
+            reraise=True,
+        )
+
+        async def post(client: httpx.AsyncClient, body: dict[str, object]) -> httpx.Response:
+            async for attempt in retrying:
+                with attempt:
+                    async with limit:
+                        response = await client.post(
+                            self.base_url + "/embeddings",
+                            json=body,
+                            headers={"Authorization": f"Bearer {self.api_key}"},
+                        )
+                    response.raise_for_status()
+                    return response
+            raise AssertionError("unreachable")
+
         async def embed(client: httpx.AsyncClient, batch: list[str]) -> list[list[float]]:
             body: dict[str, object] = {"model": self.spec.model, "input": batch}
             if self.send_dimensions:
                 body["dimensions"] = self.spec.dimensions
-            async with limit:
-                response = await client.post(
-                    self.base_url + "/embeddings",
-                    json=body,
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                )
-            response.raise_for_status()
+            response = await post(client, body)
             rows = sorted(response.json()["data"], key=lambda row: row["index"])
             if [row["index"] for row in rows] != list(range(len(batch))):
                 raise ValueError("embedding response has missing or repeated indices")
@@ -67,6 +99,35 @@ class OpenAIEmbedder:
 
     async def embed_query(self, text: str) -> list[float]:
         return (await self.embed_documents([text]))[0]
+
+
+def _retryable(exc: BaseException) -> bool:
+    """Rate limits, provider outages and dropped connections; other 4xx fail at once."""
+    import httpx
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return status == 429 or status >= 500
+    return isinstance(exc, httpx.TransportError)
+
+
+class _RetryAfterOrBackoff(wait_base):
+    """Wait as long as a 429's Retry-After header asks (capped at 60 s), else back off."""
+
+    def __init__(self, fallback: wait_base) -> None:
+        self.fallback = fallback
+
+    def __call__(self, retry_state: RetryCallState) -> float:
+        import httpx
+
+        exc = retry_state.outcome.exception() if retry_state.outcome else None
+        if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+            header = exc.response.headers.get("retry-after", "")
+            try:
+                return min(max(float(header), 0.0), 60.0)
+            except ValueError:
+                pass
+        return self.fallback(retry_state)
 
 
 class SentenceTransformerEmbedder:
