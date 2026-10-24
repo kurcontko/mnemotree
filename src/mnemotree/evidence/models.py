@@ -223,15 +223,21 @@ class SearchOptions(Record):
     # Keep at most this many fused candidates per source message: long assistant
     # turns otherwise occupy several candidate slots and several returned items.
     chunks_per_source: int | None = Field(default=None, ge=1)
-    # Anchors of this role are selected before the others (each group keeps its
-    # fusion order). Labelled evidence in long assistant/user histories is mostly
-    # the user's short turns while most tokens are the assistant's.
+    # Anchors of this role receive either a hard stable partition or a bounded
+    # addition to their RRF score. A reranker runs after the bounded prior.
     role_first: str | None = None
-    # Apply role_first only when at least this share of the history's characters is
-    # assistant text. In a human/human chat sent as user/assistant pairs the
-    # "assistant" is a person whose turns are evidence too; such chats sit at
-    # 0.43-0.53 while every LLM-assistant set measured is at 0.76 or above.
+    # Fixed additive score units, not a probability or accuracy guarantee. For
+    # example, 0.002 adds exactly 0.002 to matching roles before reranking. The
+    # finite (0, 1] bound validates configuration; even small values can reorder
+    # close RRF scores, and values near 1 can dominate ordinary RRF scores.
+    # None preserves the existing hard partition after reranking.
+    role_boost: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
+    # Apply the role policy only when at least this share of the history's characters
+    # is assistant text. Human/human chats can package both speakers in these roles.
     role_first_min_assistant_share: float | None = Field(default=None, ge=0, le=1)
+    # Dense retrieval and reranking can exclude answer options while lexical retrieval
+    # still uses their bounded terms.
+    model_query_policy: Literal["combined", "question"] = "combined"
     # Use a deeper candidate pool when the user's history averages more than
     # deep_history_density chunks per message (long assistant turns crowd the pool).
     deep_candidate_limit: int | None = Field(default=None, ge=1, le=2000)
@@ -243,6 +249,8 @@ class SearchOptions(Record):
             raise ValueError("candidate_limit must be at least limit")
         if self.deep_candidate_limit is not None and self.deep_candidate_limit < self.limit:
             raise ValueError("deep_candidate_limit must be at least limit")
+        if self.role_boost is not None and self.role_first is None:
+            raise ValueError("role_boost requires role_first")
         return self
 
 
@@ -267,6 +275,7 @@ class SearchTrace(Record):
     model_query_truncated: bool = False
     assistant_share: float | None = None
     role_first_applied: bool = False
+    role_boost_applied: bool = False
 
 
 class SearchResult(Record):

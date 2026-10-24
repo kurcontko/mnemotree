@@ -186,10 +186,10 @@ def aml_options(memory: Memory) -> SearchOptions:
         # history's chunks per message (BEAM 2.1-3.7, LME <= 1.7, LoCoMo 1.0).
         chunks_per_source=1,
         role_first="user",
-        # Not in a human/human chat sent as user/assistant pairs: the "assistant" is a
-        # person there and ordering by role cost 1.3 LoCoMo coverage points. Those chats
-        # are 43-53% assistant text; every LLM-assistant set is 76% or more.
+        # Retain the measured hard partition; bounded priors require explicit opt-in.
+        role_boost=None,
         role_first_min_assistant_share=0.65,
+        model_query_policy="combined",
         candidate_limit=100,
         deep_candidate_limit=300,
         deep_history_density=2.0,
@@ -423,6 +423,8 @@ def create_app(
             tokenizer=trace.tokenizer,
             assistant_share=trace.assistant_share,
             role_first_applied=trace.role_first_applied,
+            role_boost_applied=trace.role_boost_applied,
+            model_query_policy=options.model_query_policy,
             channel_counts=trace.channel_counts,
             timings_ms={key: round(value, 1) for key, value in trace.timings_ms.items()},
             returned_roles=dict(Counter(item.role for item in result.evidence)),

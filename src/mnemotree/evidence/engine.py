@@ -277,8 +277,9 @@ class Memory:
             raise ValueError("atom retrieval requires an extracted corpus")
         started = perf_counter()
         full_query = query + ("\n" + "\n".join(query_options) if query_options else "")
-        original_model_query_tokens = self.counter.count(full_query)
-        bounded_query = model_query(full_query, counter=self.counter)
+        unbounded_model_query = query if options.model_query_policy == "question" else full_query
+        original_model_query_tokens = self.counter.count(unbounded_model_query)
+        bounded_query = model_query(unbounded_model_query, counter=self.counter)
         model_query_tokens = self.counter.count(bounded_query)
         query_vector = None
         if options.mode in ("dense", "hybrid"):
@@ -381,6 +382,32 @@ class Memory:
                     max_chars=options.neighbor_chars,
                 )
         retrieval_ms = (perf_counter() - retrieval_start) * 1000
+        role_policy_enabled = options.role_first is not None and (
+            options.role_first_min_assistant_share is None
+            or (
+                assistant_share is not None
+                and assistant_share >= options.role_first_min_assistant_share
+            )
+        )
+        role_boost_applied = role_policy_enabled and options.role_boost is not None
+        role_first_applied = role_policy_enabled and options.role_boost is None
+        if role_boost_applied and options.role_first is not None and options.role_boost is not None:
+            candidates = sorted(
+                (
+                    item.model_copy(
+                        update={
+                            "fusion_score": item.fusion_score
+                            + (
+                                options.role_boost
+                                if windows[item.chunk.id][0].role == options.role_first
+                                else 0.0
+                            )
+                        }
+                    )
+                    for item in candidates
+                ),
+                key=lambda item: (-item.fusion_score, item.chunk.id),
+            )
         rerank_start = perf_counter()
         if self.reranker and candidates:
             scores = list(
@@ -399,13 +426,6 @@ class Memory:
                 key=lambda item: (-(item.rerank_score or 0.0), -item.fusion_score, item.chunk.id)
             )
         rerank_ms = (perf_counter() - rerank_start) * 1000
-        role_first_applied = options.role_first is not None and (
-            options.role_first_min_assistant_share is None
-            or (
-                assistant_share is not None
-                and assistant_share >= options.role_first_min_assistant_share
-            )
-        )
         if role_first_applied and options.role_first is not None:
             candidates = role_first(
                 candidates, {cid: windows[cid][0].role for cid in windows}, options.role_first
@@ -475,9 +495,10 @@ class Memory:
                 chunk_density=chunk_density,
                 original_model_query_tokens=original_model_query_tokens,
                 model_query_tokens=model_query_tokens,
-                model_query_truncated=bounded_query != full_query,
+                model_query_truncated=bounded_query != unbounded_model_query,
                 assistant_share=assistant_share,
                 role_first_applied=role_first_applied,
+                role_boost_applied=role_boost_applied,
             ),
         )
 
