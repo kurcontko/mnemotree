@@ -1,0 +1,130 @@
+name: release candidate
+
+# Step 2 of a release. When a version bump lands on main (or on dispatch with
+# an existing tag), re-run the whole CI workflow against that exact commit,
+# build and smoke-test the distributions, bind them to the source SHA and this
+# run in a manifest, then create the annotated tag and a *draft* GitHub
+# release carrying those exact files plus the constraints.txt they were tested
+# with. Publishing to PyPI is release.yml, run by hand.
+
+on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag matching a reviewed version, for example v0.4.0rc1"
+        type: string
+        required: true
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-${{ inputs.tag || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      enabled: ${{ steps.resolve.outputs.enabled }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      source: ${{ steps.resolve.outputs.source }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Resolve reviewed source
+        id: resolve
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python .github/scripts/release_candidate.py resolve
+
+  verify:
+    needs: resolve
+    if: needs.resolve.outputs.enabled == 'true'
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.source }}
+
+  build:
+    needs: [resolve, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.resolve.outputs.source }}
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache: "false"
+      - name: Build, check, and smoke-install the distributions
+        run: bash .github/scripts/check_package.sh
+      - name: Bind bundle to source and workflow identity
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source }}
+        run: |
+          set -euo pipefail
+          mkdir release
+          mv dist release/dist
+          python .github/scripts/export_constraints.py --output release/constraints.txt
+          python .github/scripts/release_bundle.py create --tag "$RELEASE_TAG" --source "$SOURCE_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: artifact
+        with:
+          name: release-${{ needs.resolve.outputs.tag }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record artifact identity
+        env:
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.artifact.outputs.artifact-digest }}
+        run: |
+          echo "Artifact ID: $ARTIFACT_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact digest: sha256:${ARTIFACT_DIGEST#sha256:}" >> "$GITHUB_STEP_SUMMARY"
+
+  draft:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Create the annotated tag and the draft release with its assets.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ needs.resolve.outputs.source }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-${{ needs.resolve.outputs.tag }}
+          path: release
+      - name: Create immutable tag target and draft with tested assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source }}
+        run: |
+          python .github/scripts/release_bundle.py verify --tag "$RELEASE_TAG" --source "$SOURCE_SHA"
+          python .github/scripts/release_candidate.py draft
