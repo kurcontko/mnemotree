@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           uv export --frozen --all-extras --no-emit-project --no-hashes > "$RUNNER_TEMP/audit.txt"
-          uvx --from "pip-audit==2.10.0" pip-audit --no-deps --disable-pip \
+          uvx --no-build --from "pip-audit==2.10.0" pip-audit --no-deps --disable-pip \
             -r "$RUNNER_TEMP/audit.txt" --format json --output audit.json
       - name: Summarise findings
         if: always()
@@ -68,14 +68,23 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-ci
       # The same extras as CI's `extras` lane, resolved fresh within the
-      # bounds pyproject.toml publishes instead of from uv.lock.
+      # bounds pyproject.toml publishes instead of from uv.lock. Wheels only,
+      # as in CI: the resolution is compiled, sdist-only pypika is dropped
+      # (chromadb's in-memory client never imports it), and the rest installs
+      # with --no-build --no-deps. mnemotree itself runs from src/.
       - name: Resolve fresh dependencies within published bounds
         run: |
           set -euo pipefail
           uv venv --clear
-          uv pip install -e '.[dev,chroma,mcp,normalization,keywords]'
+          uv pip compile pyproject.toml --no-header --no-annotate \
+            --extra dev --extra chroma --extra mcp --extra normalization --extra keywords \
+            -o "$RUNNER_TEMP/fresh.txt"
+          grep -v '^pypika==' "$RUNNER_TEMP/fresh.txt" > "$RUNNER_TEMP/fresh-wheels.txt"
+          uv pip install --no-build --no-deps -r "$RUNNER_TEMP/fresh-wheels.txt"
           uv pip freeze > "$RUNNER_TEMP/resolved.txt"
       - name: Tests
+        env:
+          PYTHONPATH: src
         run: python -m pytest --no-cov
       - name: Show what diverged from uv.lock
         if: always()
