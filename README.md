@@ -63,8 +63,8 @@ and require an explicit source export/reingestion for the new engine.
 
 ## Legacy MemoryCore and MCP
 
-The integrations below use the existing `MemoryCore` implementation. Install
-`mnemotree[legacy]` along with any chosen backend/provider extra (for example,
+The integrations below use the existing `MemoryCore` implementation. Since 0.4.0 a
+plain install no longer includes it: install `mnemotree[legacy]` along with any chosen backend/provider extra (for example,
 `pip install -e '.[legacy,lite,chroma]'`). The `mcp_server` extra includes legacy
 dependencies. The `mnemotree` and `mnemotree-mcp` commands continue to use that API;
 `mnemotree-evidence` uses the new core.
@@ -146,7 +146,7 @@ Connect MCP clients to `http://localhost:8000/mcp`.
 
 ```bash
 git clone https://github.com/kurcontko/mnemotree.git && cd mnemotree
-uv venv .venv && uv pip install -e ".[lite,chroma]"
+uv venv .venv && uv pip install -e ".[legacy,lite,chroma]"
 ```
 
 For NER: `uv run python -m spacy download en_core_web_sm`
@@ -230,9 +230,11 @@ docker compose -f docker/neo4j/docker-compose.yml up -d
 ## 📦 Extras
 
 ```bash
+uv pip install -e ".[legacy]"      # MemoryCore and its integrations
+uv pip install -e ".[embeddings]"  # OpenAI-compatible embeddings for the evidence core
+uv pip install -e ".[serve]"       # AML Add/Search HTTP adapter
 uv pip install -e ".[chroma]"      # ChromaDB
 uv pip install -e ".[neo4j]"       # Neo4j
-uv pip install -e ".[sqlite_vec]"  # SQLite + sqlite-vec
 uv pip install -e ".[lite]"        # Local embeddings
 uv pip install -e ".[ner_hf]"      # Transformers NER
 uv pip install -e ".[all]"         # Everything

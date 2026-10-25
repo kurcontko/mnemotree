@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from importlib import import_module
+from importlib.util import find_spec
+from typing import TYPE_CHECKING
 
 from .errors import (
     ConfigurationError,
@@ -13,10 +15,20 @@ from .errors import (
     StoreError,
 )
 
-__all__ = [
-    "Memory",
-    "Message",
-    "SearchOptions",
+if TYPE_CHECKING:
+    from .core.builder import MemoryCoreBuilder
+    from .core.memory import (
+        MemoryCore,
+        MemoryMode,
+        RecallFilters,
+        RecallOptions,
+        RememberOptions,
+    )
+    from .core.models import LinkType, MemoryLink
+    from .evidence import Memory, Message, SearchOptions
+
+_EVIDENCE = ("Memory", "Message", "SearchOptions")
+_LEGACY = (
     "MemoryCore",
     "MemoryCoreBuilder",
     "MemoryMode",
@@ -26,7 +38,8 @@ __all__ = [
     # Knowledge graph types
     "LinkType",
     "MemoryLink",
-    # Error types
+)
+_ERRORS = (
     "MnemotreeError",
     "StoreError",
     "SerializationError",
@@ -35,6 +48,14 @@ __all__ = [
     "MemoryNotFoundError",
     "ConfigurationError",
     "IndexError",
+)
+
+# Star-imports resolve every name in __all__, so the legacy names are listed
+# only where the legacy extra is installed.
+__all__ = [
+    *_EVIDENCE,
+    *(_LEGACY if find_spec("langchain_core") is not None else ()),
+    *_ERRORS,
 ]
 
 
@@ -52,16 +73,20 @@ _EXPORTS = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> object:
     if name not in _EXPORTS:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     try:
         value = getattr(import_module(_EXPORTS[name], __name__), name)
     except ModuleNotFoundError as exc:
-        if name not in {"Memory", "Message", "SearchOptions"}:
+        if name not in _EVIDENCE:
             raise ModuleNotFoundError(
                 "The legacy MemoryCore requires pip install 'mnemotree[legacy]'."
             ) from exc
         raise
     globals()[name] = value
     return value
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals(), *_EXPORTS})

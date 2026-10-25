@@ -3,8 +3,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+import mnemotree
 from mnemotree import Memory, Message, SearchOptions
-from mnemotree.evidence import EmbeddingSpec, IngestConflict
+from mnemotree.evidence import EmbeddingSpec, IngestConflict, IngestReceipt
 from mnemotree.evidence.engine import fuse
 from mnemotree.evidence.models import Chunk
 from mnemotree.evidence.store import vector_blob
@@ -266,3 +267,18 @@ async def test_invalid_embedding_and_reranker_responses(tmp_path):
         await add(memory)
         with pytest.raises(ValueError, match="finite score"):
             await memory.search("alice", "apple")
+
+
+def test_every_top_level_export_resolves_in_this_install():
+    # Holds in both the lean and the legacy install: star-imports resolve
+    # every name in __all__, so a legacy name listed without its extra fails.
+    for name in mnemotree.__all__:
+        getattr(mnemotree, name)
+
+
+def test_stored_receipt_with_a_newer_field_still_replays():
+    receipt = IngestReceipt.model_validate_json(
+        '{"namespace":"a","request_id":"r","session_id":"s","source_ids":["x"],'
+        '"chunk_count":1,"atom_count":0}'
+    )
+    assert receipt.source_ids == ("x",)

@@ -49,6 +49,10 @@ class EmbeddingSpec(Record):
 
 
 class IngestReceipt(Record):
+    # Receipts are stored and re-read on replay; a field added by a newer
+    # version must not make an older one reject its own database.
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
     namespace: str
     request_id: str
     session_id: str
