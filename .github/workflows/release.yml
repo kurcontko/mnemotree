@@ -1,0 +1,213 @@
+name: release
+
+# Publish mnemotree to PyPI.
+#
+# Nothing is built here. release-candidate.yml already ran the full CI
+# workflow against the tagged commit, built the wheel and sdist, and bound
+# their digests (plus constraints.txt) to the tag, the commit, and its own run
+# in manifest.json. This workflow takes that run's artifact, proves it is that
+# bundle (check_candidate.sh), and uploads exactly those files — so "we tested
+# a wheel and then shipped a different wheel" cannot happen.
+#
+# Usage:
+#
+#   1. Merge a release PR (prepare-release.yml). release-candidate.yml tags
+#      the commit and opens a draft GitHub release; note its run id.
+#   2. Run this workflow with the tag, that candidate_run_id, and
+#      preflight_only=true. It verifies the bundle and smoke-installs the
+#      wheel. Iterate here; it changes nothing.
+#   3. Run it again from main with preflight_only=false. The publish job
+#      waits on the `pypi` environment's reviewers, re-verifies the same
+#      bundle, and uploads it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v0.4.0"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Run id of the successful release-candidate.yml run for this tag"
+        required: true
+        type: string
+      preflight_only:
+        description: "Verify and smoke-test only; do not publish"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# Never cancel a release mid-flight.
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: ${{ inputs.preflight_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Read the candidate run and download its artifact.
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache: "false"
+
+      - name: Download the candidate bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-${{ inputs.tag }}
+          path: release
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Bundle is the verified candidate for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: bash .github/scripts/check_candidate.sh "$RELEASE_TAG" "$CANDIDATE_RUN_ID"
+
+      - name: Version must not already exist on PyPI
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          status=$(curl --proto "=https" --tlsv1.2 -sS -o /dev/null -w '%{http_code}' \
+            "https://pypi.org/pypi/mnemotree/${version}/json" || echo "000")
+          if [ "$status" = "200" ]; then
+            echo "::error title=already published::mnemotree ${version} is already on PyPI."
+            exit 1
+          fi
+          echo "PyPI lookup returned $status — version is free."
+
+      - name: Smoke-install the exact wheel that will be published
+        # The candidate smoke-tested its own build; this repeats it on the
+        # downloaded file, outside the checkout, constrained to the bundle's
+        # own constraints.txt, so a corrupt or mismatched download fails here.
+        run: |
+          set -euo pipefail
+          repo=$(pwd)
+          work=$(mktemp -d)
+          uv venv --quiet "$work/venv"
+          uv pip install --quiet --no-build --python "$work/venv/bin/python" \
+            -c release/constraints.txt release/dist/*.whl
+          cd "$work"
+          "$work/venv/bin/python" -I "$repo/.github/scripts/package_smoke.py" --bare
+
+  # A cheap job whose only purpose is to refuse before the environment gate
+  # wakes a human up.
+  validate_publish_request:
+    if: ${{ !inputs.preflight_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Publish must be dispatched from main
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$WORKFLOW_REF" != "refs/heads/main" ]; then
+            echo "::error title=wrong ref::Real publishes run from main. Use preflight_only=true on a branch."
+            exit 1
+          fi
+
+  publish:
+    needs: [validate_publish_request]
+    if: ${{ !inputs.preflight_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The human gate. Configure `pypi` in Settings → Environments with
+    # required reviewers; without that this job publishes unattended.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mnemotree/
+    permissions:
+      # PyPI Trusted Publishing: the job mints an OIDC token and trades it for
+      # a short-lived, scope-limited upload token. There is no API token in
+      # repository secrets to leak or rotate.
+      id-token: write
+      # Read the candidate run and download its artifact.
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      # check_candidate.sh runs release_bundle.py (Python 3.11+). No cache:
+      # nothing restored from a pull-request run sits next to this credential.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Download the candidate bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-${{ inputs.tag }}
+          path: release
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      # Re-checked here, not trusted from preflight: preflight may have run
+      # days ago, and this job is the one holding the upload credential.
+      - name: Bundle is the verified candidate for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: bash .github/scripts/check_candidate.sh "$RELEASE_TAG" "$CANDIDATE_RUN_ID"
+
+      - name: Version is still free on PyPI
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          status=$(curl --proto "=https" --tlsv1.2 -sS -o /dev/null -w '%{http_code}' \
+            "https://pypi.org/pypi/mnemotree/${version}/json" || echo "000")
+          if [ "$status" = "200" ]; then
+            echo "::error title=already published::mnemotree ${version} is already on PyPI."
+            exit 1
+          fi
+
+      - name: Publish to PyPI
+        # Pinned by commit, not by tag: this is the one step in the repository
+        # that holds a credential, and a moving tag is a credential handed to
+        # whatever the tag points at tomorrow. packages-dir holds only the
+        # verified wheel and sdist; manifest.json and the rest sit one level up.
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: release/dist
+          print-hash: true
+
+# ── setup ───────────────────────────────────────────────────────────────────
+#
+#   1. mnemotree is not on PyPI yet, so add a *pending* Trusted Publisher
+#      (it creates the project on first upload):
+#        PyPI project name: mnemotree
+#        Owner: kurcontko   Repository: mnemotree
+#        Workflow: release.yml   Environment: pypi
+#      https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/
+#
+#   2. In Settings → Environments, create `pypi` and add yourself as a
+#      required reviewer. That approval is the last thing standing between a
+#      dispatched workflow and a permanent PyPI upload.
+#
+# No secret is needed. If you find yourself adding PYPI_API_TOKEN, something
+# has gone wrong with step 1.
