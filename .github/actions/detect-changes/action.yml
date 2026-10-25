@@ -1,0 +1,80 @@
+name: Detect what a change touches
+description: >
+  Report whether a change touches only prose, and whether it touches the
+  dependency resolution. Pure git — no API calls, so it needs no token and no
+  extra permissions. Fail-safe by construction: if the diff cannot be
+  computed, the answer is "not docs-only" and "dependencies changed", which
+  runs everything.
+
+inputs:
+  base-sha:
+    description: Base commit SHA to diff HEAD against.
+    required: true
+
+outputs:
+  docs_only:
+    description: "'true' if every changed file is docs/markdown, 'false' otherwise"
+    value: ${{ steps.check.outputs.docs_only }}
+  deps_changed:
+    description: "'true' if pyproject.toml or uv.lock changed, or the diff is unknown"
+    value: ${{ steps.check.outputs.deps_changed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect changed areas
+      id: check
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: |
+        # No `set -e`: every failure path here has a defined fallback, and the
+        # fallback is always the conservative one.
+        set -uo pipefail
+
+        if [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+          echo "No usable base SHA; assuming a code and dependency change."
+          {
+            echo "docs_only=false"
+            echo "deps_changed=true"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        CHANGED=$(git diff --name-only "$BASE_SHA" HEAD 2>/dev/null || echo "UNKNOWN")
+        if [ "$CHANGED" = "UNKNOWN" ] || [ -z "$CHANGED" ]; then
+          echo "Could not diff against $BASE_SHA; assuming a code and dependency change."
+          {
+            echo "docs_only=false"
+            echo "deps_changed=true"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Deliberately narrow. Anything not matched here — including
+        # .github/**, pyproject.toml, uv.lock and anything under src/ or
+        # tests/ — counts as code and runs the full suite. A doc pattern that
+        # is too generous buys a few runner-minutes and loses the gate.
+        # README.md is the package long description, but the package lane
+        # runs on every change regardless of this answer.
+        DOC_RE='^docs/.*\.md$|^[^/]+\.md$|^LICENSE$'
+        DEPS_RE='^pyproject\.toml$|^uv\.lock$'
+
+        NON_DOCS=$(echo "$CHANGED" | grep -vE "$DOC_RE")
+        DEPS=$(echo "$CHANGED" | grep -E "$DEPS_RE")
+
+        if [ -n "$DEPS" ]; then
+          echo "deps_changed=true" >> "$GITHUB_OUTPUT"
+          echo "Dependency resolution changed — the heavy extras lane will run."
+        else
+          echo "deps_changed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ -z "$NON_DOCS" ]; then
+          echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          echo "Docs-only change — the code lanes will skip and the gate will pass them."
+        else
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          echo "Code changed:"
+          echo "$NON_DOCS"
+        fi

@@ -1,65 +1,331 @@
 name: CI
 
 on:
+  # Not `push:` bare. A branch pushed in this repo and then opened as a pull
+  # request would otherwise run the whole matrix twice for the same commit.
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+  # No `branches:` filter. Stacked pull requests target other feature
+  # branches, and under `branches: [main]` they never ran lint, types, or
+  # tests at all — only Dependency Review.
+  pull_request:
+    # ready_for_review/converted_to_draft are here so the draft gate below can
+    # actually change its mind: without them, marking a draft ready re-uses
+    # the skipped run instead of starting a real one.
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
+
+# The default token permission set is whatever the repository happens to be
+# configured with. Pin it: nothing in this workflow writes anything.
+permissions:
+  contents: read
+
+# One live run per pull request. A force-push mid-run would otherwise leave
+# the old run burning a full matrix against a commit nobody will merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  lint-typecheck-test:
+  # Decide once what this change is, and let every lane read the answer.
+  # The alternative — `paths-ignore:` on the workflow — looks equivalent and
+  # is not: a workflow filtered out by paths never reports a status at all,
+  # so a required check stays pending forever. Skipping *inside* the workflow
+  # keeps the checks list honest, and the `gate` job below turns it green.
+  preflight:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      docs_only: ${{ steps.manifest.outputs.docs_only }}
+      run_code: ${{ steps.manifest.outputs.run_code }}
+      run_heavy: ${{ steps.manifest.outputs.run_heavy }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Ensure base commit
+        if: github.event_name != 'workflow_dispatch' && !inputs.ref
+        uses: ./.github/actions/ensure-base-commit
+        with:
+          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
+          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.base.ref }}
+
+      - name: Detect changed areas
+        if: github.event_name != 'workflow_dispatch' && !inputs.ref
+        id: changes
+        uses: ./.github/actions/detect-changes
+        with:
+          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
+
+      # A dispatch or a workflow_call has no diff to route on, so both answers
+      # fall back to their conservative values: run code, run heavy.
+      - name: Build CI manifest
+        id: manifest
+        env:
+          DOCS_ONLY: ${{ steps.changes.outputs.docs_only }}
+          DEPS_CHANGED: ${{ steps.changes.outputs.deps_changed }}
+        run: |
+          set -euo pipefail
+          docs_only=false
+          run_code=true
+          run_heavy=true
+          if [ "$DOCS_ONLY" = "true" ]; then
+            docs_only=true
+            run_code=false
+          fi
+          if [ "$DEPS_CHANGED" = "false" ] || [ "$run_code" = "false" ]; then
+            run_heavy=false
+          fi
+          {
+            echo "docs_only=$docs_only"
+            echo "run_code=$run_code"
+            echo "run_heavy=$run_heavy"
+          } >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_code == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
+        # 3.14 is held back upstream: langchain-core imports pydantic.v1,
+        # which warns on 3.14, and pytest runs with `-W error`.
         python-version: ["3.11", "3.12", "3.13"]
-
+        include:
+          # sqlite-vec is a loadable extension, and macOS is where Python
+          # builds without extension loading tend to turn up.
+          - os: macos-latest
+            python-version: "3.12"
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: true
-          activate-environment: true
-
       # Wheels only from uv.lock: no third-party build scripts run in CI.
-      # The project itself is imported from src/ via PYTHONPATH instead of being built.
+      # The project itself is imported from src/ via PYTHONPATH instead of
+      # being built; the package lane is where the wheel gets checked.
       - name: Install dev dependencies (from uv.lock)
         run: uv sync --locked --no-build --no-install-project --extra dev
+      - name: Byte-compile
+        run: python -m compileall -q src tests
+      - name: Tests
+        env:
+          PYTHONPATH: src
+        # The floor sits just under today's line, so a real drop fails while
+        # a refactor's noise does not. Ratchet it up as coverage grows.
+        run: >-
+          python -m pytest
+          --cov-report=xml:coverage.xml
+          --junitxml=pytest-report.xml
+          --cov-fail-under=62
+      - name: Test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-${{ matrix.os }}-${{ matrix.python-version }}
+          path: |
+            pytest-report.xml
+            coverage.xml
+          if-no-files-found: warn
+          retention-days: 7
 
-      - name: Run lint
-        run: |
-          ruff check src tests
-          ruff format --check src tests
+  # The optional backends the suite can reach without a running service. The
+  # chromadb store tests skip outright under the dev extra alone, and chroma
+  # is the MCP server's default store.
+  extras:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache-suffix: extras
+      # Not `--no-build`: chromadb depends on pypika, which publishes only an
+      # sdist. It is the one package built here, at the version uv.lock pins.
+      - name: Install dev and optional-backend dependencies (from uv.lock)
+        run: >-
+          uv sync --locked --no-install-project
+          --extra dev --extra chroma --extra mcp --extra normalization --extra keywords
+      - name: Backends really are present
+        run: python -W error -c "import chromadb, fastmcp, dateparser, yake"
+      - name: Tests
+        env:
+          PYTHONPATH: src
+        run: python -m pytest --cov-fail-under=65
 
-      - name: Run typecheck
-        run: |
-          mypy src
-
-      - name: Run tests
+  # torch, transformers and sentence-transformers are a multi-gigabyte
+  # install, so this lane runs only when the resolution itself changed —
+  # which is exactly when it is needed. Before it existed, Dependabot bumps of
+  # all three passed CI in under a minute without any of them installed.
+  heavy:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache-suffix: heavy
+      - name: Install dev and local-model dependencies (from uv.lock)
+        run: uv sync --locked --no-build --no-install-project --extra dev --extra lite --extra ner_hf
+      - name: Local-model wrappers import against the locked versions
         env:
           PYTHONPATH: src
         run: |
-          pytest --cov-report=xml:coverage.xml --junitxml=pytest-report.xml
+          python -W error -c "
+          import torch, transformers, sentence_transformers
+          import mnemotree.embeddings.local, mnemotree.ner.hf_transformers, mnemotree.rerankers.cross_encoder
+          print('torch', torch.__version__, '| transformers', transformers.__version__,
+                '| sentence-transformers', sentence_transformers.__version__)
+          "
+      - name: Tests
+        env:
+          PYTHONPATH: src
+        run: python -m pytest --no-cov
 
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v7
-        if: always()
+  lint:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: coverage-report-${{ matrix.python-version }}
-          path: coverage.xml
-          if-no-files-found: warn
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+      - run: uv sync --locked --no-build --no-install-project --extra dev
+      - name: ruff
+        run: |
+          ruff check src tests .github/scripts
+          ruff format --check src tests .github/scripts
+      - name: mypy
+        run: mypy src
+      - name: mypy (CI scripts)
+        run: mypy .github/scripts --ignore-missing-imports --follow-imports=silent --allow-untyped-defs
 
-      - name: Upload test report artifact
-        uses: actions/upload-artifact@v7
-        if: always()
+  # Runs on docs-only changes too: README.md is the package long description,
+  # and `twine check --strict` is what renders it.
+  package:
+    needs: [preflight]
+    if: needs.preflight.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: junit-report-${{ matrix.python-version }}
-          path: pytest-report.xml
-          if-no-files-found: warn
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+      - name: Build, check, and smoke-install the distributions
+        run: bash .github/scripts/check_package.sh
+
+  workflow_sanity:
+    uses: ./.github/workflows/workflow-sanity.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+
+  # The one check worth marking "required" in branch protection.
+  #
+  # Every lane above is conditional, and GitHub reports a skipped job as
+  # neutral — which a required check reads as "never going to run". This job
+  # always runs, and decides for itself whether each lane's outcome is
+  # acceptable: success always is; skipped only when preflight said the lane
+  # was not needed (docs-only, or for heavy, an unchanged resolution). A lane
+  # that silently stops running fails here.
+  gate:
+    name: gate
+    needs: [preflight, test, extras, heavy, lint, package, workflow_sanity]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All lanes accounted for
+        env:
+          IS_DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          DOCS_ONLY: ${{ needs.preflight.outputs.docs_only }}
+          RUN_HEAVY: ${{ needs.preflight.outputs.run_heavy }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+          SANITY_RESULT: ${{ needs.workflow_sanity.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          EXTRAS_RESULT: ${{ needs.extras.result }}
+          HEAVY_RESULT: ${{ needs.heavy.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+        run: |
+          set -uo pipefail
+
+          # Draft pull request: preflight itself is gated off, so every lane
+          # is skipped and there is nothing to judge. Marking the PR ready
+          # re-triggers the workflow for real.
+          if [ "$IS_DRAFT" = "true" ] && [ "$PREFLIGHT_RESULT" = "skipped" ] && [ "$SANITY_RESULT" = "success" ]; then
+            echo "Draft pull request — no lanes ran."
+            exit 0
+          fi
+
+          if [ "$PREFLIGHT_RESULT" != "success" ]; then
+            echo "::error title=preflight failed::preflight outcome: $PREFLIGHT_RESULT"
+            exit 1
+          fi
+
+          if [ "$PACKAGE_RESULT" != "success" ] || [ "$SANITY_RESULT" != "success" ]; then
+            echo "::error::Package or workflow sanity failed or did not run"
+            exit 1
+          fi
+
+          heavy_may_skip=true
+          if [ "$RUN_HEAVY" = "true" ]; then
+            heavy_may_skip=false
+          fi
+
+          failures=0
+          for lane in \
+            "test|$TEST_RESULT|$DOCS_ONLY" \
+            "extras|$EXTRAS_RESULT|$DOCS_ONLY" \
+            "lint|$LINT_RESULT|$DOCS_ONLY" \
+            "heavy|$HEAVY_RESULT|$heavy_may_skip"; do
+            IFS='|' read -r name result may_skip <<< "$lane"
+            case "$result" in
+              success)
+                echo "$name: ok"
+                ;;
+              skipped)
+                if [ "$may_skip" = "true" ]; then
+                  echo "$name: skipped (not needed for this change)"
+                else
+                  echo "::error title=$name did not run::$name was skipped on a change that needs it"
+                  failures=1
+                fi
+                ;;
+              *)
+                echo "::error title=$name failed::$name outcome: $result"
+                failures=1
+                ;;
+            esac
+          done
+
+          exit "$failures"
