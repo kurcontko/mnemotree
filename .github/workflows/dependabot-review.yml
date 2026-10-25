@@ -59,8 +59,9 @@ jobs:
       files: ${{ steps.pr.outputs.files }}
       report: ${{ steps.validate.outputs.report }}
     env:
-      # Same Claude Code OAuth token and model as claude-code-review.yml.
-      CLAUDE_CODE_SUBAGENT_MODEL: sonnet
+      # Same Claude Code OAuth token and model (claude-sonnet-5-5) as
+      # claude-code-review.yml.
+      CLAUDE_CODE_SUBAGENT_MODEL: claude-sonnet-5-5
       CLAUDE_CODE_EFFORT_LEVEL: high
       # The action also turns this on when allowed_non_write_users is set.
       # Keep it explicit: model-controlled subprocesses must not inherit the
@@ -289,7 +290,7 @@ jobs:
           # High-tier bumps, and each costs two Context7 calls on top of the
           # PyPI and changelog reads.
           claude_args: >-
-            --model sonnet
+            --model claude-sonnet-5-5
             --max-turns 80
             --no-session-persistence
             --permission-mode dontAsk
