@@ -30,15 +30,22 @@ concurrency:
 jobs:
   triage:
     # A workflow_run must be the completion of this repository's pull-request
-    # test run and retain Dependabot as its original actor. A dispatch is an
+    # CI run and retain Dependabot as its original actor. A dispatch is an
     # owner-only escape hatch; Resolve still rejects a non-Dependabot PR.
+    #
+    # Identities are compared by numeric account ID, never by login or
+    # `github.actor`: a re-run keeps the original actor while someone else
+    # triggers it, and IDs are the one field nobody can rename into.
+    # 49699333 is dependabot[bot]. An owner re-running Dependabot's CI is
+    # not Dependabot; refresh that review through the dispatch path instead.
     if: >-
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+       github.event.workflow_run.actor.id == 49699333 &&
+       github.event.workflow_run.triggering_actor.id == 49699333 &&
        github.event.workflow_run.head_repository.full_name == github.repository) ||
       (github.event_name == 'workflow_dispatch' &&
-       github.actor == github.repository_owner)
+       github.event.sender.id == github.repository_owner_id)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
