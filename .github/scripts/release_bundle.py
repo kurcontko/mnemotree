@@ -16,6 +16,7 @@ from pathlib import Path
 from release_prepare import PACKAGE, version_key
 
 CHECK_PACKAGE = Path(__file__).with_name("check_package.sh")
+CONSTRAINTS = "constraints.txt"
 
 
 def build_tools() -> dict[str, str]:
@@ -31,6 +32,24 @@ def build_tools() -> dict[str, str]:
     return tools
 
 
+def read_metadata(path: Path, version: str) -> bytes:
+    """The core metadata file of one wheel or sdist, refusing anything unexpected."""
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("Distribution must be a regular file")
+    if path.suffix == ".whl":
+        with zipfile.ZipFile(path) as archive:
+            names = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
+            if names != [f"{PACKAGE}-{version}.dist-info/METADATA"]:
+                raise ValueError("Unexpected wheel metadata")
+            return archive.read(names[0])
+    with tarfile.open(path) as archive:
+        member = archive.getmember(f"{PACKAGE}-{version}/PKG-INFO")
+        stream = archive.extractfile(member) if member.isfile() else None
+        if stream is None:
+            raise ValueError("Invalid sdist metadata")
+        return stream.read()
+
+
 def distributions(directory: Path, version: str) -> dict[str, str]:
     version_key(version)
     expected = {f"{PACKAGE}-{version}-py3-none-any.whl", f"{PACKAGE}-{version}.tar.gz"}
@@ -40,27 +59,10 @@ def distributions(directory: Path, version: str) -> dict[str, str]:
         )
     digests = {}
     for path in sorted(directory.iterdir()):
-        if path.is_symlink() or not path.is_file():
-            raise ValueError("Distribution must be a regular file")
-        if path.suffix == ".whl":
-            with zipfile.ZipFile(path) as archive:
-                names = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
-                if names != [f"{PACKAGE}-{version}.dist-info/METADATA"]:
-                    raise ValueError("Unexpected wheel metadata")
-                metadata = archive.read(names[0])
-        else:
-            with tarfile.open(path) as archive:
-                member = archive.getmember(f"{PACKAGE}-{version}/PKG-INFO")
-                if not member.isfile():
-                    raise ValueError("Invalid sdist metadata")
-                stream = archive.extractfile(member)
-                if stream is None:
-                    raise ValueError("Missing sdist metadata")
-                metadata = stream.read()
-        parsed = BytesParser().parsebytes(metadata)
+        parsed = BytesParser().parsebytes(read_metadata(path, version))
         if parsed["Name"] != PACKAGE or parsed["Version"] != version:
             raise ValueError("Distribution metadata disagrees with release version")
-        digests[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        digests[path.name] = digest(path)
     return digests
 
 
@@ -82,8 +84,8 @@ def verify(bundle: Path, *, tag: str, source: str, run_id: str) -> dict:
         raise ValueError("Invalid release identity")
     if manifest.get("files") != distributions(bundle / "dist", tag[1:]):
         raise ValueError("Bundle digests do not match")
-    if manifest.get("constraints") != digest(bundle / "constraints.txt"):
-        raise ValueError("Bundled constraints.txt does not match the manifest")
+    if manifest.get("constraints") != digest(bundle / CONSTRAINTS):
+        raise ValueError(f"Bundled {CONSTRAINTS} does not match the manifest")
     return manifest
 
 
@@ -106,11 +108,11 @@ def main() -> None:
             "workflow_ref": os.environ["GITHUB_WORKFLOW_REF"],
             "workflow_sha": os.environ["GITHUB_WORKFLOW_SHA"],
             "files": distributions(args.bundle / "dist", args.tag[1:]),
-            "constraints": digest(args.bundle / "constraints.txt"),
+            "constraints": digest(args.bundle / CONSTRAINTS),
             "build_tools": build_tools(),
         }
         (args.bundle / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        sums = {**manifest["files"], "constraints.txt": manifest["constraints"]}
+        sums = {**manifest["files"], CONSTRAINTS: manifest["constraints"]}
         (args.bundle / "SHA256SUMS").write_text(
             "".join(f"{value}  {name}\n" for name, value in sums.items())
         )

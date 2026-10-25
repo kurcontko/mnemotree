@@ -43,14 +43,18 @@ def main() -> None:
         "--check", action="store_true", help="fail if --output differs from uv.lock"
     )
     args = parser.parse_args()
+    # Only ever read or write inside the checkout this runs from.
+    output = args.output.resolve()
+    if not output.is_relative_to(Path.cwd().resolve()):
+        raise SystemExit(f"--output must be inside {Path.cwd()}, got {args.output}")
     content = export()
     if args.check:
-        if not args.output.is_file() or args.output.read_text() != content:
+        if not output.is_file() or output.read_text() != content:
             raise SystemExit(
                 f"{args.output} drifted from uv.lock; run python .github/scripts/export_constraints.py"
             )
     else:
-        args.output.write_text(content)
+        output.write_text(content)
 
 
 if __name__ == "__main__":
