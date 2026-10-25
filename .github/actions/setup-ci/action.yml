@@ -14,6 +14,14 @@ inputs:
 runs:
   using: composite
   steps:
+    # Only uv-managed (python-build-standalone) interpreters. The macOS
+    # runner's preinstalled 3.12 is built without
+    # sqlite3.Connection.enable_load_extension, so sqlite-vec — the default
+    # store — cannot load on it at all, and which interpreter a lane gets
+    # should not depend on what the runner image happens to ship.
+    - name: Prefer uv-managed Python
+      shell: bash
+      run: echo "UV_PYTHON_PREFERENCE=only-managed" >> "$GITHUB_ENV"
     - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       with:
         version: "0.11.6"
