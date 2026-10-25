@@ -116,8 +116,10 @@ def test_every_shared_module_imports_without_optional_deps() -> None:
         f"        failed.append(f'{{mod}}: {{type(exc).__name__}}: {{exc}}')\n"
         f"print('\\n'.join(failed) or 'ok')\n"
     )
-    assert proc.returncode == 0 and proc.stdout.strip() == "ok", (
-        f"modules pulled in an optional dependency at import time:\n{proc.stdout}{proc.stderr}"
+    report = f"{proc.stdout}{proc.stderr}"
+    assert proc.returncode == 0, report
+    assert proc.stdout.strip() == "ok", (
+        f"modules pulled in an optional dependency at import time:\n{report}"
     )
 
 
@@ -130,7 +132,8 @@ def test_lazy_store_export_names_the_extra() -> None:
         "    print(exc)\n"
     )
     assert proc.returncode == 0, proc.stderr
-    assert "Install with" in proc.stdout and "chroma" in proc.stdout, proc.stdout
+    assert "Install with" in proc.stdout, proc.stdout
+    assert "mnemotree[chroma]" in proc.stdout, proc.stdout
 
 
 def test_mcp_entry_point_hints_at_extra_when_fastmcp_missing() -> None:
