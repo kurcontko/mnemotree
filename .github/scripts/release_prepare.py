@@ -8,7 +8,8 @@ import re
 import tomllib
 from pathlib import Path
 
-VERSION = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:(a|b|rc)(0|[1-9][0-9]*))?"
+VERSION = r"(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?"
+UNRELEASED = "## [Unreleased]"
 PACKAGE = "mnemotree"
 REPO = "https://github.com/kurcontko/mnemotree"
 EMPTY_SECTIONS = "### Added\n\n### Changed\n\n### Fixed\n\n### Removed\n"
@@ -16,7 +17,8 @@ EMPTY_SECTIONS = "### Added\n\n### Changed\n\n### Fixed\n\n### Removed\n"
 
 def version_key(value: str) -> tuple[int, ...]:
     match = re.fullmatch(VERSION, value)
-    if not match:
+    # Leading zeros are not canonical PEP 440, and "01" would sort as 1.
+    if not match or any(n.startswith("0") and n != "0" for n in match.groups(default="0")):
         raise ValueError("Expected MAJOR.MINOR.PATCH optionally followed by aN, bN, or rcN")
     major, minor, patch, stage, number = match.groups()
     stage_rank = {"a": 0, "b": 1, "rc": 2, None: 3}[stage]
@@ -35,9 +37,9 @@ def prepare(root: Path, version: str, date: str) -> dict[Path, str]:
     packages = [p for p in tomllib.loads(lock)["package"] if p["name"] == PACKAGE]
     if len(packages) != 1 or packages[0]["version"] != old:
         raise ValueError("Lockfile version disagrees with project metadata")
-    if changelog.count("## [Unreleased]") != 1 or f"## [{version}]" in changelog:
+    if changelog.count(UNRELEASED) != 1 or f"## [{version}]" in changelog:
         raise ValueError("Changelog needs one Unreleased section and no duplicate release")
-    notes = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    notes = changelog.split(UNRELEASED, 1)[1].split("\n## [", 1)[0]
     notes = notes.split("\n[Unreleased]:", 1)[0]
     if not re.search(r"(?m)^- \S", notes):
         raise ValueError("Add user-facing Unreleased notes before preparing a release")
@@ -56,8 +58,8 @@ def prepare(root: Path, version: str, date: str) -> dict[Path, str]:
     # Empty headings left in the released section are noise; drop them.
     released = re.sub(r"(?m)^### \w+\n+(?=### |\Z)", "", notes.strip() + "\n").strip()
     changelog = changelog.replace(
-        "## [Unreleased]" + notes,
-        f"## [Unreleased]\n\n{EMPTY_SECTIONS}\n## [{version}] — {date}\n\n{released}\n",
+        UNRELEASED + notes,
+        f"{UNRELEASED}\n\n{EMPTY_SECTIONS}\n## [{version}] — {date}\n\n{released}\n",
         1,
     )
     changelog = re.sub(
