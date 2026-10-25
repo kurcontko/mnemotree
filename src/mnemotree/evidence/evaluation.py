@@ -6,7 +6,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Iterator
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from statistics import mean
 
@@ -40,6 +40,14 @@ def read_jsonl(path: Path) -> Iterator[dict]:
                 yield json.loads(line)
             except ValueError as exc:
                 raise ValueError(f"invalid JSON at {path}:{line_number}") from exc
+
+
+def installed_version(name: str) -> str | None:
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        # Imported from a source checkout; code_sha256 still identifies the code.
+        return None
 
 
 def file_hash(path: Path) -> str:
@@ -129,7 +137,7 @@ async def evaluate(memory: Memory, corpus: Path, queries: Path, options: SearchO
             "queries_sha256": file_hash(queries),
             "code_sha256": digest(code),
             "corpus_records": records,
-            "mnemotree": version("mnemotree"),
+            "mnemotree": installed_version("mnemotree"),
             "sqlite": sqlite3.sqlite_version,
             "sqlite_vec": version("sqlite-vec"),
             "tokenizer": memory.counter.signature,

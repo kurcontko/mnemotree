@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -97,7 +97,7 @@ async def test_occurrences_spans_time_and_neighbor_context(tmp_path):
         receipt = await memory.add(
             "alice",
             [
-                Message(content=content, timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc)),
+                Message(content=content, timestamp=datetime(2024, 1, 1, tzinfo=UTC)),
                 Message(content=content),
             ],
             request_id="r",

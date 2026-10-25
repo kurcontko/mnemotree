@@ -101,7 +101,8 @@ keywords = [
 ui = ["streamlit>=1.40.0"]
 
 # MCP server
-mcp = ["fastmcp<4"]
+# The MCP server runs on MemoryCore, so it needs the legacy dependencies.
+mcp = ["mnemotree[legacy]", "fastmcp<4"]
 mcp_server = [
     "mnemotree[legacy]",
     "chromadb>=0.5.23",

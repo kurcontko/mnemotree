@@ -2893,6 +2893,19 @@ lite = [
 ]
 mcp = [
     { name = "fastmcp" },
+    { name = "filelock" },
+    { name = "langchain" },
+    { name = "langchain-classic" },
+    { name = "langchain-community" },
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "networkx" },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.4.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "openai" },
+    { name = "scikit-learn" },
+    { name = "spacy" },
+    { name = "urllib3" },
 ]
 mcp-server = [
     { name = "chromadb" },
@@ -2985,6 +2998,7 @@ requires-dist = [
     { name = "langchain-huggingface", marker = "extra == 'all'", specifier = ">=0.1.0" },
     { name = "langchain-huggingface", marker = "extra == 'huggingface'", specifier = ">=0.1.0" },
     { name = "langchain-openai", marker = "extra == 'legacy'", specifier = ">=1.1.12,<2.0.0" },
+    { name = "mnemotree", extras = ["legacy"], marker = "extra == 'mcp'" },
     { name = "mnemotree", extras = ["legacy"], marker = "extra == 'mcp-server'" },
     { name = "mnemotree", extras = ["legacy", "embeddings", "serve"], marker = "extra == 'all'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.0" },

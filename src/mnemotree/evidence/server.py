@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hmac
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -24,7 +24,7 @@ class AddMessage(Record):
             content=self.content,
             role=self.role,
             timestamp=(
-                datetime.fromtimestamp(self.timestamp / 1000, tz=timezone.utc)
+                datetime.fromtimestamp(self.timestamp / 1000, tz=UTC)
                 if self.timestamp is not None
                 else None
             ),

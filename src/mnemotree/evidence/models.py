@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -33,7 +33,7 @@ class Message(Record):
         if value is not None:
             if value.tzinfo is None:
                 raise ValueError("timestamp must include a timezone")
-            return value.astimezone(timezone.utc)
+            return value.astimezone(UTC)
         return value
 
 
