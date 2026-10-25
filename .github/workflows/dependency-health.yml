@@ -1,0 +1,113 @@
+name: dependency health
+
+# Two questions CI cannot answer on a pull request, asked weekly:
+#
+#   audit             — does anything uv.lock pins have a published advisory?
+#   latest-compatible — does the suite still pass on what `pip install
+#                       mnemotree` resolves *today*? Users never see uv.lock,
+#                       so a release that breaks us within our own published
+#                       bounds shows up here before it shows up in an issue.
+
+on:
+  schedule:
+    # Wednesday 05:23 UTC. Off the hour: scheduled workflows queue behind
+    # everyone else's :00 cron.
+    - cron: "23 5 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-health
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci
+      # Every extra, because an advisory in an optional backend still reaches
+      # every user who installs that backend.
+      - name: Audit the locked resolution
+        run: |
+          set -euo pipefail
+          uv export --frozen --all-extras --no-emit-project --no-hashes > "$RUNNER_TEMP/audit.txt"
+          uvx --no-build --from "pip-audit==2.10.0" pip-audit --no-deps --disable-pip \
+            -r "$RUNNER_TEMP/audit.txt" --format json --output audit.json
+      - name: Summarise findings
+        if: always()
+        run: |
+          set -uo pipefail
+          [ -s audit.json ] || exit 0
+          jq -r '
+            [.dependencies[] | select((.vulns // []) | length > 0)] as $hits
+            | if ($hits | length) == 0 then "No known vulnerabilities."
+              else "| Package | Version | Advisories | Fixed in |\n| --- | --- | --- | --- |\n" +
+                ($hits | map("| \(.name) | \(.version) | \([.vulns[].id] | unique | join(", ")) | \([.vulns[].fix_versions[]?] | unique | join(", ")) |") | join("\n"))
+              end
+          ' audit.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: dependency-audit
+          path: audit.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  latest-compatible:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci
+      # The same extras as CI's `extras` lane, resolved fresh within the
+      # bounds pyproject.toml publishes instead of from uv.lock. Wheels only,
+      # as in CI: the resolution is compiled, sdist-only pypika is dropped
+      # (chromadb's in-memory client never imports it), and the rest installs
+      # with --no-build --no-deps. mnemotree itself runs from src/.
+      - name: Resolve fresh dependencies within published bounds
+        run: |
+          set -euo pipefail
+          uv venv --clear
+          uv pip compile pyproject.toml --no-header --no-annotate \
+            --extra dev --extra chroma --extra mcp --extra normalization --extra keywords \
+            -o "$RUNNER_TEMP/fresh.txt"
+          grep -v '^pypika==' "$RUNNER_TEMP/fresh.txt" > "$RUNNER_TEMP/fresh-wheels.txt"
+          uv pip install --no-build --no-deps -r "$RUNNER_TEMP/fresh-wheels.txt"
+          uv pip freeze > "$RUNNER_TEMP/resolved.txt"
+      - name: Tests
+        env:
+          PYTHONPATH: src
+        run: python -m pytest --no-cov
+      - name: Show what diverged from uv.lock
+        if: always()
+        run: |
+          set -uo pipefail
+          uv export --frozen --all-extras --no-emit-project --no-hashes --no-header --no-annotate \
+            > "$RUNNER_TEMP/locked.txt"
+          python - "$RUNNER_TEMP/resolved.txt" "$RUNNER_TEMP/locked.txt" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import re
+          import sys
+
+          def load(path):
+              pins = {}
+              for line in open(path):
+                  m = re.match(r"([A-Za-z0-9_.-]+)==([^ ;]+)", line.strip())
+                  if m:
+                      pins[re.sub(r"[-_.]+", "-", m[1]).lower()] = m[2]
+              return pins
+
+          fresh, locked = load(sys.argv[1]), load(sys.argv[2])
+          rows = [(n, locked.get(n, "not locked"), v) for n, v in sorted(fresh.items()) if locked.get(n) != v]
+          print("### Fresh resolution vs uv.lock\n")
+          print("| Package | uv.lock | Fresh |\n| --- | --- | --- |")
+          for row in rows:
+              print("| %s | %s | %s |" % row)
+          PY

@@ -39,10 +39,10 @@ test:
 	$(VENV)/bin/pytest
 
 precommit:
-	$(VENV)/bin/pre-commit run --all-files --config pre-commit.yaml
+	$(VENV)/bin/pre-commit run --all-files
 
 precommit-install:
-	$(VENV)/bin/pre-commit install --config pre-commit.yaml
+	$(VENV)/bin/pre-commit install
 
 build:
 	$(VENV)/bin/python -m build

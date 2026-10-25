@@ -28,7 +28,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ "python" ]
+        # `actions` analyses the workflow YAML itself — the same surface
+        # workflow-sanity lints, from a different angle (data flow from
+        # untrusted event fields into shells and privileged steps).
+        language: [ "python", "actions" ]
 
     steps:
       - name: Checkout repository
@@ -40,6 +43,9 @@ jobs:
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           languages: ${{ matrix.language }}
+          queries: security-and-quality
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: "/language:${{ matrix.language }}"

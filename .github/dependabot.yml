@@ -1,15 +1,59 @@
 version: 2
-updates:
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    rebase-strategy: "auto"
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+# Security updates are a separate mechanism (Settings → Code security). They
+# ignore this file's schedule, cooldown and groups, open at once, and rewrite
+# uv.lock directly; CI's `heavy` lane runs whenever uv.lock changes, so a
+# torch or transformers security bump is tested against the real package.
+# Every Dependabot pull request, from either source, gets a triage comment
+# from workflows/dependabot-review.yml before a human reads it.
+
+updates:
+  # Python version updates. Minor and patch releases arrive as one grouped
+  # pull request a week; majors stay one per package, because a major is
+  # where the breakage is (transformers 4 → 5 is the current example) and it
+  # deserves its own CI run and its own revert.
+  - package-ecosystem: uv
+    directory: /
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    rebase-strategy: "auto"
+      interval: weekly
+      day: monday
+      # Off the hour: scheduled jobs queue behind everyone else's :00.
+      time: "05:17"
+      timezone: Etc/UTC
+    # A yanked or compromised release usually surfaces within days. Waiting a
+    # week on minors and two on majors means most of those never reach a PR.
+    # Security updates ignore the cooldown.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 5
+
+  # Action tags are nobody's editorial decision — no one deliberately holds
+  # actions/checkout at an old version, it just rots there until something
+  # breaks. Monthly batches the noise into one review window.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      time: "05:17"
+      timezone: Etc/UTC
+    # Two weeks, not two days. A compromised tag (tj-actions/changed-files,
+    # March 2025) took longer than days to be noticed, and actions here run
+    # next to credentials and OIDC scopes.
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    # The repo's own CI commits are `ci:`; a bump reads the same way in the
+    # log instead of Dependabot's default `build(deps):`.
+    commit-message:
+      prefix: "ci(deps)"
+    open-pull-requests-limit: 5
