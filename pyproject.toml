@@ -13,7 +13,7 @@ dependencies = [
     "networkx>=3.4.0,<4.0.0",
     "spacy>=3.8.14,<4.0.0",
     "urllib3>=2.7.0,<3.0.0",
-    "filelock>=3.20.3,<4.0.0",
+    "filelock>=3.20.3,<5.0.0",
 
     # Default store — SQLite with vector search (zero-infra)
     "sqlite-vec>=0.1.0",
