@@ -1,0 +1,60 @@
+# Scope budget for the mnemotree package, enforced by tests/test_budget.py
+# and .github/scripts/eval_gate.py.
+#
+# Growth is a reviewable decision, not drift. Each zone has a ceiling on
+# significant lines (non-blank, non-comment). CI fails when a zone exceeds
+# its ceiling — growing scope means raising the number here, in the same PR,
+# with a one-line reason above it, where a reviewer sees it. CI also fails
+# when a zone shrinks well below its ceiling (>10% slack): after deleting
+# code, ratchet the ceiling down so headroom doesn't silently accumulate.
+#
+# Zones (paths under src/mnemotree/):
+#   core          — core/: MemoryCore, models, retrieval, scoring, decay
+#   store         — store/: every backend plus shared serialization
+#   integrations  — adapters/, integrations/, tools/, mcp/: framework glue
+#   experimental  — experimental/: no stability promise
+#   enrichment    — everything else: analysis, ner, normalization,
+#                   rerankers, embeddings, utils, configs, cli, errors
+
+[zones]
+# 2026-10: initial ceilings, ~3% above the measured size on main.
+core = 5150
+store = 5780
+integrations = 2050
+experimental = 2050
+enrichment = 2370
+
+[surface]
+# Tools the MCP server registers. Every MCP client loads every tool schema
+# into its prompt on every session, so each one has a standing token cost
+# for every user. Adding a tool means bumping this in the same PR.
+max_mcp_tools = 5
+# Names in mnemotree.__all__ — the public API callers are promised will stay
+# stable. Growing it is a compatibility commitment, so it is counted.
+max_public_exports = 16
+
+[eval]
+# Offline retrieval floors for benchmarks/evaluate.py with
+# --dummy-embeddings, NER and keywords off, PYTHONHASHSEED=0 (the dummy
+# embedder hashes tokens with the builtin hash). Deterministic, so the
+# floors sit just under the measured value: any retrieval regression
+# fails. A retrieval miss is a failure, not noise — if a change lowers
+# these on purpose, lower them here and say why.
+stores = ["inmemory", "chroma", "sqlite-vec"]
+# Every store sees the same memories and the same embeddings, so they must
+# rank them the same. Max allowed spread between stores per metric. Not 0:
+# chroma's HNSW index is approximate, and hashed bag-of-words embeddings
+# produce exact score ties whose order is backend-defined. On Linux CI that
+# moves one of the 68 queries (recall@5 0.2897 vs 0.2824 = 0.0074); macOS
+# matched exactly. 0.015 allows about two such queries; a broken store
+# moves many more. Per-query results are uploaded as the `eval-results`
+# artifact when a spread needs explaining.
+max_store_spread = 0.015
+
+[eval.floors]
+# 2026-10: measured recall@5 0.2824, recall@10 0.3613, mrr 0.2555,
+# ndcg@10 0.3132 — identical on all three stores.
+"recall@5" = 0.28
+"recall@10" = 0.36
+mrr = 0.255
+"ndcg@10" = 0.31

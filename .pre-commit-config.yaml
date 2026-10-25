@@ -33,6 +33,14 @@ repos:
         args: [--persona=regular, --min-severity=medium, --min-confidence=medium]
   - repo: local
     hooks:
+      # The two gates that fail most often and cost the least to run; the
+      # full pytest hook below still runs everything.
+      - id: budget-and-purity
+        name: budget and import-purity gates
+        entry: .venv/bin/pytest tests/test_budget.py tests/test_import_purity.py -q --no-cov
+        language: system
+        pass_filenames: false
+        files: '^(src/mnemotree/|budget\.toml$|tests/test_(budget|import_purity)\.py$)'
       - id: workflow-tabs
         name: no tabs in workflow files
         entry: python3 .github/scripts/check_workflow_tabs.py
