@@ -1,0 +1,99 @@
+name: workflow sanity
+
+# CI is code, and until this file existed it was the only code in the repo
+# with no linter pointed at it. actionlint catches the mechanical errors
+# (unknown fields, bad expressions, shellcheck findings inside `run:`);
+# zizmor catches the security ones (unpinned mutable refs, template injection
+# into a shell, over-broad token permissions).
+
+# Called by CI so workflow validation is part of its required gate.
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install actionlint
+        # Pinned and checksum-verified rather than `go install` or an action:
+        # a linter that can change its own rule set between runs turns a green
+        # build into an unrelated red one. Bumping it is a commit.
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+        run: |
+          set -euo pipefail
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          base_url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          # Release-asset downloads return the occasional transient 5xx. This
+          # job must not fail closed on a CDN hiccup.
+          curl --proto "=https" --tlsv1.2 --retry 5 --retry-delay 2 --retry-all-errors -sSfL -o "${archive}" "${base_url}/${archive}"
+          curl --proto "=https" --tlsv1.2 --retry 5 --retry-delay 2 --retry-all-errors -sSfL -o checksums.txt \
+            "${base_url}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          grep " ${archive}\$" checksums.txt | sha256sum -c -
+          tar -xzf "${archive}" actionlint
+          sudo install -m 0755 actionlint /usr/local/bin/actionlint
+          rm -f "${archive}" checksums.txt actionlint
+
+      - name: Install zizmor
+        env:
+          ZIZMOR_VERSION: "1.29.0"
+        run: python -m pip install --only-binary ":all:" "zizmor==${ZIZMOR_VERSION}"
+
+      # Each check below is independent and cheap, so they report together.
+      # Fail-fast here would mean fixing a tab, pushing, waiting, and only
+      # then learning that zizmor also had something to say.
+      - name: No tabs in workflow files
+        id: no_tabs
+        continue-on-error: true
+        run: python3 .github/scripts/check_workflow_tabs.py
+
+      - name: actionlint
+        id: actionlint
+        continue-on-error: true
+        run: actionlint -color
+
+      - name: zizmor
+        id: zizmor
+        continue-on-error: true
+        run: |
+          zizmor --persona=regular --min-severity=medium --min-confidence=medium \
+            .github/workflows .github/actions
+
+      - name: Report
+        env:
+          NO_TABS_OUTCOME: ${{ steps.no_tabs.outcome }}
+          ACTIONLINT_OUTCOME: ${{ steps.actionlint.outcome }}
+          ZIZMOR_OUTCOME: ${{ steps.zizmor.outcome }}
+        run: |
+          set -uo pipefail
+          failures=0
+          for check in \
+            "no-tabs|$NO_TABS_OUTCOME" \
+            "actionlint|$ACTIONLINT_OUTCOME" \
+            "zizmor|$ZIZMOR_OUTCOME"; do
+            name="${check%%|*}"
+            outcome="${check#*|}"
+            if [ "$outcome" != "success" ]; then
+              echo "::error title=$name failed::$name outcome: $outcome"
+              failures=1
+            fi
+          done
+          exit "$failures"

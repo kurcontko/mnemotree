@@ -1,0 +1,31 @@
+name: Set up locked CI tools
+description: >
+  Select Python and a pinned uv, and put the project virtualenv on PATH.
+  One place to bump the toolchain, instead of one per job.
+inputs:
+  python-version:
+    description: Python interpreter
+    default: "3.12"
+  cache-suffix:
+    description: >
+      Separates the uv cache of lanes that install different extras, so the
+      heavy torch lane neither evicts nor bloats the cache the fast lanes use.
+    default: ""
+runs:
+  using: composite
+  steps:
+    # Only uv-managed (python-build-standalone) interpreters. The macOS
+    # runner's preinstalled 3.12 is built without
+    # sqlite3.Connection.enable_load_extension, so sqlite-vec — the default
+    # store — cannot load on it at all, and which interpreter a lane gets
+    # should not depend on what the runner image happens to ship.
+    - name: Prefer uv-managed Python
+      shell: bash
+      run: echo "UV_PYTHON_PREFERENCE=only-managed" >> "$GITHUB_ENV"
+    - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      with:
+        version: "0.11.6"
+        python-version: ${{ inputs.python-version }}
+        enable-cache: true
+        cache-suffix: ${{ inputs.cache-suffix }}
+        activate-environment: true
