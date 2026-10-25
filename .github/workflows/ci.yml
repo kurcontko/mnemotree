@@ -170,11 +170,12 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           cache-suffix: extras
-      # Not `--no-build`: chromadb depends on pypika, which publishes only an
-      # sdist. It is the one package built here, at the version uv.lock pins.
+      # chromadb depends on pypika, which publishes only an sdist. Rather
+      # than run its setup script, leave it out: the in-memory client these
+      # tests use never imports it (all 11 chroma tests pass without it).
       - name: Install dev and optional-backend dependencies (from uv.lock)
         run: >-
-          uv sync --locked --no-install-project
+          uv sync --locked --no-build --no-install-project --no-install-package pypika
           --extra dev --extra chroma --extra mcp --extra normalization --extra keywords
       - name: Backends really are present
         run: python -W error -c "import chromadb, fastmcp, dateparser, yake"
