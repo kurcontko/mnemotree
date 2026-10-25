@@ -1,0 +1,282 @@
+name: release
+
+# Publish mnemotree to PyPI.
+#
+# The shape here is preflight → gate → publish, and the split is the whole
+# point: the artifact that gets uploaded to PyPI is the exact artifact a
+# previous, successful run built and smoke-tested. Nothing is rebuilt at
+# publish time, because "we tested a wheel and then shipped a different wheel"
+# is the packaging bug this workflow exists to make impossible.
+#
+# Usage:
+#
+#   1. Tag the release commit on main (release-candidate.yml does this when a
+#      version bump merges) and make sure the tag is pushed.
+#   2. Run this workflow with preflight_only=true and the tag. It validates,
+#      tests, builds, smoke-installs, and uploads the artifact. Iterate here.
+#   3. Run it again from main with preflight_only=false and preflight_run_id
+#      set to the run id from step 2. That job waits on the `pypi`
+#      environment's reviewers, then publishes the artifact from step 2.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v0.4.0"
+        required: true
+        type: string
+      preflight_only:
+        description: "Validate and build only; do not publish"
+        required: true
+        default: true
+        type: boolean
+      preflight_run_id:
+        description: "Run id of the successful preflight to publish (required for a real publish)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Never cancel a release mid-flight.
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: ${{ inputs.preflight_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Validate inputs
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
+            echo "::error title=bad tag::Invalid release tag: $RELEASE_TAG (expected vMAJOR.MINOR.PATCH[aN|bN|rcN])"
+            exit 1
+          fi
+          if [ -n "$PREFLIGHT_RUN_ID" ]; then
+            echo "::error title=bad input::preflight_run_id is only meaningful for a real publish."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache: "false"
+
+      - name: Tag and packaged version must agree
+        # A tag that does not match pyproject is the single most common
+        # release mistake, and PyPI will happily accept the mismatch.
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          expected="${RELEASE_TAG#v}"
+          if [ "$version" != "$expected" ]; then
+            echo "::error title=version mismatch::tag $RELEASE_TAG implies $expected, pyproject says $version"
+            exit 1
+          fi
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Releasing mnemotree $version"
+
+      - name: Version must not already exist on PyPI
+        run: |
+          set -euo pipefail
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://pypi.org/pypi/mnemotree/${RELEASE_VERSION}/json" || echo "000")
+          if [ "$status" = "200" ]; then
+            echo "::error title=already published::mnemotree ${RELEASE_VERSION} is already on PyPI."
+            exit 1
+          fi
+          echo "PyPI lookup returned $status — version is free."
+
+      - name: Install (from uv.lock)
+        run: uv sync --locked --no-build --no-install-project --extra dev
+
+      - name: Gates
+        # The same gates CI runs, re-run against the tagged commit. A release
+        # is the one build that must not trust an earlier green check on a
+        # branch that has since moved.
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+          ruff check src tests
+          mypy src
+          python -m pytest -q
+
+      - name: Build, check, and smoke-install the distributions
+        # Installs only the wheel, into clean venvs outside the checkout, so a
+        # module the wheel forgot to ship cannot be papered over by src/.
+        run: bash .github/scripts/check_package.sh
+
+      - name: Assemble the release bundle
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          rm -rf release && mkdir -p release
+          mv dist release/dist
+          python .github/scripts/export_constraints.py --output release/constraints.txt
+          printf '%s' "$RELEASE_TAG" > release/release-tag.txt
+          git rev-parse HEAD | tr -d '\n' > release/release-sha.txt
+          echo "tag=$(cat release/release-tag.txt) sha=$(cat release/release-sha.txt)"
+
+      - name: Upload prepared release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-preflight-${{ inputs.tag }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  # A cheap job whose only purpose is to refuse before the environment gate
+  # wakes a human up.
+  validate_publish_request:
+    if: ${{ !inputs.preflight_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Publish must be dispatched from main, against a preflight run
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
+            echo "::error title=bad tag::Invalid release tag: $RELEASE_TAG"
+            exit 1
+          fi
+          if [ "$WORKFLOW_REF" != "refs/heads/main" ]; then
+            echo "::error title=wrong ref::Real publishes run from main. Use preflight_only=true on a branch."
+            exit 1
+          fi
+          if [[ ! "$PREFLIGHT_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error title=missing preflight::preflight_run_id is required — publish never builds its own artifact."
+            exit 1
+          fi
+
+  publish:
+    needs: [validate_publish_request]
+    if: ${{ !inputs.preflight_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The human gate. Configure `pypi` in Settings → Environments with
+    # required reviewers; without that this job publishes unattended.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mnemotree/
+    permissions:
+      # PyPI Trusted Publishing: the job mints an OIDC token and trades it for
+      # a short-lived, scope-limited upload token. There is no API token in
+      # repository secrets to leak or rotate.
+      id-token: write
+      # Reading an artifact from a *different* workflow run needs this.
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Download the prepared release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pypi-preflight-${{ inputs.tag }}
+          path: release
+          run-id: ${{ inputs.preflight_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Bundle must match what we were asked to publish
+        # The artifact arrives from a run this job did not supervise. Check
+        # that it was built for this tag, from this commit — otherwise a
+        # mistyped run id publishes some other build under this version.
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          for f in release/release-tag.txt release/release-sha.txt; do
+            if [ ! -f "$f" ]; then
+              echo "::error title=bad bundle::$f is missing from the preflight artifact."
+              ls -la release >&2 || true
+              exit 1
+            fi
+          done
+
+          artifact_tag=$(tr -d '\r\n' < release/release-tag.txt)
+          artifact_sha=$(tr -d '\r\n' < release/release-sha.txt)
+          expected_sha=$(git rev-parse HEAD)
+
+          if [ "$artifact_tag" != "$RELEASE_TAG" ]; then
+            echo "::error title=tag mismatch::bundle was built for $artifact_tag, not $RELEASE_TAG"
+            exit 1
+          fi
+          if [ "$artifact_sha" != "$expected_sha" ]; then
+            echo "::error title=sha mismatch::bundle was built from $artifact_sha, tag points at $expected_sha"
+            exit 1
+          fi
+
+          count=$(find release/dist -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')
+          total=$(find release/dist -maxdepth 1 -type f | wc -l | tr -d ' ')
+          if [ "$count" -ne 2 ] || [ "$total" -ne 2 ]; then
+            echo "::error title=bad bundle::expected exactly one wheel and one sdist, found $total file(s)"
+            find release/dist -maxdepth 1 -type f >&2 || true
+            exit 1
+          fi
+          find release/dist -maxdepth 1 -type f -print
+
+      - name: Version is still free on PyPI
+        # Re-checked here because preflight may have run days ago, and an
+        # upload of an existing version fails halfway rather than cleanly.
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://pypi.org/pypi/mnemotree/${version}/json" || echo "000")
+          if [ "$status" = "200" ]; then
+            echo "::error title=already published::mnemotree ${version} is already on PyPI."
+            exit 1
+          fi
+
+      - name: Publish to PyPI
+        # Pinned by commit, not by tag: this is the one step in the repository
+        # that holds a credential, and a moving tag is a credential handed to
+        # whatever the tag points at tomorrow.
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: release/dist
+          print-hash: true
+
+# ── setup ───────────────────────────────────────────────────────────────────
+#
+#   1. mnemotree is not on PyPI yet, so add a *pending* Trusted Publisher
+#      (it creates the project on first upload):
+#        PyPI project name: mnemotree
+#        Owner: kurcontko   Repository: mnemotree
+#        Workflow: release.yml   Environment: pypi
+#      https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/
+#
+#   2. In Settings → Environments, create `pypi` and add yourself as a
+#      required reviewer. That approval is the last thing standing between a
+#      dispatched workflow and a permanent PyPI upload.
+#
+# No secret is needed. If you find yourself adding PYPI_API_TOKEN, something
+# has gone wrong with step 1.
