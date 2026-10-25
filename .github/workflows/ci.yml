@@ -100,10 +100,15 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        # 3.14 is held back upstream: langchain-core imports pydantic.v1,
-        # which warns on 3.14, and pytest runs with `-W error`.
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         include:
+          # langchain-core imports pydantic.v1, which warns once on 3.14, and
+          # pytest runs with `-W error`. Ignore exactly that warning, so any
+          # other 3.14 warning still fails. Drop this when langchain-core
+          # stops importing pydantic.v1.
+          - python-version: "3.14"
+            pytest-args: >-
+              -W "ignore:Core Pydantic V1 functionality isn't compatible with Python 3.14:UserWarning"
           # sqlite-vec is a loadable extension, and macOS is where Python
           # builds without extension loading tend to turn up.
           - os: macos-latest
@@ -126,13 +131,18 @@ jobs:
       - name: Tests
         env:
           PYTHONPATH: src
+          PYTEST_ARGS: ${{ matrix.pytest-args }}
         # The floor sits just under today's line, so a real drop fails while
         # a refactor's noise does not. Ratchet it up as coverage grows.
-        run: >-
-          python -m pytest
-          --cov-report=xml:coverage.xml
-          --junitxml=pytest-report.xml
-          --cov-fail-under=62
+        # PYTEST_ARGS is a fixed matrix value, never event data; eval keeps
+        # its quoted warning filter as one argument.
+        run: |
+          eval "set -- ${PYTEST_ARGS:-}"
+          python -m pytest \
+            --cov-report=xml:coverage.xml \
+            --junitxml=pytest-report.xml \
+            --cov-fail-under=62 \
+            "$@"
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
