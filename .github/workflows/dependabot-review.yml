@@ -29,20 +29,17 @@ concurrency:
 
 jobs:
   triage:
-    # A workflow_run must be the completion of this repository's pull-request
-    # CI run and retain Dependabot as its original actor. A dispatch is an
-    # owner-only escape hatch; Resolve still rejects a non-Dependabot PR.
+    # A workflow_run must be the completion of this repository's own
+    # pull-request CI run; a dispatch is an owner-only escape hatch.
     #
-    # Identities are compared by numeric account ID, never by login or
-    # `github.actor`: a re-run keeps the original actor while someone else
-    # triggers it, and IDs are the one field nobody can rename into.
-    # 49699333 is dependabot[bot]. An owner re-running Dependabot's CI is
-    # not Dependabot; refresh that review through the dispatch path instead.
+    # Deliberately no actor or login test here. Event context such as
+    # workflow_run.actor describes who triggered a run, not who authored the
+    # pull request, so it is not the thing to trust. The Resolve step asks
+    # the API for the PR's author and skips anything that is not Dependabot
+    # before any credential or checkout is touched.
     if: >-
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.actor.id == 49699333 &&
-       github.event.workflow_run.triggering_actor.id == 49699333 &&
        github.event.workflow_run.head_repository.full_name == github.repository) ||
       (github.event_name == 'workflow_dispatch' &&
        github.event.sender.id == github.repository_owner_id)
@@ -86,13 +83,24 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # CI completes for every pull request. Only a dispatch, which names
+          # its PR on purpose, treats "not a Dependabot PR" as an error.
+          not_ours() {
+            if [ "$EVENT" = "workflow_dispatch" ]; then
+              echo "::error title=$1::$2"
+              exit 1
+            fi
+            echo "$2; nothing to triage."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
           pr="$EVENT_PR"
           if [ "$EVENT" = "workflow_dispatch" ]; then
             pr="$INPUT_PR"
           fi
           if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
-            echo "::error title=bad pull request::expected a numeric PR, got: $pr"
-            exit 1
+            not_ours "bad pull request" "expected a numeric PR, got: '$pr'"
           fi
 
           data="$(gh pr view "$pr" --repo "$REPO" \
@@ -105,12 +113,10 @@ jobs:
           files="$(jq -c '[.files[].path] | sort' <<< "$data")"
 
           if [ "$author" != "app/dependabot" ] || [ "$is_bot" != "true" ]; then
-            echo "::error title=wrong author::#$pr is not authored by Dependabot"
-            exit 1
+            not_ours "wrong author" "#$pr is not authored by Dependabot"
           fi
           if [ "$state" != "OPEN" ]; then
-            echo "::error title=closed pull request::#$pr is not open"
-            exit 1
+            not_ours "closed pull request" "#$pr is not open"
           fi
           if ! [[ "$head" =~ ^[0-9a-f]{40}$ && "$base" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error title=bad revision::GitHub returned an invalid head or base SHA"
