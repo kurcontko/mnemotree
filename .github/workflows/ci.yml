@@ -218,6 +218,106 @@ jobs:
           PYTHONPATH: src
         run: python -m pytest --no-cov
 
+  # Offline retrieval quality. benchmarks/evaluate.py with deterministic
+  # dummy embeddings on every store that needs no service; eval_gate.py
+  # holds each to the floors in budget.toml and the stores to each other.
+  eval:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache-suffix: extras
+      - name: Install dev and optional-backend dependencies (from uv.lock)
+        run: >-
+          uv sync --locked --no-build --no-install-project --no-install-package pypika
+          --extra dev --extra chroma --extra mcp --extra normalization --extra keywords
+      - name: Evaluate every store offline
+        env:
+          PYTHONPATH: src
+          # The dummy embedder hashes tokens with the builtin hash(), which
+          # Python randomises per process; without this the "deterministic"
+          # embeddings change on every run.
+          PYTHONHASHSEED: "0"
+        run: |
+          set -uo pipefail
+          data="$RUNNER_TEMP/eval-data"
+          out="$RUNNER_TEMP/eval"
+          mkdir -p "$data" "$out"
+          cp benchmarks/data/*.jsonl "$data/"
+          stores=$(python -c "import tomllib; print(' '.join(tomllib.load(open('budget.toml', 'rb'))['eval']['stores']))")
+          for store in $stores; do
+            echo "::group::$store"
+            python benchmarks/evaluate.py --store "$store" --data-dir "$data" \
+              --dummy-embeddings --disable-ner --disable-keywords \
+              --output "$out/$store.json" || echo "::error title=eval crashed::$store"
+            echo "::endgroup::"
+          done
+          {
+            echo "### Offline retrieval eval"
+            echo
+            python .github/scripts/eval_gate.py "$out"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # The suite and the offline eval inside bubblewrap with the network
+  # namespace unshared. "Lite mode needs no network" is a promise; this is
+  # where it is checked rather than assumed — a test, a default, or an
+  # optional backend that phones home fails here instead of on an
+  # air-gapped user's machine.
+  sandbox:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_code == 'true'
+    # This image permits the unprivileged user namespaces bubblewrap needs.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache-suffix: extras
+      - name: Install bubblewrap and dependencies (from uv.lock)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bubblewrap
+          uv sync --locked --no-build --no-install-project --no-install-package pypika \
+            --extra dev --extra chroma --extra mcp --extra normalization --extra keywords
+      # Proves the containment before trusting a green run inside it.
+      - name: The sandbox really has no network
+        run: |
+          set -uo pipefail
+          if bwrap --dev-bind / / --unshare-net --die-with-parent \
+            python -c "import socket; socket.create_connection(('pypi.org', 443), timeout=5)"; then
+            echo "::error title=sandbox leak::pypi.org is reachable with the network unshared"
+            exit 1
+          fi
+          echo "No route out, as intended."
+      - name: Suite and offline eval with networking unshared
+        env:
+          PYTHONPATH: src
+          PYTHONHASHSEED: "0"
+        run: |
+          data="$RUNNER_TEMP/sandbox-eval"
+          mkdir -p "$data"
+          cp benchmarks/data/*.jsonl "$data/"
+          # The inner script is single-quoted on purpose: "$1" is expanded by
+          # the bash that runs inside the sandbox, from the argument after `_`.
+          # shellcheck disable=SC2016
+          bwrap --dev-bind / / --unshare-net --die-with-parent -- bash -euo pipefail -c '
+            python -m pytest -q --no-cov -p no:cacheprovider
+            python benchmarks/evaluate.py --store inmemory --data-dir "$1" \
+              --dummy-embeddings --disable-ner --disable-keywords \
+              --output "$1/result.json"
+          ' _ "$data"
+
   lint:
     needs: [preflight]
     if: needs.preflight.outputs.run_code == 'true'
@@ -270,7 +370,7 @@ jobs:
   # that silently stops running fails here.
   gate:
     name: gate
-    needs: [preflight, test, extras, heavy, lint, package, workflow_sanity]
+    needs: [preflight, test, extras, heavy, eval, sandbox, lint, package, workflow_sanity]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -285,6 +385,8 @@ jobs:
           SANITY_RESULT: ${{ needs.workflow_sanity.result }}
           TEST_RESULT: ${{ needs.test.result }}
           EXTRAS_RESULT: ${{ needs.extras.result }}
+          EVAL_RESULT: ${{ needs.eval.result }}
+          SANDBOX_RESULT: ${{ needs.sandbox.result }}
           HEAVY_RESULT: ${{ needs.heavy.result }}
           LINT_RESULT: ${{ needs.lint.result }}
         run: |
@@ -317,6 +419,8 @@ jobs:
           for lane in \
             "test|$TEST_RESULT|$DOCS_ONLY" \
             "extras|$EXTRAS_RESULT|$DOCS_ONLY" \
+            "eval|$EVAL_RESULT|$DOCS_ONLY" \
+            "sandbox|$SANDBOX_RESULT|$DOCS_ONLY" \
             "lint|$LINT_RESULT|$DOCS_ONLY" \
             "heavy|$HEAVY_RESULT|$heavy_may_skip"; do
             IFS='|' read -r name result may_skip <<< "$lane"
