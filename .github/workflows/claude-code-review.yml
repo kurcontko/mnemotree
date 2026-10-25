@@ -145,26 +145,33 @@ jobs:
           STARTED_AT: ${{ steps.start.outputs.at }}
         run: |
           set -euo pipefail
-          if [ -s "${EXECUTION_FILE:-}" ]; then
-            echo "::group::MCP servers"
-            jq -r '.[] | select(.type == "system" and .subtype == "init")
-              | .mcp_servers[]? | "\(.name) \(.status)"' "$EXECUTION_FILE" || true
-            echo "::endgroup::"
-            echo "::group::Tool calls"
-            jq -r '.[] | select(.type == "assistant") | .message.content[]?
-              | select(.type == "tool_use") | .name' "$EXECUTION_FILE" \
-              | sort | uniq -c | sort -rn || true
-            echo "::endgroup::"
-            echo "::group::Denied tool calls"
-            jq -r '.[] | select(.type == "result") | .permission_denials[]?
-              | "\(.tool_name) \(.tool_input | tostring | .[0:160])"' "$EXECUTION_FILE" \
-              | sort | uniq -c | sort -rn | head -40 || true
-            echo "::endgroup::"
-            echo "::group::Final message"
-            jq -r '.[] | select(.type == "result") | .result // "" | .[0:4000]' \
-              "$EXECUTION_FILE" || true
-            echo "::endgroup::"
+          # No execution log means no Claude session ran. The action exits
+          # successfully without one when it skips on purpose — notably on any
+          # PR that changes this workflow, which it refuses to run until the
+          # file matches the default branch. That is not a missing review.
+          # An action error, such as a missing credential, fails that step.
+          if [ ! -s "${EXECUTION_FILE:-}" ]; then
+            echo "::warning title=review skipped::claude-code-action ran no session (see its log); no review was expected"
+            exit 0
           fi
+          echo "::group::MCP servers"
+          jq -r '.[] | select(.type == "system" and .subtype == "init")
+            | .mcp_servers[]? | "\(.name) \(.status)"' "$EXECUTION_FILE" || true
+          echo "::endgroup::"
+          echo "::group::Tool calls"
+          jq -r '.[] | select(.type == "assistant") | .message.content[]?
+            | select(.type == "tool_use") | .name' "$EXECUTION_FILE" \
+            | sort | uniq -c | sort -rn || true
+          echo "::endgroup::"
+          echo "::group::Denied tool calls"
+          jq -r '.[] | select(.type == "result") | .permission_denials[]?
+            | "\(.tool_name) \(.tool_input | tostring | .[0:160])"' "$EXECUTION_FILE" \
+            | sort | uniq -c | sort -rn | head -40 || true
+          echo "::endgroup::"
+          echo "::group::Final message"
+          jq -r '.[] | select(.type == "result") | .result // "" | .[0:4000]' \
+            "$EXECUTION_FILE" || true
+          echo "::endgroup::"
           posted=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments?since=$STARTED_AT&per_page=100" \
             --jq '[.[] | select(.user.type == "Bot")] | length')
           if [ "$posted" -eq 0 ]; then
