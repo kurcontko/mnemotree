@@ -124,8 +124,8 @@ jobs:
       # Wheels only from uv.lock: no third-party build scripts run in CI.
       # The project itself is imported from src/ via PYTHONPATH instead of
       # being built; the package lane is where the wheel gets checked.
-      - name: Install dev dependencies (from uv.lock)
-        run: uv sync --locked --no-build --no-install-project --extra dev
+      - name: Install dev and legacy dependencies (from uv.lock)
+        run: uv sync --locked --no-build --no-install-project --extra dev --extra legacy
       - name: Byte-compile
         run: python -m compileall -q src tests
       - name: Tests
@@ -176,7 +176,7 @@ jobs:
       - name: Install dev and optional-backend dependencies (from uv.lock)
         run: >-
           uv sync --locked --no-build --no-install-project --no-install-package pypika
-          --extra dev --extra chroma --extra mcp --extra normalization --extra keywords
+          --extra dev --extra legacy --extra chroma --extra mcp --extra normalization --extra keywords
       - name: Backends really are present
         run: python -W error -c "import chromadb, fastmcp, dateparser, yake"
       - name: Tests
@@ -202,7 +202,9 @@ jobs:
         with:
           cache-suffix: heavy
       - name: Install dev and local-model dependencies (from uv.lock)
-        run: uv sync --locked --no-build --no-install-project --extra dev --extra lite --extra ner_hf
+        run: >-
+          uv sync --locked --no-build --no-install-project
+          --extra dev --extra legacy --extra lite --extra ner_hf
       - name: Local-model wrappers import against the locked versions
         env:
           PYTHONPATH: src
@@ -218,6 +220,40 @@ jobs:
           PYTHONPATH: src
         run: python -m pytest --no-cov
 
+  # The default install is the evidence engine alone. Every other lane adds
+  # the legacy extra, so this is the one place a stray LangChain-era import
+  # in mnemotree.evidence would fail.
+  evidence-minimal:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache-suffix: evidence-minimal
+      - name: Install dev and serve dependencies, without legacy (from uv.lock)
+        run: uv sync --locked --no-build --no-install-project --extra dev --extra serve
+      - name: Legacy dependencies really are absent
+        env:
+          PYTHONPATH: src
+        run: |
+          python -W error -c "
+          import importlib.util
+          from mnemotree import Memory
+          legacy = ('langchain', 'langchain_core', 'numpy', 'sklearn', 'networkx', 'spacy', 'openai')
+          present = [name for name in legacy if importlib.util.find_spec(name) is not None]
+          assert not present, present
+          "
+      - name: Evidence tests
+        env:
+          PYTHONPATH: src
+        run: python -m pytest tests/test_evidence.py tests/test_evidence_adapter.py --no-cov
+
   lint:
     needs: [preflight]
     if: needs.preflight.outputs.run_code == 'true'
@@ -229,7 +265,7 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.ref || github.sha }}
       - uses: ./.github/actions/setup-ci
-      - run: uv sync --locked --no-build --no-install-project --extra dev
+      - run: uv sync --locked --no-build --no-install-project --extra dev --extra legacy
       - name: ruff
         run: |
           ruff check src tests .github/scripts
@@ -270,7 +306,7 @@ jobs:
   # that silently stops running fails here.
   gate:
     name: gate
-    needs: [preflight, test, extras, heavy, lint, package, workflow_sanity]
+    needs: [preflight, test, extras, heavy, evidence-minimal, lint, package, workflow_sanity]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -286,6 +322,7 @@ jobs:
           TEST_RESULT: ${{ needs.test.result }}
           EXTRAS_RESULT: ${{ needs.extras.result }}
           HEAVY_RESULT: ${{ needs.heavy.result }}
+          EVIDENCE_RESULT: ${{ needs.evidence-minimal.result }}
           LINT_RESULT: ${{ needs.lint.result }}
         run: |
           set -uo pipefail
@@ -317,6 +354,7 @@ jobs:
           for lane in \
             "test|$TEST_RESULT|$DOCS_ONLY" \
             "extras|$EXTRAS_RESULT|$DOCS_ONLY" \
+            "evidence-minimal|$EVIDENCE_RESULT|$DOCS_ONLY" \
             "lint|$LINT_RESULT|$DOCS_ONLY" \
             "heavy|$HEAVY_RESULT|$heavy_may_skip"; do
             IFS='|' read -r name result may_skip <<< "$lane"
