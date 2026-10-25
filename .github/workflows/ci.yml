@@ -264,6 +264,14 @@ jobs:
             echo
             python .github/scripts/eval_gate.py "$out"
           } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Per-query eval results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eval-results
+          path: ${{ runner.temp }}/eval/
+          if-no-files-found: warn
+          retention-days: 7
 
   # The suite and the offline eval inside bubblewrap with the network
   # namespace unshared. "Lite mode needs no network" is a promise; this is

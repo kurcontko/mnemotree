@@ -42,8 +42,14 @@ max_public_exports = 16
 # these on purpose, lower them here and say why.
 stores = ["inmemory", "chroma", "sqlite-vec"]
 # Every store sees the same memories and the same embeddings, so they must
-# rank them the same. Max allowed spread between stores per metric.
-max_store_spread = 0.005
+# rank them the same. Max allowed spread between stores per metric. Not 0:
+# chroma's HNSW index is approximate, and hashed bag-of-words embeddings
+# produce exact score ties whose order is backend-defined. On Linux CI that
+# moves one of the 68 queries (recall@5 0.2897 vs 0.2824 = 0.0074); macOS
+# matched exactly. 0.015 allows about two such queries; a broken store
+# moves many more. Per-query results are uploaded as the `eval-results`
+# artifact when a spread needs explaining.
+max_store_spread = 0.015
 
 [eval.floors]
 # 2026-10: measured recall@5 0.2824, recall@10 0.3613, mrr 0.2555,
