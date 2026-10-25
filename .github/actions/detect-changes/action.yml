@@ -28,8 +28,12 @@ runs:
       env:
         BASE_SHA: ${{ inputs.base-sha }}
       run: |
-        # No `set -e`: every failure path here has a defined fallback, and the
-        # fallback is always the conservative one.
+        # No errexit: every failure path here has a defined fallback, and the
+        # fallback is always the conservative one. GitHub runs composite
+        # `shell: bash` steps as `bash -e -o pipefail`, so it has to be turned
+        # off explicitly — under -e, a grep that matches nothing (exit 1)
+        # inside $(...) aborted the step on every change without a doc file.
+        set +e
         set -uo pipefail
 
         if [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
@@ -60,8 +64,9 @@ runs:
         DOC_RE='^docs/.*\.md$|^[^/]+\.md$|^LICENSE$'
         DEPS_RE='^pyproject\.toml$|^uv\.lock$'
 
-        NON_DOCS=$(echo "$CHANGED" | grep -vE "$DOC_RE")
-        DEPS=$(echo "$CHANGED" | grep -E "$DEPS_RE")
+        # grep exits 1 when nothing matches; an empty answer is the answer.
+        NON_DOCS=$(echo "$CHANGED" | grep -vE "$DOC_RE" || true)
+        DEPS=$(echo "$CHANGED" | grep -E "$DEPS_RE" || true)
 
         if [ -n "$DEPS" ]; then
           echo "deps_changed=true" >> "$GITHUB_OUTPUT"
