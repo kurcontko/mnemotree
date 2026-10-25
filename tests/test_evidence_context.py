@@ -1,4 +1,5 @@
 import json
+from datetime import UTC
 
 import pytest
 
@@ -247,12 +248,12 @@ def test_render_marks_skipped_messages():
 
 
 def test_relative_dates_resolve_against_the_message_time():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from mnemotree.evidence.temporal import resolve
 
     # Monday, 8 May 2023.
-    said = datetime(2023, 5, 8, 13, 0, tzinfo=timezone.utc)
+    said = datetime(2023, 5, 8, 13, 0, tzinfo=UTC)
     assert resolve("I went yesterday and again two weeks ago.", said) == [
         "yesterday = Sunday, 7 May 2023",
         "two weeks ago = week of 24 April 2023",
@@ -282,22 +283,22 @@ def test_relative_dates_resolve_against_the_message_time():
     ],
 )
 def test_dates_out_of_range_get_no_note(text):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from mnemotree.evidence.models import render_line
     from mnemotree.evidence.temporal import resolve
 
-    said = datetime(2023, 5, 8, 13, 0, tzinfo=timezone.utc)
+    said = datetime(2023, 5, 8, 13, 0, tzinfo=UTC)
     assert resolve(text + " See you tomorrow.", said) == ["tomorrow = Tuesday, 9 May 2023"]
     assert render_line(said, "user", text).endswith(f"user: {text}")
 
 
 def test_render_appends_resolved_dates():
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from mnemotree.evidence.models import render_line
 
-    said = datetime(2023, 5, 8, 13, 0, tzinfo=timezone.utc)
+    said = datetime(2023, 5, 8, 13, 0, tzinfo=UTC)
     assert render_line(said, "Caroline", "I went yesterday.") == (
         "[2023-05-08 Mon 13:00 UTC] Caroline: I went yesterday. (yesterday = Sunday, 7 May 2023)"
     )
@@ -305,10 +306,10 @@ def test_render_appends_resolved_dates():
 
 
 async def test_time_order_returns_selected_items_chronologically(tmp_path):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    early = datetime(2023, 5, 1, tzinfo=timezone.utc)
-    late = datetime(2023, 6, 1, tzinfo=timezone.utc)
+    early = datetime(2023, 5, 1, tzinfo=UTC)
+    late = datetime(2023, 6, 1, tzinfo=UTC)
     with Memory(tmp_path / "m.db") as memory:
         for request, (when, text) in enumerate(
             [(early, "Bought a kayak."), (late, "Kayak trip, kayak lessons, kayak club.")]
