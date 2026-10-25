@@ -59,16 +59,12 @@ jobs:
       files: ${{ steps.pr.outputs.files }}
       report: ${{ steps.validate.outputs.report }}
     env:
-      # `deepseek-flash` is DeepSeek's current Flash ID, served by V4.1 Flash.
-      ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic
-      ANTHROPIC_DEFAULT_OPUS_MODEL: deepseek-flash
-      ANTHROPIC_DEFAULT_SONNET_MODEL: deepseek-flash
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: deepseek-flash
-      CLAUDE_CODE_SUBAGENT_MODEL: deepseek-flash
-      CLAUDE_CODE_EFFORT_LEVEL: max
+      # Same Claude Code OAuth token and model as claude-code-review.yml.
+      CLAUDE_CODE_SUBAGENT_MODEL: sonnet
+      CLAUDE_CODE_EFFORT_LEVEL: high
       # The action also turns this on when allowed_non_write_users is set.
       # Keep it explicit: model-controlled subprocesses must not inherit the
-      # DeepSeek key or runner/cloud credentials.
+      # OAuth token or runner/cloud credentials.
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
     steps:
       - name: Resolve the pull request
@@ -169,10 +165,10 @@ jobs:
       - name: Require model credential
         if: steps.pr.outputs.skip != 'true'
         env:
-          MODEL_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           if [ -z "${MODEL_KEY:-}" ]; then
-            echo "::error title=missing secret::DEEPSEEK_API_KEY is not configured in the Actions secret store"
+            echo "::error title=missing secret::CLAUDE_CODE_OAUTH_TOKEN is not configured in the Actions secret store"
             exit 1
           fi
 
@@ -223,7 +219,7 @@ jobs:
         id: claude
         if: steps.pr.outputs.skip != 'true'
         with:
-          anthropic_api_key: ${{ secrets.DEEPSEEK_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
           # Supplying this job's token avoids minting the Claude App's broader
           # token. Its permissions above are read-only and it expires with the
@@ -279,7 +275,7 @@ jobs:
           # Network reads are GET-only and domain-scoped; structured output is
           # checked again by a trusted step before crossing jobs.
           claude_args: >-
-            --model deepseek-flash
+            --model sonnet
             --max-turns 50
             --no-session-persistence
             --permission-mode dontAsk
@@ -296,7 +292,7 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           REPORT_JSON: ${{ steps.claude.outputs.structured_output }}
           EXPECTED_FILES: ${{ steps.pr.outputs.files }}
           HEAD: ${{ steps.pr.outputs.head }}
@@ -460,9 +456,11 @@ jobs:
             echo "Commented on #$PR."
           fi
 
-# Setup: configure DEEPSEEK_API_KEY once as an Actions repository secret. The
-# workflow_run job can read it even though the upstream Dependabot `CI` run
-# cannot. No duplicate Dependabot secret is needed. To refresh an open PR:
+# Setup: the same CLAUDE_CODE_OAUTH_TOKEN Actions secret as the automatic
+# review (`claude setup-token`). The workflow_run job can read it even though
+# the upstream Dependabot `CI` run cannot. No duplicate Dependabot secret is
+# needed, and no Claude GitHub App token is minted: the job passes its own
+# read-only github_token. To refresh an open PR:
 #
 #   gh workflow run "dependabot review" -f pr=<number>
 #
