@@ -1,0 +1,74 @@
+name: prepare release
+
+# Step 1 of a release. Bumps the version in pyproject.toml and uv.lock,
+# promotes CHANGELOG.md's Unreleased notes to a dated section, and opens a
+# release PR for review. Merging that PR is what triggers
+# release-candidate.yml; nothing here tags, drafts, or publishes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Explicit PEP 440 version, for example 0.4.0rc1"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Push the release branch, open its PR, and dispatch CI on it.
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci
+        with:
+          cache: "false"
+      - name: Prepare reviewed version and changelog
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python .github/scripts/release_prepare.py "$RELEASE_VERSION"
+          uv lock --check
+          git diff --check
+      - name: Open release PR and explicitly dispatch its checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          branch="release/v${RELEASE_VERSION}"
+          # Never replace a branch containing an earlier review or a maintainer edit.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" >/dev/null 2>&1; then
+            echo "::error::Release branch exists; resume its PR instead of overwriting it"
+            exit 1
+          fi
+          git checkout -b "$branch"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pyproject.toml uv.lock CHANGELOG.md
+          git commit -m "chore: prepare mnemotree $RELEASE_VERSION"
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin "$branch"
+          cat > "$RUNNER_TEMP/release-pr.md" <<'BODY'
+          Updates the package version and promotes the reviewed Unreleased notes.
+
+          Review compatibility and migration notes before merging. Merge creates a
+          tested release candidate and annotated tag; PyPI publication is separate.
+          BODY
+          gh pr create --base main --head "$branch" --title "Release mnemotree $RELEASE_VERSION" --body-file "$RUNNER_TEMP/release-pr.md"
+          # GITHUB_TOKEN-created PRs do not trigger normal pull_request workflows.
+          gh workflow run ci.yml --ref "$branch"

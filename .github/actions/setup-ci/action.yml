@@ -11,6 +11,12 @@ inputs:
       Separates the uv cache of lanes that install different extras, so the
       heavy torch lane neither evicts nor bloats the cache the fast lanes use.
     default: ""
+  cache:
+    description: >
+      "false" for release builds: an artifact that ends up on PyPI must not be
+      built on top of a cache that any earlier pull-request run could have
+      written into.
+    default: "true"
 runs:
   using: composite
   steps:
@@ -26,6 +32,6 @@ runs:
       with:
         version: "0.11.6"
         python-version: ${{ inputs.python-version }}
-        enable-cache: true
+        enable-cache: ${{ inputs.cache }}
         cache-suffix: ${{ inputs.cache-suffix }}
         activate-environment: true
