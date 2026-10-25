@@ -345,3 +345,81 @@ async def test_sqlite_vec_error_handling(tmp_path, memory_item):
 
     finally:
         await store.close()
+
+
+def _axis(dim: int, *weights: tuple[int, float]) -> list[float]:
+    vector = [0.0] * dim
+    for index, weight in weights:
+        vector[index] = weight
+    return vector
+
+
+@pytest.mark.asyncio
+async def test_sqlite_vec_vector_search_ranks_nearest_first(tmp_path, memory_item):
+    """Regression: both vector-search paths called a distance() function that
+    sqlite-vec does not define, so every vector recall raised OperationalError."""
+    dim = 8
+    store = SQLiteVecMemoryStore(db_path=tmp_path / "memories.sqlite", embedding_dim=dim)
+    await store.initialize()
+    try:
+        for i in range(3):
+            await store.store_memory(
+                memory_item.model_copy(
+                    update={"memory_id": f"mem-{i}", "embedding": _axis(dim, (i, 1.0))}
+                )
+            )
+        # Squared L2 to the query: mem-1 0.25, mem-2 1.25, mem-0 2.25.
+        query = _axis(dim, (1, 1.0), (2, 0.5))
+
+        similar = await store.get_similar_memories("query", query, top_k=3)
+        assert [m.memory_id for m in similar] == ["mem-1", "mem-2", "mem-0"]
+
+        queried = await store.query_memories(MemoryQuery(vector=query, limit=2))
+        assert [m.memory_id for m in queried] == ["mem-1", "mem-2"]
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_vec_vector_search_breaks_ties_by_memory_id(tmp_path, memory_item):
+    dim = 4
+    store = SQLiteVecMemoryStore(db_path=tmp_path / "memories.sqlite", embedding_dim=dim)
+    await store.initialize()
+    try:
+        for memory_id in ("mem-b", "mem-c", "mem-a"):
+            await store.store_memory(
+                memory_item.model_copy(
+                    update={"memory_id": memory_id, "embedding": _axis(dim, (0, 1.0))}
+                )
+            )
+        similar = await store.get_similar_memories("query", _axis(dim, (0, 1.0)), top_k=3)
+        assert [m.memory_id for m in similar] == ["mem-a", "mem-b", "mem-c"]
+    finally:
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_memory_core_recall_round_trip_on_sqlite_store(tmp_path):
+    """The default store must survive MemoryCore.remember -> recall, the path
+    mnemotree-mcp's recall tool takes with its default sqlite backend."""
+    from langchain_core.embeddings import DeterministicFakeEmbedding
+
+    from mnemotree import MemoryCore
+    from mnemotree.core.memory import ModeDefaultsConfig, NerConfig
+
+    dim = 32
+    store = SQLiteVecMemoryStore(db_path=tmp_path / "memories.sqlite", embedding_dim=dim)
+    await store.initialize()
+    try:
+        core = MemoryCore(
+            store=store,
+            embeddings=DeterministicFakeEmbedding(size=dim),
+            mode_defaults=ModeDefaultsConfig(enable_keywords=False),
+            ner_config=NerConfig(enable_ner=False),
+        )
+        stored = await core.remember("The sqlite store round-trips this memory.")
+        await core.remember("An unrelated note about gardening.")
+        recalled = await core.recall("The sqlite store round-trips this memory.", limit=1)
+        assert [m.memory_id for m in recalled] == [stored.memory_id]
+    finally:
+        await store.close()
