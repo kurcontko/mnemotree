@@ -15,6 +15,8 @@ allowed-tools:
   - "WebFetch(domain:github.com)"
   - "WebFetch(domain:raw.githubusercontent.com)"
   - "WebFetch(domain:pypi.org)"
+  - "mcp__context7__resolve-library-id"
+  - "mcp__context7__query-docs"
 ---
 
 # Dependabot review
@@ -177,6 +179,15 @@ vulnerable API; say which API and which grep proved it.
    reachable through a direct dependency, which you must name.
 3. **For High.** Read the release notes between old and new (PR body, then
    `https://pypi.org/project/<pkg>/<version>/` and the upstream changelog).
+   Then ask Context7 about the new version directly:
+   `mcp__context7__resolve-library-id` with the package name, then
+   `mcp__context7__query-docs` with that ID and a question naming the
+   symbols mnemotree imports (from the grep in step 2), e.g. "Is
+   `langchain_core.embeddings.Embeddings.aembed_query` still present in
+   1.8, and did its signature change?". Release notes summarize; the docs
+   answer for the specific names. Cite which library ID and version
+   Context7 returned. If it has no docs for that version, say so rather than
+   reading an older version's docs as current.
    For the langchain family, list the names mnemotree imports
    (`grep -rn 'from langchain' src/mnemotree/`) and check the notes for
    renames, removals and moved modules on those names. For `sqlite-vec`,
