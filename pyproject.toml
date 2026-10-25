@@ -97,10 +97,10 @@ keywords = [
 ui = ["streamlit>=1.40.0"]
 
 # MCP server
-mcp = ["fastmcp<4"]
+mcp = ["fastmcp<5"]
 mcp_server = [
     "chromadb>=0.5.23",
-    "fastmcp<4",
+    "fastmcp<5",
     "sentence-transformers>=2.7.0",
 ]
 
@@ -126,7 +126,7 @@ all = [
     "sentence-transformers>=2.7.0",
     "yake>=0.4.8",
     "streamlit>=1.40.0",
-    "fastmcp<4",
+    "fastmcp<5",
     "langchain-google-genai>=2.0.7",
     "langchain-anthropic>=1.4.6",
     "langchain-aws>=0.2.0",
