@@ -1,9 +1,17 @@
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from mnemotree.evidence.cli import main
+
+
+def run_cli():
+    # main() ends in asyncio.run, which clears its thread's event loop when done. On
+    # the test thread that would drop the loop pytest-asyncio set there, unclosed.
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pool.submit(main).result()
 
 
 def test_retrieval_ablation_cli_writes_span_metrics_and_reproducibility(
@@ -62,7 +70,7 @@ def test_retrieval_ablation_cli_writes_span_metrics_and_reproducibility(
             str(output),
         ],
     )
-    main()
+    run_cli()
     report = json.loads(output.read_text())
     assert json.loads(capsys.readouterr().out) == report["summary"]
     baseline = report["reports"]["baseline"]
@@ -89,10 +97,10 @@ def test_cli_search_routes_explicit_options(tmp_path, monkeypatch, capsys):
     )
     common = ["mnemotree-evidence", "--db", str(tmp_path / "db")]
     monkeypatch.setattr(sys, "argv", [*common, "add", str(corpus)])
-    main()
+    run_cli()
     capsys.readouterr()
     monkeypatch.setattr(sys, "argv", [*common, "search", "u", "unmatched", "--option", "zebra"])
-    main()
+    run_cli()
     result = json.loads(capsys.readouterr().out)
     assert result["trace"]["channel_counts"]["lexical"] == 1
     assert result["evidence"][0]["source_id"] == "a"
@@ -117,6 +125,6 @@ def test_cli_rejects_invalid_candidate_k_before_creating_database(tmp_path, monk
         ],
     )
     with pytest.raises(SystemExit) as exc:
-        main()
+        run_cli()
     assert exc.value.code == 2
     assert not path.exists()
