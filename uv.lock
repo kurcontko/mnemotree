@@ -5645,11 +5645,11 @@ wheels = [
 
 [[package]]
 name = "spark-nlp"
-version = "6.3.0"
+version = "7.0.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e7/bc/ebff16d3ef82cd978c94731bb53064b0c52f0a7748dbf6cf753fd53873a6/spark_nlp-6.3.0.tar.gz", hash = "sha256:b14df0fe6b97417c02a6444c0fb5b49a99d6f7d7a75eeb6ef80a3aeae527f86f", size = 363984, upload-time = "2025-12-16T14:13:17.722Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a4/f4/cb5a53f3a332a4b6f95c958c789a090c6350598766747d2fca89e89a12ef/spark_nlp-7.0.0.tar.gz", hash = "sha256:8c405447e2e68ca120ae4aacce620ed4c8f8807c070ebacbac55c3dbdc2b9bc5", size = 396160, upload-time = "2026-09-23T19:52:28.135Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ed/ba/248fd8a48c04d6350b25f3382c0b3a404e3d572135829e963e3406c07dce/spark_nlp-6.3.0-py2.py3-none-any.whl", hash = "sha256:478ba1fbf00d3f7262828c1249df44114b245d21e7252f8df10a5ebb39217953", size = 744951, upload-time = "2025-12-16T14:13:15.348Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/7c/952c0f9b7f6652a87d6d04e5d6477eb791951e8bc21fd6358c4da79f605e/spark_nlp-7.0.0-py2.py3-none-any.whl", hash = "sha256:5507de3bb2ae28c353da7dbe6d80f3986379f6ab62c925e7e52800aa4bc6e3ba", size = 794338, upload-time = "2026-09-23T19:52:26.617Z" },
 ]
 
 [[package]]
