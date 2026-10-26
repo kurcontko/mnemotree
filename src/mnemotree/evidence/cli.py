@@ -124,7 +124,8 @@ def code_identity() -> dict[str, str | None]:
                 if result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40}", value):
                     revision = value
             except (OSError, subprocess.TimeoutExpired):
-                pass
+                # No git binary, or it hung: the source digest below still identifies the code.
+                revision = ""
     source_hash = hashlib.sha256()
     try:
         for path in sorted(package.glob("*.py")):
