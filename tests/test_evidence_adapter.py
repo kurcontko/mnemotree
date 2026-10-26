@@ -27,10 +27,15 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
                     {"role": "assistant", "content": "Warsaw sounds good"},
                 ],
             }
-            assert (await client.post("/add", json=payload)).status_code == 401
+            assert (await client.post("/v1/memories/add", json=payload)).status_code == 401
+            query = {"query": "Where did I move?", "user_id": "u"}
+            assert (await client.post("/v1/memories/search", json=query)).status_code == 401
+            wrong = {"Authorization": "Bearer wrong-key"}
+            response = await client.post("/v1/memories/search", json=query, headers=wrong)
+            assert response.status_code == 401
             client.headers["Authorization"] = "Bearer test-key"
             for _ in range(2):
-                response = await client.post("/add", json=payload)
+                response = await client.post("/v1/memories/add", json=payload)
                 assert response.status_code == 200
                 assert response.json() == {
                     "success": True,
@@ -44,22 +49,26 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
                 "user_id": "u",
                 "top_k": 100,
             }
-            response = await client.post("/search", json=request)
+            response = await client.post("/v1/memories/search", json=request)
             assert response.status_code == 200
             results = response.json()["data"]
             assert len(results) == 2 and len({item["id"] for item in results}) == 2
             rendered = [json.loads(item["content"]) for item in results]
             assert any(item["timestamp"] == "2024-01-01T00:00:00+00:00" for item in rendered)
             assert all(item["session_id"] == "s" for item in rendered)
-            assert (await client.post("/search", json={**request, "user_id": "other"})).json() == {
-                "data": []
-            }
-            assert (await client.post("/search", json={**request, "top_k": 101})).status_code == 422
-            assert (await client.post("/search", json={**request, "query": []})).status_code == 422
+            assert (
+                await client.post("/v1/memories/search", json={**request, "user_id": "other"})
+            ).json() == {"data": []}
+            assert (
+                await client.post("/v1/memories/search", json={**request, "top_k": 101})
+            ).status_code == 422
+            assert (
+                await client.post("/v1/memories/search", json={**request, "query": []})
+            ).status_code == 422
             changed = {**payload, "session_id": "changed"}
-            assert (await client.post("/add", json=changed)).status_code == 409
+            assert (await client.post("/v1/memories/add", json=changed)).status_code == 409
             invalid = {**payload, "messages": [{"role": "user", "content": " ", "timestamp": 1}]}
-            assert (await client.post("/add", json=invalid)).status_code == 422
+            assert (await client.post("/v1/memories/add", json=invalid)).status_code == 422
 
 
 async def test_provider_transport_batch_order_and_errors(monkeypatch):
