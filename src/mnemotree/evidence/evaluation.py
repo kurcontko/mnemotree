@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from statistics import mean
+from time import perf_counter
 
 from pydantic import Field
 
@@ -59,19 +60,62 @@ def file_hash(path: Path) -> str:
 
 
 async def evaluate(memory: Memory, corpus: Path, queries: Path, options: SearchOptions) -> dict:
+    ingestion = await ingest_corpus(memory, corpus)
+    return await score_queries(memory, corpus, queries, options, ingestion)
+
+
+async def ablate(memory: Memory, corpus: Path, queries: Path, options: SearchOptions) -> dict:
+    if memory.extractor is None:
+        raise ValueError("atomic ablation requires an extractor")
+    ingestion = await ingest_corpus(memory, corpus)
+    reports = {}
+    for representation in ("raw", "atoms", "combined"):
+        settings = SearchOptions.model_validate(
+            {**options.model_dump(), "representation": representation}
+        )
+        reports[representation] = await score_queries(memory, corpus, queries, settings, ingestion)
+    return {
+        "summary": {key: report["summary"] for key, report in reports.items()},
+        "shared_ingestion": ingestion,
+        "reports": reports,
+    }
+
+
+async def ingest_corpus(memory: Memory, corpus: Path) -> dict:
     # Reject contaminated runs, including forgotten-source receipts.
     if memory.store.db.execute("SELECT 1 FROM evidence_requests LIMIT 1").fetchone():
         raise ValueError("evaluation requires a fresh empty database")
     records = 0
+    atom_count = 0
+    source_count = 0
+    started = perf_counter()
+    usage_before = dict(getattr(memory.extractor, "usage", {}))
     for value in read_jsonl(corpus):
         record = CorpusRecord.model_validate(value)
-        await memory.add(
+        receipt = await memory.add(
             record.namespace,
             record.messages,
             request_id=record.request_id,
             session_id=record.session_id,
         )
         records += 1
+        atom_count += receipt.atom_count
+        source_count += len(receipt.source_ids)
+    return {
+        "records": records,
+        "sources": source_count,
+        "atoms": atom_count,
+        "elapsed_ms": (perf_counter() - started) * 1000,
+        "extraction_usage": {
+            key: value - usage_before.get(key, 0)
+            for key, value in getattr(memory.extractor, "usage", {}).items()
+        },
+    }
+
+
+async def score_queries(
+    memory: Memory, corpus: Path, queries: Path, options: SearchOptions, ingestion: dict
+) -> dict:
     rows = []
     seen = set()
     for value in read_jsonl(queries):
@@ -104,6 +148,7 @@ async def evaluate(memory: Memory, corpus: Path, queries: Path, options: SearchO
                 **metrics,
                 "packed_source_ids": packed,
                 "candidate_count": len(result.trace.candidates),
+                "atom_hit_count": len(result.trace.atom_hits),
                 "packed_tokens": result.trace.packed_tokens,
                 "timings_ms": result.trace.timings_ms,
             }
@@ -136,7 +181,9 @@ async def evaluate(memory: Memory, corpus: Path, queries: Path, options: SearchO
             "corpus_sha256": file_hash(corpus),
             "queries_sha256": file_hash(queries),
             "code_sha256": digest(code),
-            "corpus_records": records,
+            "corpus_records": ingestion["records"],
+            "ingestion": ingestion,
+            "extraction": memory.store.extractor_config,
             "mnemotree": installed_version("mnemotree"),
             "sqlite": sqlite3.sqlite_version,
             "sqlite_vec": version("sqlite-vec"),

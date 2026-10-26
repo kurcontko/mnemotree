@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from time import perf_counter
 
+from .atoms import AtomHit, Extractor, extract_atoms
 from .chunking import chunk_source
 from .models import (
     Candidate,
@@ -24,18 +25,23 @@ from .models import (
 )
 from .packing import TiktokenCounter, pack
 from .protocols import Embedder, Reranker, TokenCounter
-from .store import SQLiteEvidenceStore, now
+from .store import SQLiteEvidenceStore, now, vector_blob
 
 
 def fuse(
-    channels: dict[str, list[tuple[Chunk, float]]], *, weights: dict[str, float], k: int
+    channels: dict[str, list[tuple[Chunk, float]]],
+    *,
+    weights: dict[str, float],
+    k: int,
+    ranks: dict[str, dict[str, int]] | None = None,
 ) -> list[Candidate]:
     by_id: dict[str, Chunk] = {}
     scores: dict[str, dict[str, ChannelScore]] = {}
     for channel, items in channels.items():
         for rank, (chunk, score) in enumerate(items, 1):
             by_id[chunk.id] = chunk
-            scores.setdefault(chunk.id, {})[channel] = ChannelScore(rank=rank, score=score)
+            source_rank = (ranks or {}).get(channel, {}).get(chunk.id, rank)
+            scores.setdefault(chunk.id, {})[channel] = ChannelScore(rank=source_rank, score=score)
     candidates = [
         Candidate(
             chunk=by_id[id],
@@ -65,14 +71,30 @@ class Memory:
         token_counter: TokenCounter | None = None,
         chunk_size: int = 1200,
         chunk_overlap: int = 200,
+        extractor: Extractor | None = None,
+        extraction_batch_chars: int = 12000,
     ) -> None:
         if chunk_size < 1 or not 0 <= chunk_overlap < chunk_size:
             raise ValueError("require chunk_size > chunk_overlap >= 0")
         self.embedder = embedder
+        if not 1 <= extraction_batch_chars <= 100000:
+            raise ValueError("extraction_batch_chars must be between 1 and 100000")
+        self.extractor = extractor
+        self.extraction_batch_chars = extraction_batch_chars
         self.reranker = reranker
         self.counter = token_counter if token_counter is not None else TiktokenCounter()
         self.chunk_size, self.chunk_overlap = chunk_size, chunk_overlap
-        self.store = SQLiteEvidenceStore(path, embedding_spec=embedder.spec if embedder else None)
+        self.store = SQLiteEvidenceStore(
+            path,
+            embedding_spec=embedder.spec if embedder else None,
+            extractor_config={
+                "extractor": extractor.spec.model_dump(),
+                "batch_chars": extraction_batch_chars,
+                "pipeline": "quoted-atoms-v1",
+            }
+            if extractor
+            else None,
+        )
 
     def close(self) -> None:
         self.store.close()
@@ -106,6 +128,8 @@ class Memory:
             return replay
         if self.store.embedding_spec and self.embedder is None:
             raise ValueError("writes to a dense database require its configured embedder")
+        if self.store.extractor_config is not None and self.extractor is None:
+            raise ValueError("writes to an atom database require its configured extractor")
         ingested_at = now()
         sources = [
             Source(
@@ -135,8 +159,31 @@ class Memory:
             if self.embedder
             else None
         )
+        atoms = (
+            await extract_atoms(
+                self.extractor,
+                sources,
+                max_chars=self.extraction_batch_chars,
+                signature=digest(self.store.extractor_config),
+            )
+            if self.extractor
+            else []
+        )
+        atom_vectors = (
+            await self.embedder.embed_documents([atom.text for atom in atoms])
+            if self.embedder and atoms
+            else None
+        )
         return self.store.ingest(
-            namespace, request_id, session_id, body_hash, sources, chunks, vectors
+            namespace,
+            request_id,
+            session_id,
+            body_hash,
+            sources,
+            chunks,
+            vectors,
+            atoms,
+            atom_vectors,
         )
 
     async def search(
@@ -146,6 +193,8 @@ class Memory:
         if not isinstance(query, str) or not query.strip():
             raise ValueError("query must not be blank")
         options = options or SearchOptions(mode="hybrid" if self.embedder else "lexical")
+        if options.representation != "raw" and self.store.extractor_config is None:
+            raise ValueError("atom retrieval requires an extracted corpus")
         started = perf_counter()
         query_vector = None
         if options.mode in ("dense", "hybrid"):
@@ -156,19 +205,51 @@ class Memory:
         retrieval_start = perf_counter()
         channels: dict[str, list[tuple[Chunk, float]]] = {}
         windows: dict[str, tuple[Source, int, int]] = {}
+        atom_hits: list[AtomHit] = []
+        atom_ranks: dict[str, dict[str, int]] = {}
         # A single snapshot covers all channels and source materialization.
         # Concurrent writes cannot mix different versions in the returned evidence.
         with self.store.transaction(read=True):
-            if options.mode in ("lexical", "hybrid"):
+            if options.representation != "atoms" and options.mode in ("lexical", "hybrid"):
                 channels["lexical"] = self.store.lexical(namespace, query, options.candidate_limit)
-            if query_vector is not None:
+            if options.representation != "atoms" and query_vector is not None:
                 channels["dense"] = self.store.dense(
                     namespace, query_vector, options.candidate_limit
                 )
+            if options.representation != "raw":
+                atom_channels = {}
+                if options.mode in ("lexical", "hybrid"):
+                    atom_channels["atom_lexical"] = self.store.atoms.lexical(
+                        namespace, query, options.candidate_limit
+                    )
+                if query_vector is not None:
+                    assert self.store.embedding_spec is not None
+                    atom_channels["atom_dense"] = self.store.atoms.dense(
+                        namespace,
+                        vector_blob(query_vector, self.store.embedding_spec.dimensions),
+                        options.candidate_limit,
+                    )
+                for channel, hits in atom_channels.items():
+                    expanded: dict[str, tuple[Chunk, float]] = {}
+                    atom_ranks[channel] = {}
+                    for rank, (atom, score) in enumerate(hits, 1):
+                        atom_hits.append(
+                            AtomHit(atom=atom, channel=channel, rank=rank, score=score)
+                        )
+                        for chunk in self.store.atoms.chunks(namespace, atom):
+                            expanded.setdefault(chunk.id, (chunk, score))
+                            atom_ranks[channel].setdefault(chunk.id, rank)
+                    channels[channel] = list(expanded.values())
             candidates = fuse(
                 channels,
-                weights={"lexical": options.lexical_weight, "dense": options.dense_weight},
+                weights={
+                    "lexical": options.lexical_weight,
+                    "dense": options.dense_weight,
+                    "atom_lexical": options.lexical_weight * options.atom_weight,
+                    "atom_dense": options.dense_weight * options.atom_weight,
+                },
                 k=options.rrf_k,
+                ranks=atom_ranks,
             )
             for candidate in candidates:
                 windows[candidate.chunk.id] = self.store.window(
@@ -218,6 +299,7 @@ class Memory:
             trace=SearchTrace(
                 mode=options.mode,
                 candidates=tuple(candidates),
+                atom_hits=tuple(hit.model_dump(mode="json") for hit in atom_hits),
                 channel_counts={channel: len(items) for channel, items in channels.items()},
                 packed_tokens=tokens,
                 tokenizer=self.counter.signature,

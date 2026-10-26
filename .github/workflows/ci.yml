@@ -252,7 +252,7 @@ jobs:
       - name: Evidence tests
         env:
           PYTHONPATH: src
-        run: python -m pytest tests/test_evidence.py tests/test_evidence_adapter.py --no-cov
+        run: python -m pytest tests/test_evidence*.py --no-cov
 
   lint:
     needs: [preflight]
