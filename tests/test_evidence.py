@@ -1,6 +1,6 @@
 import asyncio
 import random
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from importlib import import_module
 
 import pytest

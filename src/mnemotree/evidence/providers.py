@@ -7,7 +7,7 @@ import logging
 import math
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 from tenacity import (
@@ -237,7 +237,7 @@ class _RetryAfterOrBackoff(wait_base):
         self,
         fallback: wait_base,
         *,
-        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.fallback = fallback
         self.now = now
@@ -276,7 +276,7 @@ def _retry_after(value: str, now: Callable[[], datetime]) -> float | None:
     except (TypeError, ValueError, IndexError):
         return None
     if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
+        when = when.replace(tzinfo=UTC)
     return _valid((when - now()).total_seconds())
 
 

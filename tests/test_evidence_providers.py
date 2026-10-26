@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from functools import partial
 
 import httpx
 import pytest
@@ -13,9 +14,7 @@ ACTUAL_CLIENT = httpx.AsyncClient
 
 def fake_client(monkeypatch, respond):
     monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
-        lambda **kwargs: ACTUAL_CLIENT(**kwargs, transport=httpx.MockTransport(respond)),
+        httpx, "AsyncClient", partial(ACTUAL_CLIENT, transport=httpx.MockTransport(respond))
     )
 
 
@@ -159,7 +158,7 @@ def test_retry_after_http_date_and_reset_headers():
             error = httpx.HTTPStatusError("e", request=request, response=response)
             self.outcome = type("Outcome", (), {"exception": lambda _: error})()
 
-    now = datetime(2015, 10, 21, 7, 27, 48, tzinfo=timezone.utc)
+    now = datetime(2015, 10, 21, 7, 27, 48, tzinfo=UTC)
     wait = _RetryAfterOrBackoff(lambda state: 1.5, now=lambda: now)
     assert wait(State({"retry-after": "Wed, 21 Oct 2015 07:28:00 GMT"})) == 12.0
     assert wait(State({"retry-after": "Wed, 21 Oct 2015 09:00:00 GMT"})) == 60.0

@@ -8,8 +8,8 @@ import itertools
 import json
 import logging
 import secrets
-from datetime import UTC, datetime, timezone
 from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Annotated, Any, Literal
@@ -42,7 +42,7 @@ MAX_DETAIL_ERRORS = 10
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    return datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
 def append_jsonl(path: Path, record: dict[str, Any]) -> None:
