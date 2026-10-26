@@ -130,3 +130,28 @@ async def test_mcp_sqlite_update_delete_and_restart_are_coherent(tmp_path, monke
     finally:
         await restarted.store.close()
         server._memory_core = None
+
+
+@pytest.mark.asyncio
+async def test_mcp_startup_failure_closes_the_opened_store(tmp_path, monkeypatch):
+    monkeypatch.setenv("MNEMOTREE_MCP_STORE_BACKEND", "sqlite")
+    monkeypatch.setenv("MNEMOTREE_MCP_PERSIST_DIR", str(tmp_path / "memories.sqlite"))
+    monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_HOST", raising=False)
+    monkeypatch.delenv("MNEMOTREE_MCP_CHROMA_PORT", raising=False)
+    monkeypatch.setattr(server, "_memory_core", None)
+    closed = []
+    close = SQLiteVecMemoryStore.close
+
+    async def recording_close(self):
+        closed.append(True)
+        await close(self)
+
+    def failing_core(**_):
+        raise RuntimeError("core")
+
+    monkeypatch.setattr(SQLiteVecMemoryStore, "close", recording_close)
+    monkeypatch.setattr(server, "MemoryCore", failing_core)
+    with pytest.raises(RuntimeError, match="core"):
+        await server._get_memory_core()
+    assert closed == [True]
+    assert server._memory_core is None

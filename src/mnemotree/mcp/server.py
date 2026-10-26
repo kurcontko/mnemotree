@@ -257,8 +257,6 @@ async def _get_memory_core() -> MemoryCore:
                 collection_name=collection_name,
             )
 
-        await store.initialize()
-
         ner_backend = os.getenv("MNEMOTREE_MCP_NER_BACKEND")
         ner_model = os.getenv("MNEMOTREE_MCP_NER_MODEL")
         ner = None
@@ -281,19 +279,21 @@ async def _get_memory_core() -> MemoryCore:
             enable_bm25=enable_bm25,
         )
 
-        memory_core = MemoryCore(
-            store=store,
-            mode_defaults=mode_defaults,
-            ner_config=ner_config,
-            retrieval_config=retrieval_config,
-        )
+        await store.initialize()
+        # Anything that fails, or is cancelled, after the store opens must close it.
         try:
+            memory_core = MemoryCore(
+                store=store,
+                mode_defaults=mode_defaults,
+                ner_config=ner_config,
+                retrieval_config=retrieval_config,
+            )
             if enable_bm25 and isinstance(store, SupportsMemoryListing):
                 # Cached lexical candidates also participate in vector-aware scoring.
                 memories = await store.list_memories(include_embeddings=True)
                 for memory in memories:
                     memory_core.index_manager.add(memory)
-        except Exception:
+        except BaseException:
             await store.close()
             raise
         _memory_core = memory_core
