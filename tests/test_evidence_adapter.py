@@ -28,6 +28,11 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
                 ],
             }
             assert (await client.post("/v1/memories/add", json=payload)).status_code == 401
+            query = {"query": "Where did I move?", "user_id": "u"}
+            assert (await client.post("/v1/memories/search", json=query)).status_code == 401
+            wrong = {"Authorization": "Bearer wrong-key"}
+            response = await client.post("/v1/memories/search", json=query, headers=wrong)
+            assert response.status_code == 401
             client.headers["Authorization"] = "Bearer test-key"
             for _ in range(2):
                 response = await client.post("/v1/memories/add", json=payload)
