@@ -4,28 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import time
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from datetime import UTC, datetime
-from email.utils import parsedate_to_datetime
-
-from tenacity import (
-    AsyncRetrying,
-    RetryCallState,
-    retry_if_exception,
-    stop_after_attempt,
-    wait_exponential_jitter,
-    wait_none,
-)
-from tenacity.wait import wait_base
+from collections.abc import Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING
 
 from .models import EmbeddingSpec
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from tenacity import AsyncRetrying
 
-# Longest wait a provider may request through Retry-After or a reset header.
-_MAX_SERVER_WAIT = 60.0
+logger = logging.getLogger(__name__)
 
 
 class OpenAIEmbedder:
@@ -122,7 +110,19 @@ class OpenAIEmbedder:
         return now - started
 
     def _retrying(self, batch_size: int, cooldown_waited: list[float]) -> AsyncRetrying:
+        # tenacity comes with the embeddings extra; importing it here keeps the module,
+        # and so SentenceTransformerEmbedder, importable on a lite install.
         import httpx
+        from tenacity import (
+            AsyncRetrying,
+            RetryCallState,
+            retry_if_exception,
+            stop_after_attempt,
+            wait_exponential_jitter,
+            wait_none,
+        )
+
+        from .retry import RetryAfterOrBackoff, retryable
 
         def before_sleep(state: RetryCallState) -> None:
             exc = state.outcome.exception() if state.outcome else None
@@ -157,9 +157,9 @@ class OpenAIEmbedder:
             await self._sleep(seconds)
 
         return AsyncRetrying(
-            retry=retry_if_exception(_retryable),
+            retry=retry_if_exception(retryable),
             stop=stop_after_attempt(self.max_attempts),
-            wait=_RetryAfterOrBackoff(
+            wait=RetryAfterOrBackoff(
                 wait_exponential_jitter(initial=self.backoff_seconds, max=16)
                 if self.backoff_seconds > 0
                 else wait_none()
@@ -213,83 +213,6 @@ class OpenAIEmbedder:
 
     async def embed_query(self, text: str) -> list[float]:
         return (await self.embed_documents([text]))[0]
-
-
-def _retryable(exc: BaseException) -> bool:
-    """Rate limits, provider outages and dropped connections; other 4xx fail at once."""
-    import httpx
-
-    if isinstance(exc, httpx.HTTPStatusError):
-        status = exc.response.status_code
-        return status == 429 or status >= 500
-    return isinstance(exc, httpx.TransportError)
-
-
-class _RetryAfterOrBackoff(wait_base):
-    """Wait as long as a 429 asks (capped at 60 s), else back off.
-
-    Honours ``Retry-After`` as delta-seconds or an HTTP-date (RFC 7231), then
-    ``x-ratelimit-reset-requests``/``x-ratelimit-reset-tokens`` only when they are
-    plain seconds. Negative, non-finite or unparseable values use the fallback.
-    """
-
-    def __init__(
-        self,
-        fallback: wait_base,
-        *,
-        now: Callable[[], datetime] = lambda: datetime.now(UTC),
-    ) -> None:
-        self.fallback = fallback
-        self.now = now
-
-    def __call__(self, retry_state: RetryCallState) -> float:
-        import httpx
-
-        exc = retry_state.outcome.exception() if retry_state.outcome else None
-        if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
-            seconds = _server_wait(exc.response.headers, self.now)
-            if seconds is not None:
-                return seconds
-        return self.fallback(retry_state)
-
-
-def _server_wait(headers: Mapping[str, str], now: Callable[[], datetime]) -> float | None:
-    value = headers.get("retry-after", "").strip()
-    seconds = _retry_after(value, now) if value else None
-    if seconds is None:
-        resets = [
-            _seconds(headers.get(name, "").strip())
-            for name in ("x-ratelimit-reset-requests", "x-ratelimit-reset-tokens")
-        ]
-        valid = [reset for reset in resets if reset is not None]
-        seconds = max(valid) if valid else None
-    return None if seconds is None else min(seconds, _MAX_SERVER_WAIT)
-
-
-def _retry_after(value: str, now: Callable[[], datetime]) -> float | None:
-    try:
-        return _valid(float(value))
-    except ValueError:
-        pass
-    try:
-        when = parsedate_to_datetime(value)
-    except (TypeError, ValueError, IndexError):
-        return None
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=UTC)
-    return _valid((when - now()).total_seconds())
-
-
-def _seconds(value: str) -> float | None:
-    """Plain seconds only; durations like ``6m0s`` or epoch formats are not guessed."""
-    try:
-        return _valid(float(value))
-    except ValueError:
-        return None
-
-
-def _valid(seconds: float) -> float | None:
-    return seconds if math.isfinite(seconds) and seconds >= 0 else None
 
 
 class SentenceTransformerEmbedder:

@@ -84,9 +84,11 @@ class AtomStore:
                     (cursor.lastrowid, namespace, blobs[index]),
                 )
 
-    def lexical(self, namespace: str, query: str, limit: int) -> list[tuple[Atom, float]]:
+    def lexical(
+        self, namespace: str, query: str, limit: int, *, options: Sequence[str] | None = None
+    ) -> list[tuple[Atom, float]]:
         scope(namespace)
-        match = scoped_match(namespace, query)
+        match = scoped_match(namespace, query, options=options)
         if match is None:
             return []
         rows = self.db.execute(

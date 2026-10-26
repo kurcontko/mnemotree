@@ -8,6 +8,7 @@ import os
 import shutil
 import sys
 import time
+import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -296,7 +297,8 @@ class DummyEmbeddings:
         tokens = [t.lower() for t in text.split() if t.strip()]
         vec = [0.0] * self.dim
         for token in tokens:
-            idx = hash(token) % self.dim
+            # crc32, not hash(): str hashes change with each process's hash seed.
+            idx = zlib.crc32(token.encode()) % self.dim
             vec[idx] += 1.0
         norm = sum(v * v for v in vec) ** 0.5
         if norm > 0:

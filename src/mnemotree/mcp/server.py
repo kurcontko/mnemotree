@@ -257,8 +257,6 @@ async def _get_memory_core() -> MemoryCore:
                 collection_name=collection_name,
             )
 
-        await store.initialize()
-
         ner_backend = os.getenv("MNEMOTREE_MCP_NER_BACKEND")
         ner_model = os.getenv("MNEMOTREE_MCP_NER_MODEL")
         ner = None
@@ -281,12 +279,24 @@ async def _get_memory_core() -> MemoryCore:
             enable_bm25=enable_bm25,
         )
 
-        _memory_core = MemoryCore(
-            store=store,
-            mode_defaults=mode_defaults,
-            ner_config=ner_config,
-            retrieval_config=retrieval_config,
-        )
+        await store.initialize()
+        # Anything that fails, or is cancelled, after the store opens must close it.
+        try:
+            memory_core = MemoryCore(
+                store=store,
+                mode_defaults=mode_defaults,
+                ner_config=ner_config,
+                retrieval_config=retrieval_config,
+            )
+            if enable_bm25 and isinstance(store, SupportsMemoryListing):
+                # Cached lexical candidates also participate in vector-aware scoring.
+                memories = await store.list_memories(include_embeddings=True)
+                for memory in memories:
+                    memory_core.index_manager.add(memory)
+        except BaseException:
+            await store.close()
+            raise
+        _memory_core = memory_core
         return _memory_core
 
 
@@ -448,7 +458,7 @@ async def update_memory(
     memory_id: str,
     patch: dict[str, Any],
     *,
-    reembed: bool = False,
+    reembed: bool = True,
 ) -> dict[str, Any]:
     """Update fields on an existing memory.
 
@@ -456,7 +466,7 @@ async def update_memory(
         memory_id: ID of the memory to update.
         patch: Dict of fields to update. Supported keys:
             content, summary, tags, importance, context, metadata.
-        reembed: Recompute embedding when content changes (default: False).
+        reembed: Recompute embedding when content changes (default: True).
 
     Returns:
         Updated memory record as a dictionary.
@@ -480,6 +490,9 @@ async def update_memory(
     memory = await store.get_memory(memory_id)
     if memory is None:
         raise ValueError("Memory not found.")
+    # Some stores return shared objects, including ones held by the lexical index.
+    # A failed validation or write must not mutate those published candidates.
+    memory = memory.model_copy(deep=True)
 
     content_updated = False
 
@@ -512,7 +525,7 @@ async def update_memory(
     if content_updated and reembed:
         memory.embedding = await memory_core.get_embedding(memory.content)
 
-    await store.store_memory(memory)
+    await memory_core.persistence.save(memory)
     return _serialize_memory(memory, include_embedding=False)
 
 

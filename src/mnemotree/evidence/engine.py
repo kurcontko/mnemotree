@@ -28,11 +28,8 @@ from .packing import TiktokenCounter, pack
 from .protocols import Embedder, Reranker, TokenCounter
 from .store import SQLiteEvidenceStore, now, vector_blob
 
-# Embedding APIs cap their input (text-embedding-v4: 8,192 tokens), and an AML query can
-# be a whole reference document. The query is sent whole while it counts at most
-# QUERY_EMBED_TOKENS with the service tokenizer (o200k, a close proxy with margin);
-# beyond that its start and end are kept. Without a counter, 6,000 characters stay
-# under the provider cap even for CJK text, where a character is about one token.
+# Cap the final model input with the configured tokenizer. The service tokenizer
+# is a proxy for the provider's tokenizer, so keep margin below its 8,192 limit.
 QUERY_EMBED_TOKENS = 6000
 QUERY_EMBED_CHARS = 6000
 
@@ -48,21 +45,34 @@ def chronological(item: Evidence) -> tuple[int, float, int]:
 def model_query(
     query: str, limit: int = QUERY_EMBED_CHARS, counter: TokenCounter | None = None
 ) -> str:
-    """The query as sent to an embedder or reranker: its start and end when it is too long.
+    """Preserve small inputs; otherwise retain endpoints within the final input cap."""
+    separator = "\n...\n"
 
-    With a ``counter`` the limit is QUERY_EMBED_TOKENS tokens, so a long Latin-script
-    query (about four characters per token) is embedded whole far past ``limit`` chars.
-    """
-    if len(query) <= limit:
+    def endpoints(chars: int) -> str:
+        if chars < len(separator):
+            return query[:chars]
+        retained = chars - len(separator)
+        head = (retained + 1) // 2
+        tail = retained // 2
+        return query[:head] + separator + (query[-tail:] if tail else "")
+
+    if counter is None:
+        return query if len(query) <= limit else endpoints(max(0, limit))
+    if counter.count(query) <= QUERY_EMBED_TOKENS:
         return query
-    if counter is not None:
-        tokens = counter.count(query)
-        if tokens <= QUERY_EMBED_TOKENS:
-            return query
-        # Keep the character budget that the token budget implies for this text.
-        limit = max(limit, int(len(query) * QUERY_EMBED_TOKENS / tokens * 0.95))
-    half = limit // 2
-    return query[:half] + "\n...\n" + query[-half:]
+    # Count every candidate, including its separator. Character/token ratios can
+    # differ radically between the middle and endpoints, even in short inputs.
+    low, high = 0, len(query) - 1
+    best = ""
+    while low <= high:
+        middle = (low + high) // 2
+        candidate = endpoints(middle)
+        if counter.count(candidate) <= QUERY_EMBED_TOKENS:
+            best = candidate
+            low = middle + 1
+        else:
+            high = middle - 1
+    return best
 
 
 def fuse(
@@ -252,7 +262,12 @@ class Memory:
         )
 
     async def search(
-        self, namespace: str, query: str, *, options: SearchOptions | None = None
+        self,
+        namespace: str,
+        query: str,
+        *,
+        options: SearchOptions | None = None,
+        query_options: Sequence[str] | None = None,
     ) -> SearchResult:
         scope(namespace)
         if not isinstance(query, str) or not query.strip():
@@ -261,11 +276,16 @@ class Memory:
         if options.representation != "raw" and self.store.extractor_config is None:
             raise ValueError("atom retrieval requires an extracted corpus")
         started = perf_counter()
+        full_query = query + ("\n" + "\n".join(query_options) if query_options else "")
+        unbounded_model_query = query if options.model_query_policy == "question" else full_query
+        original_model_query_tokens = self.counter.count(unbounded_model_query)
+        bounded_query = model_query(unbounded_model_query, counter=self.counter)
+        model_query_tokens = self.counter.count(bounded_query)
         query_vector = None
         if options.mode in ("dense", "hybrid"):
             if self.embedder is None:
                 raise ValueError("dense/hybrid retrieval requires the indexed embedder")
-            query_vector = await self.embedder.embed_query(model_query(query, counter=self.counter))
+            query_vector = await self.embedder.embed_query(bounded_query)
         embedding_ms = (perf_counter() - started) * 1000
         retrieval_start = perf_counter()
         channels: dict[str, list[tuple[Chunk, float]]] = {}
@@ -276,6 +296,20 @@ class Memory:
         # A single snapshot covers all channels and source materialization.
         # Concurrent writes cannot mix different versions in the returned evidence.
         with self.store.transaction(read=True):
+            source_cache: dict[str, Source] = {}
+
+            def window(chunk: Chunk) -> tuple[Source, int, int]:
+                source = source_cache.get(chunk.source_id)
+                if source is None:
+                    source = self.store.get_source(namespace, chunk.source_id)
+                    if source is None:
+                        raise ValueError("retrieved chunk has no source")
+                    source_cache[chunk.source_id] = source
+                return self.store.window(namespace, chunk, options.neighbor_chunks, source=source)
+
+            assistant_share = (
+                self.store.assistant_share(namespace) if options.role_first is not None else None
+            )
             candidate_limit = options.candidate_limit
             chunk_density = None
             if options.deep_candidate_limit is not None:
@@ -283,14 +317,16 @@ class Memory:
                 if chunk_density > options.deep_history_density:
                     candidate_limit = options.deep_candidate_limit
             if options.representation != "atoms" and options.mode in ("lexical", "hybrid"):
-                channels["lexical"] = self.store.lexical(namespace, query, candidate_limit)
+                channels["lexical"] = self.store.lexical(
+                    namespace, query, candidate_limit, options=query_options
+                )
             if options.representation != "atoms" and query_vector is not None:
                 channels["dense"] = self.store.dense(namespace, query_vector, candidate_limit)
             if options.representation != "raw":
                 atom_channels = {}
                 if options.mode in ("lexical", "hybrid"):
                     atom_channels["atom_lexical"] = self.store.atoms.lexical(
-                        namespace, query, candidate_limit
+                        namespace, query, candidate_limit, options=query_options
                     )
                 if query_vector is not None:
                     assert self.store.embedding_spec is not None
@@ -335,13 +371,9 @@ class Memory:
                             known.add(chunk.id)
                             overflow.append(Candidate(chunk=chunk, fusion_score=0.0, channels={}))
             for candidate in overflow:
-                windows[candidate.chunk.id] = self.store.window(
-                    namespace, candidate.chunk, options.neighbor_chunks
-                )
+                windows[candidate.chunk.id] = window(candidate.chunk)
             for candidate in candidates:
-                windows[candidate.chunk.id] = self.store.window(
-                    namespace, candidate.chunk, options.neighbor_chunks
-                )
+                windows[candidate.chunk.id] = window(candidate.chunk)
                 source = windows[candidate.chunk.id][0]
                 neighbors[candidate.chunk.id] = self.store.conversation_context(
                     namespace,
@@ -350,11 +382,37 @@ class Memory:
                     max_chars=options.neighbor_chars,
                 )
         retrieval_ms = (perf_counter() - retrieval_start) * 1000
+        role_policy_enabled = options.role_first is not None and (
+            options.role_first_min_assistant_share is None
+            or (
+                assistant_share is not None
+                and assistant_share >= options.role_first_min_assistant_share
+            )
+        )
+        role_boost_applied = role_policy_enabled and options.role_boost is not None
+        role_first_applied = role_policy_enabled and options.role_boost is None
+        if role_boost_applied and options.role_first is not None and options.role_boost is not None:
+            candidates = sorted(
+                (
+                    item.model_copy(
+                        update={
+                            "fusion_score": item.fusion_score
+                            + (
+                                options.role_boost
+                                if windows[item.chunk.id][0].role == options.role_first
+                                else 0.0
+                            )
+                        }
+                    )
+                    for item in candidates
+                ),
+                key=lambda item: (-item.fusion_score, item.chunk.id),
+            )
         rerank_start = perf_counter()
         if self.reranker and candidates:
             scores = list(
                 await self.reranker.score(
-                    model_query(query, counter=self.counter),
+                    bounded_query,
                     [item.chunk.text for item in candidates],
                 )
             )
@@ -368,10 +426,7 @@ class Memory:
                 key=lambda item: (-(item.rerank_score or 0.0), -item.fusion_score, item.chunk.id)
             )
         rerank_ms = (perf_counter() - rerank_start) * 1000
-        if options.role_first is not None and (
-            options.role_first_min_assistant_share is None
-            or self.store.assistant_share(namespace) >= options.role_first_min_assistant_share
-        ):
+        if role_first_applied and options.role_first is not None:
             candidates = role_first(
                 candidates, {cid: windows[cid][0].role for cid in windows}, options.role_first
             )
@@ -438,6 +493,12 @@ class Memory:
                 },
                 candidate_limit=candidate_limit,
                 chunk_density=chunk_density,
+                original_model_query_tokens=original_model_query_tokens,
+                model_query_tokens=model_query_tokens,
+                model_query_truncated=bounded_query != unbounded_model_query,
+                assistant_share=assistant_share,
+                role_first_applied=role_first_applied,
+                role_boost_applied=role_boost_applied,
             ),
         )
 

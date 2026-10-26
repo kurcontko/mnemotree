@@ -401,9 +401,11 @@ class SQLiteEvidenceStore:
                     chunks[row["source_id"]].append(self._chunk(row))
         return chunks
 
-    def lexical(self, namespace: str, query: str, limit: int) -> list[tuple[Chunk, float]]:
+    def lexical(
+        self, namespace: str, query: str, limit: int, *, options: Sequence[str] | None = None
+    ) -> list[tuple[Chunk, float]]:
         scope(namespace)
-        match = scoped_match(namespace, query)
+        match = scoped_match(namespace, query, options=options)
         if match is None:
             return []
         with self._lock:
@@ -431,12 +433,25 @@ class SQLiteEvidenceStore:
             ).fetchall()
         return [(self._chunk(row), 1.0 - float(row["distance"])) for row in rows]
 
-    def window(self, namespace: str, chunk: Chunk, neighbors: int) -> tuple[Source, int, int]:
+    def window(
+        self,
+        namespace: str,
+        chunk: Chunk,
+        neighbors: int,
+        *,
+        source: Source | None = None,
+    ) -> tuple[Source, int, int]:
+        """Materialize a chunk window, optionally reusing a source from this read snapshot."""
         scope(namespace)
         with self._lock:
-            source = self.get_source(namespace, chunk.source_id)
+            if source is None:
+                source = self.get_source(namespace, chunk.source_id)
             if source is None:
                 raise ValueError("source is not present in this namespace")
+            if source.namespace != namespace or source.id != chunk.source_id:
+                raise ValueError("source does not match this chunk's namespace and ID")
+            if neighbors == 0:
+                return source, chunk.start, chunk.end
             row = self.db.execute(
                 "SELECT min(start),max(end) FROM evidence_chunks "
                 "WHERE namespace=? AND source_id=? AND chunk_index BETWEEN ? AND ?",

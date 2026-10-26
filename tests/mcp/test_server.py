@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
+from mnemotree.core._internal.persistence import DefaultPersistence
 from mnemotree.core.memory import ModeDefaultsConfig, NerConfig, RetrievalConfig
 from mnemotree.core.models import MemoryItem, MemoryType
 from mnemotree.mcp import server
@@ -28,6 +29,7 @@ def mock_memory_core_with_store(monkeypatch):
         store.get_memory = AsyncMock(return_value=memory)
         store.store_memory = AsyncMock(side_effect=store_memory_side_effect)
         memory_core = MagicMock(store=store)
+        memory_core.persistence = DefaultPersistence(store, memory_core.index_manager)
         memory_core.get_embedding = AsyncMock(return_value=[0.5])
         monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
         return memory_core, store
@@ -694,6 +696,7 @@ async def test_update_memory_applies_patch_and_reembed(monkeypatch):
     memory_core = MagicMock()
     memory_core.store = store
     memory_core.get_embedding = AsyncMock(return_value=[0.9])
+    memory_core.persistence = DefaultPersistence(store, memory_core.index_manager)
 
     monkeypatch.setattr(server, "_get_memory_core", AsyncMock(return_value=memory_core))
 

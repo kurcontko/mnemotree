@@ -341,6 +341,36 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 )
                 raise
 
+    async def list_memories(self, *, include_embeddings: bool = False) -> list[MemoryItem]:
+        await self.initialize()
+        start = time.perf_counter()
+        async with self._lock:
+            conn = self._require_conn()
+            try:
+                columns = [
+                    row["name"]
+                    for row in conn.execute(f'PRAGMA table_info("{self.collection_name}")')
+                ]
+                selected_columns = ", ".join(
+                    f'"{column}"'
+                    if include_embeddings or column != "embedding"
+                    else "NULL AS embedding"
+                    for column in columns
+                )
+                rows = conn.execute(
+                    f'SELECT {selected_columns} FROM "{self.collection_name}" ORDER BY id'
+                ).fetchall()
+                return [sqlite_memory_from_row(row) for row in rows]
+            except (sqlite3.Error, json.JSONDecodeError, TypeError, ValueError):
+                logger.exception(
+                    "Failed to list memories",
+                    extra=store_log_context(
+                        self.store_type,
+                        duration_ms=elapsed_ms(start),
+                    ),
+                )
+                raise
+
     async def delete_memory(self, memory_id: str, *, cascade: bool = False) -> bool:
         await self.initialize()
         start = time.perf_counter()
@@ -1034,7 +1064,7 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 excluded_ids = {memory_id} | {row[0] for row in linked_rows}
 
                 # Find similar memories using vector search
-                # sqlite-vec distance() returns L2 distance; lower = more similar
+                # sqlite-vec uses L2 distance here; lower = more similar
                 # We fetch extra candidates and filter out linked ones
                 fetch_limit = limit + len(excluded_ids) + 5
                 vector_blob = source_embedding

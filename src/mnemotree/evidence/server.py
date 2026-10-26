@@ -9,6 +9,7 @@ import json
 import logging
 import secrets
 from collections import Counter
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 BOOT = secrets.token_hex(6)
 _SEQ = itertools.count(1)
 MAX_DETAIL_ERRORS = 10
+MAX_LOGGED_PATH = 64
 
 
 def utc_now() -> str:
@@ -90,6 +92,26 @@ def failure(exc: BaseException) -> dict[str, Any]:
             break
         current = current.__cause__ or current.__context__
     return info
+
+
+def returned_role_chars(evidence: Sequence[Evidence]) -> dict[str, int]:
+    """Unique source characters by actual role, including merged spans and neighbors.
+
+    Count source offsets, excluding rendered role/date headers and derived date notes.
+    Overlaps between returned blocks count once as well as overlaps within a block.
+    """
+    spans: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for item in evidence:
+        for member in item.members():
+            for span in (member, *member.neighbors):
+                spans.setdefault((span.source_id, span.role), []).append((span.start, span.end))
+    counts: Counter[str] = Counter()
+    for (_, role), ranges in spans.items():
+        end = 0
+        for start, stop in sorted(ranges):
+            counts[role] += max(0, stop - max(start, end))
+            end = max(end, stop)
+    return dict(counts)
 
 
 class Request(BaseModel):
@@ -164,10 +186,10 @@ def aml_options(memory: Memory) -> SearchOptions:
         # history's chunks per message (BEAM 2.1-3.7, LME <= 1.7, LoCoMo 1.0).
         chunks_per_source=1,
         role_first="user",
-        # Not in a human/human chat sent as user/assistant pairs: the "assistant" is a
-        # person there and ordering by role cost 1.3 LoCoMo coverage points. Those chats
-        # are 43-53% assistant text; every LLM-assistant set is 76% or more.
+        # Retain the measured hard partition; bounded priors require explicit opt-in.
+        role_boost=None,
         role_first_min_assistant_share=0.65,
+        model_query_policy="combined",
         candidate_limit=100,
         deep_candidate_limit=300,
         deep_history_density=2.0,
@@ -240,7 +262,8 @@ def create_app(
             "ts": http.state.ts,
             "boot": BOOT,
             "seq": http.state.seq,
-            "route": http.url.path,
+            # Unmatched paths are caller-chosen; keep only a bounded prefix of them.
+            "route": http.url.path[:MAX_LOGGED_PATH],
             "method": http.method,
             "auth_scheme": auth_scheme(
                 http.headers.get("authorization"), http.headers.get("x-api-key")
@@ -255,6 +278,8 @@ def create_app(
             record.update(failure(exc))
             raise
         finally:
+            if (route := http.scope.get("route")) is not None:
+                record["route"] = route.path
             record["status"] = status
             record["ms"] = round((perf_counter() - started) * 1000, 1)
             record.update(getattr(http.state, "log", {}))
@@ -363,17 +388,19 @@ def create_app(
         )
         if not request.query.strip():
             raise HTTPException(status_code=422, detail="query must not be blank")
-        # Options are supplied by the benchmark, not gold labels. Retain their
-        # ordering and include them in the retrieval query for lexical coverage.
-        query = request.query
-        if request.options:
-            query += "\n" + "\n".join(request.options)
+        # Keep explicit option boundaries for the bounded lexical term allocation.
+        # Memory still combines the stem and options in order for model inputs.
         # Returning fewer than top_k is valid; returning more is a contract error.
         search_options = options.model_copy(
             update={"limit": limit, "candidate_limit": max(options.candidate_limit, limit)}
         )
         try:
-            result = await memory.search(request.user_id, query, options=search_options)
+            result = await memory.search(
+                request.user_id,
+                request.query,
+                options=search_options,
+                query_options=request.options,
+            )
         except Exception as exc:
             note(http, **failure(exc))
             raise HTTPException(
@@ -390,9 +417,18 @@ def create_app(
             chunk_density=(
                 round(trace.chunk_density, 3) if trace.chunk_density is not None else None
             ),
+            original_model_query_tokens=trace.original_model_query_tokens,
+            model_query_tokens=trace.model_query_tokens,
+            model_query_truncated=trace.model_query_truncated,
+            tokenizer=trace.tokenizer,
+            assistant_share=trace.assistant_share,
+            role_first_applied=trace.role_first_applied,
+            role_boost_applied=trace.role_boost_applied,
+            model_query_policy=options.model_query_policy,
             channel_counts=trace.channel_counts,
             timings_ms={key: round(value, 1) for key, value in trace.timings_ms.items()},
             returned_roles=dict(Counter(item.role for item in result.evidence)),
+            returned_role_chars=returned_role_chars(result.evidence),
             ids_digest=hashlib.sha256(json.dumps(ids).encode()).hexdigest()[:16],
         )
         return {"data": [response_item(item) for item in result.evidence]}

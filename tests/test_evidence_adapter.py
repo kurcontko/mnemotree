@@ -428,3 +428,52 @@ async def test_provider_failure_logs_status_without_provider_body(tmp_path, monk
     assert row["detail"] == "retrieval failed; retry this request"
     text = log.read_text()
     assert "SECRET" not in text and "rate limited" not in text and "provider.test" not in text
+
+
+def test_cli_names_a_missing_credential_variable(monkeypatch):
+    from mnemotree.evidence.cli import secret
+
+    monkeypatch.delenv("NO_SUCH_KEY", raising=False)
+    with pytest.raises(SystemExit, match="set the NO_SUCH_KEY environment variable"):
+        secret("NO_SUCH_KEY")
+
+
+async def test_request_log_bounds_unmatched_paths(tmp_path):
+    pytest.importorskip("fastapi")
+    from mnemotree.evidence.server import MAX_LOGGED_PATH, create_app
+
+    log = tmp_path / "r.jsonl"
+    with Memory(tmp_path / "m.db") as memory:
+        app = create_app(memory, api_key="k", request_log=log)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            assert (await client.get("/" + "x" * 1000)).status_code == 404
+    (row,) = read_log(log)
+    assert row["status"] == 404
+    assert row["route"] == "/" + "x" * (MAX_LOGGED_PATH - 1)
+
+
+async def test_search_clamps_top_k_in_the_options_the_engine_receives(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    from mnemotree.evidence.server import MAX_TOP_K, create_app
+
+    with Memory(tmp_path / "m.db") as memory:
+        limits = []
+        search = memory.search
+
+        async def recording_search(namespace, query, *, options, **kwargs):
+            limits.append(options.limit)
+            return await search(namespace, query, options=options, **kwargs)
+
+        monkeypatch.setattr(memory, "search", recording_search)
+        app = create_app(memory, api_key="k")
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": "Bearer k"},
+        ) as client:
+            for top_k in (7, MAX_TOP_K, 500):
+                query = {"query": "anything", "user_id": "u", "top_k": top_k}
+                assert (await client.post("/v1/memories/search", json=query)).status_code == 200
+    assert limits == [7, MAX_TOP_K, MAX_TOP_K]

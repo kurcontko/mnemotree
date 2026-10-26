@@ -6,6 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MNEMOTREE_MCP_PERSIST_DIR: /data/chromadb
+      MNEMOTREE_MCP_STORE_BACKEND: sqlite
+      MNEMOTREE_MCP_PERSIST_DIR: /data/mnemotree.sqlite
     volumes:
       - ../../.mnemotree:/data

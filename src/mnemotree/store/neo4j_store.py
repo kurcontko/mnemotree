@@ -978,7 +978,7 @@ class Neo4jMemoryStore(BaseMemoryStore):
         """Update metadata fields for a memory item."""
         await self.initialize()
         start = time.perf_counter()
-        allowed_fields = {"last_accessed", "access_count", "access_history"}
+        allowed_fields = {"last_accessed", "access_count", "access_history", "importance"}
         updates = {k: v for k, v in metadata.items() if k in allowed_fields}
         if not updates:
             return False
