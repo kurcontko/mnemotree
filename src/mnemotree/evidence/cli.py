@@ -27,6 +27,14 @@ class Config(Record):
     search: SearchOptions | None = None
 
 
+def secret(name: str) -> str:
+    """A credential from the environment; a missing one names the variable to set."""
+    try:
+        return os.environ[name]
+    except KeyError:
+        raise SystemExit(f"mnemotree-evidence: set the {name} environment variable") from None
+
+
 def open_memory(path: Path, config: Config) -> Memory:
     from .atoms import OpenAIExtractor
 
@@ -38,7 +46,7 @@ def open_memory(path: Path, config: Config) -> Memory:
         if "api_key" in settings:
             raise ValueError("use api_key_env instead of storing a secret in configuration")
         key_env = settings.pop("api_key_env", "EXTRACTION_API_KEY")
-        extractor = OpenAIExtractor(api_key=os.environ[key_env], **settings)
+        extractor = OpenAIExtractor(api_key=secret(key_env), **settings)
     embedder: Embedder | None = None
     if config.embedding is not None:
         from .providers import OpenAIEmbedder, SentenceTransformerEmbedder
@@ -49,7 +57,7 @@ def open_memory(path: Path, config: Config) -> Memory:
             if "api_key" in settings:
                 raise ValueError("use api_key_env instead of storing a secret in configuration")
             key_env = settings.pop("api_key_env", "EMBEDDING_API_KEY")
-            embedder = OpenAIEmbedder(api_key=os.environ[key_env], **settings)
+            embedder = OpenAIEmbedder(api_key=secret(key_env), **settings)
         elif kind == "sentence-transformers":
             embedder = SentenceTransformerEmbedder(**settings)
         else:
@@ -144,7 +152,7 @@ def main() -> None:
             sample_limit = args.sample_limit or None
             app = create_app(
                 memory,
-                api_key=os.environ[args.key_env],
+                api_key=secret(args.key_env),
                 options=options,
                 sample_path=args.sample_payloads,
                 sample_limit=sample_limit,

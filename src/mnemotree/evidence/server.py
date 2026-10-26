@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 BOOT = secrets.token_hex(6)
 _SEQ = itertools.count(1)
 MAX_DETAIL_ERRORS = 10
+MAX_LOGGED_PATH = 64
 
 
 def utc_now() -> str:
@@ -240,7 +241,8 @@ def create_app(
             "ts": http.state.ts,
             "boot": BOOT,
             "seq": http.state.seq,
-            "route": http.url.path,
+            # Unmatched paths are caller-chosen; keep only a bounded prefix of them.
+            "route": http.url.path[:MAX_LOGGED_PATH],
             "method": http.method,
             "auth_scheme": auth_scheme(
                 http.headers.get("authorization"), http.headers.get("x-api-key")
@@ -255,6 +257,8 @@ def create_app(
             record.update(failure(exc))
             raise
         finally:
+            if (route := http.scope.get("route")) is not None:
+                record["route"] = route.path
             record["status"] = status
             record["ms"] = round((perf_counter() - started) * 1000, 1)
             record.update(getattr(http.state, "log", {}))
