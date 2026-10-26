@@ -11,7 +11,9 @@ name: claude review
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    # Review when opened, or when a draft becomes ready. Follow-up reviews
+    # use @claude via claude-code-mention.yml.
+    types: [opened, ready_for_review]
 
 # The reviewer is read-only and advisory. `id-token: write` is used by the
 # action to obtain a short-lived Claude GitHub App token for PR comments; it
