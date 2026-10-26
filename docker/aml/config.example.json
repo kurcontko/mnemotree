@@ -1,0 +1,15 @@
+{
+  "chunk_size": 1200,
+  "chunk_overlap": 200,
+  "tokenizer": "o200k_base",
+  "embedding": {
+    "kind": "openai",
+    "model": "text-embedding-v4",
+    "dimensions": 1024,
+    "revision": "dashscope-intl",
+    "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "api_key_env": "DASHSCOPE_API_KEY",
+    "batch_size": 10,
+    "timeout": 60
+  }
+}

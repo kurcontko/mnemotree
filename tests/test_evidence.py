@@ -1,4 +1,5 @@
 import asyncio
+import random
 from datetime import UTC, datetime
 from importlib import import_module
 
@@ -6,8 +7,9 @@ import pytest
 
 from mnemotree import Memory, Message, SearchOptions
 from mnemotree.evidence import EmbeddingSpec, IngestConflict, IngestReceipt
-from mnemotree.evidence.engine import QUERY_EMBED_CHARS, fuse
+from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
 from mnemotree.evidence.models import Chunk
+from mnemotree.evidence.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
 from mnemotree.evidence.store import vector_blob
 
 
@@ -356,10 +358,12 @@ async def test_long_queries_are_clipped_for_the_embedder(tmp_path):
     embedder = Recording()
     with Memory(tmp_path / "memory.db", embedder=embedder) as memory:
         await add(memory)
-        query = "apple " + "filler " * 5000 + "orchard question"
+        query = "apple " + "filler " * 12000 + "orchard question"
         result = await memory.search("alice", query, options=SearchOptions(mode="hybrid"))
     assert result.evidence
-    assert len(embedder.query) <= QUERY_EMBED_CHARS + 5
+    # Clipped by tokens, not characters: well past the character cap, under the token cap.
+    assert QUERY_EMBED_CHARS < len(embedder.query) < len(query)
+    assert memory.counter.count(embedder.query) <= QUERY_EMBED_TOKENS
     assert embedder.query.startswith("apple ") and embedder.query.endswith("orchard question")
 
 
@@ -378,3 +382,261 @@ async def test_lexical_search_reads_only_its_namespace(tmp_path):
         assert not (
             await memory.search("alice", "apple", options=SearchOptions(mode="lexical"))
         ).evidence
+
+
+async def test_role_stack_options(tmp_path):
+    """One chunk per message, user turns first, and the density-gated deep pool."""
+    long_reply = ("apple " * 30 + "\n") * 8  # several chunks, all matching "apple"
+    with Memory(tmp_path / "m.db", chunk_size=200, chunk_overlap=20) as memory:
+        messages = []
+        for i in range(6):
+            messages.append(Message(content=f"apple question {i}", role="user", id=f"u{i}"))
+            messages.append(Message(content=long_reply, role="assistant", id=f"a{i}"))
+        await memory.add("alice", messages, request_id="r", session_id="s")
+        assert memory.store.chunk_density("alice") > 2.0
+
+        base = await memory.search(
+            "alice", "apple", options=SearchOptions(mode="lexical", limit=100)
+        )
+        per_source = {}
+        for c in base.trace.candidates:
+            per_source[c.chunk.source_id] = per_source.get(c.chunk.source_id, 0) + 1
+        assert max(per_source.values()) > 1  # long replies take several slots by default
+
+        capped = await memory.search(
+            "alice",
+            "apple",
+            options=SearchOptions(
+                mode="lexical", limit=100, chunks_per_source=1, role_first="user"
+            ),
+        )
+        sources = [c.chunk.source_id for c in capped.trace.candidates]
+        assert len(sources) == len(set(sources)) == 12
+        roles = [item.role for item in capped.evidence]
+        assert roles[:6] == ["user"] * 6 and set(roles[6:]) == {"assistant"}
+
+        shallow = SearchOptions(mode="lexical", limit=4, candidate_limit=4)
+        deep = SearchOptions(
+            mode="lexical",
+            limit=4,
+            candidate_limit=4,
+            deep_candidate_limit=40,
+            deep_history_density=2.0,
+        )
+        assert (await memory.search("alice", "apple", options=shallow)).trace.channel_counts[
+            "lexical"
+        ] == 4
+        assert (await memory.search("alice", "apple", options=deep)).trace.channel_counts[
+            "lexical"
+        ] > 4
+        # A short-turn history stays on the shallow pool.
+        await memory.add(
+            "bob",
+            [Message(content="apple", role="user", id=f"b{i}") for i in range(30)],
+            request_id="r",
+            session_id="s",
+        )
+        assert memory.store.chunk_density("bob") == 1.0
+        assert (await memory.search("bob", "apple", options=deep)).trace.channel_counts[
+            "lexical"
+        ] == 4
+        with pytest.raises(ValueError, match="deep_candidate_limit"):
+            SearchOptions(limit=50, candidate_limit=50, deep_candidate_limit=10)
+        # role_first applies only where the assistant carries most of the text.
+        gated = SearchOptions(
+            mode="lexical",
+            limit=100,
+            chunks_per_source=1,
+            role_first="user",
+            role_first_min_assistant_share=0.65,
+        )
+        assert memory.store.assistant_share("alice") > 0.9
+        roles = [
+            item.role for item in (await memory.search("alice", "apple", options=gated)).evidence
+        ]
+        assert roles[:6] == ["user"] * 6
+        await memory.add(
+            "carol",
+            [
+                Message(
+                    content=f"apple {i} for carol", role=("user", "assistant")[i % 2], id=f"c{i}"
+                )
+                for i in range(8)
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        roles = [
+            item.role for item in (await memory.search("carol", "apple", options=gated)).evidence
+        ]
+        assert 0.4 < memory.store.assistant_share("carol") < 0.6
+        assert "assistant" in roles[:2]  # a human/human chat keeps fusion order
+
+
+async def test_capped_chunks_fill_unused_budget(tmp_path):
+    with Memory(tmp_path / "m.db", chunk_size=300, chunk_overlap=50) as memory:
+        paragraphs = [
+            f"Paragraph {i}: the report discusses topic {i} in detail. " * 4 for i in range(8)
+        ]
+        document = "\n".join(paragraphs)
+        await memory.add(
+            "dana",
+            [Message(content=document, role="user", id="doc")],
+            request_id="r",
+            session_id="s",
+        )
+        assert memory.store.chunk_density("dana") > 5
+        capped = SearchOptions(
+            mode="lexical",
+            limit=100,
+            chunks_per_source=1,
+            token_budget=8000,
+            neighbor_messages=1,
+            merge_blocks=True,
+        )
+        result = await memory.search("dana", "report topic 7", options=capped)
+        # One message, one item, but the whole document rather than one chunk of it.
+        assert len(result.evidence) == 1
+        assert "Paragraph 0" in result.context and "Paragraph 7" in result.context
+        assert result.trace.packed_tokens > 400
+        tight = capped.model_copy(update={"token_budget": 120})
+        small = await memory.search("dana", "report topic 7", options=tight)
+        assert small.trace.packed_tokens <= 120 and "Paragraph 7" in small.context
+        assert small.context.count("Paragraph") < result.context.count("Paragraph")
+
+
+@pytest.mark.parametrize("encoding", sorted(LINE_SAFE_ENCODINGS))
+def test_counter_by_piece_matches_whole_text(encoding):
+    counter = TiktokenCounter(encoding)
+    parts = ["\n", "\n\n", "\r\n", " ", "  ", "\t", "\u2028", "\xa0", "\u0085", "<|endoftext|>"]
+    parts += [".", "/", "[", "]", "-", ":", "'s", "'S", "word", "Word", "12345", "é", "日本"]
+    rng = random.Random(0)
+    for _ in range(3000):
+        text = "".join(rng.choice(parts) for _ in range(rng.randrange(1, 40)))
+        assert counter.count(text) == len(counter.encoding.encode(text, disallowed_special=()))
+
+
+def test_model_query_is_token_aware():
+    from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, model_query
+
+    counter = TiktokenCounter("o200k_base")
+    latin = (
+        "The committee reviewed the quarterly report and noted several open items. " * 160
+    ).strip()
+    assert len(latin) > QUERY_EMBED_CHARS and counter.count(latin) < QUERY_EMBED_TOKENS
+    # Without a counter the character cap applies; with one, the whole query is sent.
+    assert "\n...\n" in model_query(latin)
+    assert model_query(latin, counter=counter) == latin
+    huge = latin * 6
+    assert counter.count(huge) > QUERY_EMBED_TOKENS
+    cut = model_query(huge, counter=counter)
+    assert "\n...\n" in cut and counter.count(cut) <= QUERY_EMBED_TOKENS
+    assert cut.startswith(huge[:100]) and cut.endswith(huge[-100:])
+    cjk = "华沙是波兰的首都，也是最大的城市。" * 700
+    assert counter.count(cjk) > QUERY_EMBED_TOKENS
+    assert counter.count(model_query(cjk, counter=counter)) <= QUERY_EMBED_TOKENS
+
+
+def service_like(**overrides) -> SearchOptions:
+    """The AML service defaults (hybrid), for packaging tests with the toy embedder."""
+    values = {
+        "mode": "hybrid",
+        "limit": 100,
+        "token_budget": 8000,
+        "neighbor_messages": 1,
+        "merge_blocks": True,
+        "chunks_per_source": 1,
+        "role_first": "user",
+        "role_first_min_assistant_share": 0.65,
+        "candidate_limit": 100,
+        "deep_candidate_limit": 300,
+        "deep_history_density": 2.0,
+    }
+    values.update(overrides)
+    return SearchOptions(**values)
+
+
+async def test_packaging_does_not_decide_what_survives(tmp_path):
+    """The same information packaged as different transport messages yields the same evidence."""
+    steps = [
+        f"step {i}: open table t{i} and read column c{i}; observation: value v{i}."
+        for i in range(40)
+    ]
+    final = "final observation: the migration finished with 7 warnings and task 289 is complete."
+    trace = "\n".join(steps + [final])
+    with Memory(
+        tmp_path / "m.db", embedder=ToyEmbedder(), chunk_size=400, chunk_overlap=40
+    ) as memory:
+        # One trajectory message vs. the same ordered trace as several messages.
+        await memory.add(
+            "one", [Message(content=trace, role="user", id="t")], request_id="r", session_id="s"
+        )
+        parts = [
+            Message(content="\n".join(steps[i : i + 8]), role="user", id=f"p{i}")
+            for i in range(0, 40, 8)
+        ]
+        parts.append(Message(content=final, role="user", id="pf"))
+        await memory.add("many", parts, request_id="r", session_id="s")
+        for user in ("one", "many"):
+            result = await memory.search(user, "task 289 warnings", options=service_like())
+            assert "7 warnings" in result.context, user
+            assert "step 0:" in result.context, user  # the record, not just the matching line
+
+        # One document vs. its sections; the needed fact sits in the last section.
+        sections = [
+            f"Section {i}. " + f"Background material about topic {i}. " * 12 for i in range(6)
+        ]
+        sections.append("Section 6. Appendix: the reactor's rated output is 412 megawatts.")
+        await memory.add(
+            "doc",
+            [Message(content="\n\n".join(sections), role="user", id="d")],
+            request_id="r",
+            session_id="s",
+        )
+        await memory.add(
+            "secs",
+            [Message(content=text, role="user", id=f"s{i}") for i, text in enumerate(sections)],
+            request_id="r",
+            session_id="s",
+        )
+        for user in ("doc", "secs"):
+            result = await memory.search(user, "rated output megawatts", options=service_like())
+            assert "412 megawatts" in result.context, user
+
+        # A human/human chat as user/assistant pairs vs. all-user with names in content.
+        turns = [
+            (("Caroline", "Mel")[i % 2], f"chat line {i} about everyday things") for i in range(30)
+        ]
+        turns[17] = ("Mel", "I went to the LGBTQ support group yesterday and it was powerful.")
+        await memory.add(
+            "pairs",
+            [
+                Message(content=t, role=("user", "assistant")[i % 2], id=f"a{i}")
+                for i, (_, t) in enumerate(turns)
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        await memory.add(
+            "named",
+            [
+                Message(content=f"{who}: {t}", role="user", id=f"b{i}")
+                for i, (who, t) in enumerate(turns)
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        assert memory.store.assistant_share("pairs") < 0.65  # a person, so no role reordering
+        for user in ("pairs", "named"):
+            result = await memory.search(user, "support group", options=service_like())
+            assert "LGBTQ support group" in result.context, user
+            assert result.evidence[0].source_id in ("a17", "b17"), user
+
+        # A required observation at the end of a long source is not found only on its prefix.
+        long = " ".join(f"routine entry {i} with nothing notable." for i in range(300))
+        long += " Unexpected: the pressure valve failed at 03:14 and was replaced."
+        await memory.add(
+            "tail", [Message(content=long, role="user", id="l")], request_id="r", session_id="s"
+        )
+        result = await memory.search("tail", "pressure valve failed", options=service_like())
+        assert "03:14" in result.context

@@ -1,0 +1,4 @@
+{
+  "tokenizer": "o200k_base",
+  "search": {"mode": "lexical", "token_budget": 8000, "neighbor_messages": 1, "merge_blocks": true}
+}

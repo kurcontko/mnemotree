@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from time import perf_counter
 
@@ -29,7 +29,11 @@ from .protocols import Embedder, Reranker, TokenCounter
 from .store import SQLiteEvidenceStore, now, vector_blob
 
 # Embedding APIs cap their input (text-embedding-v4: 8,192 tokens), and an AML query can
-# be a whole reference document. 6,000 characters stay under the cap even for CJK text.
+# be a whole reference document. The query is sent whole while it counts at most
+# QUERY_EMBED_TOKENS with the service tokenizer (o200k, a close proxy with margin);
+# beyond that its start and end are kept. Without a counter, 6,000 characters stay
+# under the provider cap even for CJK text, where a character is about one token.
+QUERY_EMBED_TOKENS = 6000
 QUERY_EMBED_CHARS = 6000
 
 
@@ -41,10 +45,22 @@ def chronological(item: Evidence) -> tuple[int, float, int]:
     return (0, min(stamps), seq) if stamps else (1, 0.0, seq)
 
 
-def model_query(query: str, limit: int = QUERY_EMBED_CHARS) -> str:
-    """The query as sent to an embedder or reranker: its start and end when it is too long."""
+def model_query(
+    query: str, limit: int = QUERY_EMBED_CHARS, counter: TokenCounter | None = None
+) -> str:
+    """The query as sent to an embedder or reranker: its start and end when it is too long.
+
+    With a ``counter`` the limit is QUERY_EMBED_TOKENS tokens, so a long Latin-script
+    query (about four characters per token) is embedded whole far past ``limit`` chars.
+    """
     if len(query) <= limit:
         return query
+    if counter is not None:
+        tokens = counter.count(query)
+        if tokens <= QUERY_EMBED_TOKENS:
+            return query
+        # Keep the character budget that the token budget implies for this text.
+        limit = max(limit, int(len(query) * QUERY_EMBED_TOKENS / tokens * 0.95))
     half = limit // 2
     return query[:half] + "\n...\n" + query[-half:]
 
@@ -74,6 +90,34 @@ def fuse(
         for id, contributions in scores.items()
     ]
     return sorted(candidates, key=lambda candidate: (-candidate.fusion_score, candidate.chunk.id))
+
+
+def cap_per_source(
+    candidates: Sequence[Candidate], per_source: int
+) -> tuple[list[Candidate], list[Candidate]]:
+    """Split candidates into the best `per_source` of each source message and the rest.
+
+    Both lists keep the given order. The rest is not discarded: the packer adds it
+    once anchors and their neighbors have been placed, so a history that is one long
+    document is not served as a single chunk of it.
+    """
+    seen: dict[str, int] = {}
+    kept: list[Candidate] = []
+    overflow: list[Candidate] = []
+    for candidate in candidates:
+        count = seen.get(candidate.chunk.source_id, 0)
+        (kept if count < per_source else overflow).append(candidate)
+        seen[candidate.chunk.source_id] = count + 1
+    return kept, overflow
+
+
+def role_first(
+    candidates: Sequence[Candidate], roles: Mapping[str, str], role: str
+) -> list[Candidate]:
+    """Stable partition: candidates whose source has `role` first, then the rest."""
+    first = [c for c in candidates if roles.get(c.chunk.id) == role]
+    rest = [c for c in candidates if roles.get(c.chunk.id) != role]
+    return first + rest
 
 
 class Memory:
@@ -221,7 +265,7 @@ class Memory:
         if options.mode in ("dense", "hybrid"):
             if self.embedder is None:
                 raise ValueError("dense/hybrid retrieval requires the indexed embedder")
-            query_vector = await self.embedder.embed_query(model_query(query))
+            query_vector = await self.embedder.embed_query(model_query(query, counter=self.counter))
         embedding_ms = (perf_counter() - started) * 1000
         retrieval_start = perf_counter()
         channels: dict[str, list[tuple[Chunk, float]]] = {}
@@ -232,24 +276,28 @@ class Memory:
         # A single snapshot covers all channels and source materialization.
         # Concurrent writes cannot mix different versions in the returned evidence.
         with self.store.transaction(read=True):
+            candidate_limit = options.candidate_limit
+            chunk_density = None
+            if options.deep_candidate_limit is not None:
+                chunk_density = self.store.chunk_density(namespace)
+                if chunk_density > options.deep_history_density:
+                    candidate_limit = options.deep_candidate_limit
             if options.representation != "atoms" and options.mode in ("lexical", "hybrid"):
-                channels["lexical"] = self.store.lexical(namespace, query, options.candidate_limit)
+                channels["lexical"] = self.store.lexical(namespace, query, candidate_limit)
             if options.representation != "atoms" and query_vector is not None:
-                channels["dense"] = self.store.dense(
-                    namespace, query_vector, options.candidate_limit
-                )
+                channels["dense"] = self.store.dense(namespace, query_vector, candidate_limit)
             if options.representation != "raw":
                 atom_channels = {}
                 if options.mode in ("lexical", "hybrid"):
                     atom_channels["atom_lexical"] = self.store.atoms.lexical(
-                        namespace, query, options.candidate_limit
+                        namespace, query, candidate_limit
                     )
                 if query_vector is not None:
                     assert self.store.embedding_spec is not None
                     atom_channels["atom_dense"] = self.store.atoms.dense(
                         namespace,
                         vector_blob(query_vector, self.store.embedding_spec.dimensions),
-                        options.candidate_limit,
+                        candidate_limit,
                     )
                 for channel, hits in atom_channels.items():
                     expanded: dict[str, tuple[Chunk, float]] = {}
@@ -273,6 +321,23 @@ class Memory:
                 k=options.rrf_k,
                 ranks=atom_ranks,
             )
+            overflow: list[Candidate] = []
+            if options.chunks_per_source is not None:
+                candidates, overflow = cap_per_source(candidates, options.chunks_per_source)
+                # Complete each anchored message: the chunks of a long record that no
+                # channel retrieved follow its anchor, placed only into unused budget, so
+                # a trajectory or document is served whole when the budget allows.
+                known = {c.chunk.id for c in candidates} | {c.chunk.id for c in overflow}
+                anchored = list(dict.fromkeys(c.chunk.source_id for c in candidates))
+                for chunks in self.store.source_chunks(namespace, anchored).values():
+                    for chunk in chunks:
+                        if chunk.id not in known:
+                            known.add(chunk.id)
+                            overflow.append(Candidate(chunk=chunk, fusion_score=0.0, channels={}))
+            for candidate in overflow:
+                windows[candidate.chunk.id] = self.store.window(
+                    namespace, candidate.chunk, options.neighbor_chunks
+                )
             for candidate in candidates:
                 windows[candidate.chunk.id] = self.store.window(
                     namespace, candidate.chunk, options.neighbor_chunks
@@ -289,7 +354,8 @@ class Memory:
         if self.reranker and candidates:
             scores = list(
                 await self.reranker.score(
-                    model_query(query), [item.chunk.text for item in candidates]
+                    model_query(query, counter=self.counter),
+                    [item.chunk.text for item in candidates],
                 )
             )
             if len(scores) != len(candidates) or not all(math.isfinite(score) for score in scores):
@@ -302,34 +368,42 @@ class Memory:
                 key=lambda item: (-(item.rerank_score or 0.0), -item.fusion_score, item.chunk.id)
             )
         rerank_ms = (perf_counter() - rerank_start) * 1000
-        evidence = []
-        for candidate in candidates:
-            source, start, end = windows[candidate.chunk.id]
-            evidence.append(
-                Evidence(
-                    id=candidate.chunk.id,
-                    source_id=source.id,
-                    session_id=source.session_id,
-                    role=source.role,
-                    timestamp=source.timestamp,
-                    start=start,
-                    end=end,
-                    text=source.content[start:end],
-                    score=candidate.fusion_score,
-                    channels=candidate.channels,
-                    rerank_score=candidate.rerank_score,
-                    request_id=source.request_id if options.neighbor_messages else None,
-                    position=source.position if options.neighbor_messages else None,
-                    seq=source.session_seq,
-                    neighbors=neighbors[candidate.chunk.id],
-                )
+        if options.role_first is not None and (
+            options.role_first_min_assistant_share is None
+            or self.store.assistant_share(namespace) >= options.role_first_min_assistant_share
+        ):
+            candidates = role_first(
+                candidates, {cid: windows[cid][0].role for cid in windows}, options.role_first
             )
+
+        def to_evidence(candidate: Candidate, context: tuple[ContextSpan, ...]) -> Evidence:
+            source, start, end = windows[candidate.chunk.id]
+            return Evidence(
+                id=candidate.chunk.id,
+                source_id=source.id,
+                session_id=source.session_id,
+                role=source.role,
+                timestamp=source.timestamp,
+                start=start,
+                end=end,
+                text=source.content[start:end],
+                score=candidate.fusion_score,
+                channels=candidate.channels,
+                rerank_score=candidate.rerank_score,
+                request_id=source.request_id if options.neighbor_messages else None,
+                position=source.position if options.neighbor_messages else None,
+                seq=source.session_seq,
+                neighbors=context,
+            )
+
+        evidence = [to_evidence(c, neighbors[c.chunk.id]) for c in candidates]
         packing_start = perf_counter()
         selected, context, tokens, omitted = pack(
             evidence,
             self.counter,
             budget=options.token_budget,
             limit=options.limit,
+            overflow=[to_evidence(c, ()) for c in overflow],
             # Anchors whose neighbor windows would touch share one item.
             merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
         )
@@ -362,6 +436,8 @@ class Memory:
                     "packing": (perf_counter() - packing_start) * 1000,
                     "total": (perf_counter() - started) * 1000,
                 },
+                candidate_limit=candidate_limit,
+                chunk_density=chunk_density,
             ),
         )
 

@@ -1,0 +1,62 @@
+# Usage (from this directory, after `cp .env.example .env` and filling it in):
+#   docker compose --profile caddy up -d --build    # cloud VM: public IP + DNS A record, direct TLS
+#   docker compose --profile tunnel up -d --build   # behind a NAT: Cloudflare tunnel (100 s proxy limit)
+services:
+  memory:
+    build:
+      context: ../..
+      dockerfile: docker/aml/Dockerfile
+    image: mnemotree-aml:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Payload capture is off unless AML_SAMPLE_PAYLOADS names a file (Smoke only);
+      # when on, AML_SAMPLE_LIMIT=0 captures every request.
+      AML_SAMPLE_PAYLOADS: ${AML_SAMPLE_PAYLOADS:-}
+      AML_SAMPLE_LIMIT: ${AML_SAMPLE_LIMIT:-0}
+    volumes:
+      - aml-data:/data
+      - ${AML_CONFIG:-./config.example.json}:/config/config.json:ro
+    command:
+      - --db
+      - /data/${AML_DB:-aml.sqlite}
+      - --config
+      - /config/config.json
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --request-log
+      - /data/logs/requests.jsonl
+    ports:
+      - "127.0.0.1:8000:8000"
+    stop_grace_period: 30s
+
+  caddy:
+    profiles: [caddy]
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on: [memory]
+    environment:
+      AML_DOMAIN: ${AML_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+  tunnel:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:2025.9.1
+    restart: unless-stopped
+    depends_on: [memory]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    # The tunnel's ingress must point at http://memory:8000.
+
+volumes:
+  aml-data:
+  caddy-data:

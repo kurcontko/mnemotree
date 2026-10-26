@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -155,7 +156,7 @@ class Evidence(Record):
         message are joined, and "..." marks skipped messages within a block.
         """
         by_source: dict[str, list[Evidence | ContextSpan]] = {}
-        for member in self.members():
+        for member in (self, *self.merged):
             for span in (member, *member.neighbors):
                 by_source.setdefault(span.source_id, []).append(span)
         lines: list[tuple[tuple[int, int], int | None, str]] = []
@@ -183,6 +184,17 @@ class Evidence(Record):
 
 
 def render_line(timestamp: datetime | None, role: str, text: str) -> str:
+    # Equal instants in different zones print differently, so the offset is part of the key.
+    offset = timestamp.utcoffset() if timestamp is not None else None
+    return _render_line(timestamp, offset, role, text)
+
+
+# Packing re-renders a block for every merge and neighbor it tries; the date notes are
+# the costly part of a line, so each line is rendered once.
+@lru_cache(maxsize=1 << 14)
+def _render_line(
+    timestamp: datetime | None, _offset: timedelta | None, role: str, text: str
+) -> str:
     if timestamp is None:
         return f"{role}: {text}"
     # Weekday helps resolve "last Friday"; computed directly to stay locale-free.
@@ -208,11 +220,29 @@ class SearchOptions(Record):
     rrf_k: int = Field(default=60, ge=1)
     lexical_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     dense_weight: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    # Keep at most this many fused candidates per source message: long assistant
+    # turns otherwise occupy several candidate slots and several returned items.
+    chunks_per_source: int | None = Field(default=None, ge=1)
+    # Anchors of this role are selected before the others (each group keeps its
+    # fusion order). Labelled evidence in long assistant/user histories is mostly
+    # the user's short turns while most tokens are the assistant's.
+    role_first: str | None = None
+    # Apply role_first only when at least this share of the history's characters is
+    # assistant text. In a human/human chat sent as user/assistant pairs the
+    # "assistant" is a person whose turns are evidence too; such chats sit at
+    # 0.43-0.53 while every LLM-assistant set measured is at 0.76 or above.
+    role_first_min_assistant_share: float | None = Field(default=None, ge=0, le=1)
+    # Use a deeper candidate pool when the user's history averages more than
+    # deep_history_density chunks per message (long assistant turns crowd the pool).
+    deep_candidate_limit: int | None = Field(default=None, ge=1, le=2000)
+    deep_history_density: float = Field(default=2.0, gt=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def enough_candidates(self) -> SearchOptions:
         if self.candidate_limit < self.limit:
             raise ValueError("candidate_limit must be at least limit")
+        if self.deep_candidate_limit is not None and self.deep_candidate_limit < self.limit:
+            raise ValueError("deep_candidate_limit must be at least limit")
         return self
 
 
@@ -227,6 +257,10 @@ class SearchTrace(Record):
     tokenizer: str
     omitted_ids: tuple[str, ...]
     timings_ms: dict[str, float]
+    # Pool size each channel actually used (after the history-density gate), and the
+    # measured chunks per message when that gate was evaluated.
+    candidate_limit: int = 0
+    chunk_density: float | None = None
 
 
 class SearchResult(Record):

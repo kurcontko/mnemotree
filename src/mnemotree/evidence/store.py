@@ -339,6 +339,29 @@ class SQLiteEvidenceStore:
             )
             return receipt
 
+    def assistant_share(self, namespace: str) -> float:
+        """Share of the namespace's message characters carried by assistant turns."""
+        scope(namespace)
+        with self._lock:
+            row = self.db.execute(
+                "SELECT COALESCE(SUM(CASE WHEN role='assistant' THEN LENGTH(content) END), 0), "
+                "COALESCE(SUM(LENGTH(content)), 0) FROM evidence_sources WHERE namespace=?",
+                (namespace,),
+            ).fetchone()
+        return int(row[0]) / int(row[1]) if row[1] else 0.0
+
+    def chunk_density(self, namespace: str) -> float:
+        """Chunks per stored message in the namespace (0.0 when empty)."""
+        scope(namespace)
+        with self._lock:
+            row = self.db.execute(
+                "SELECT (SELECT COUNT(*) FROM evidence_chunks WHERE namespace=?), "
+                "(SELECT COUNT(*) FROM evidence_sources WHERE namespace=?)",
+                (namespace, namespace),
+            ).fetchone()
+        chunks, sources = int(row[0]), int(row[1])
+        return chunks / sources if sources else 0.0
+
     def get_source(self, namespace: str, source_id: str) -> Source | None:
         scope(namespace)
         with self._lock:
@@ -359,6 +382,24 @@ class SQLiteEvidenceStore:
             end=row["end"],
             text=row["text"],
         )
+
+    def source_chunks(self, namespace: str, source_ids: Sequence[str]) -> dict[str, list[Chunk]]:
+        """Every chunk of the given source messages, by source, in chunk order."""
+        scope(namespace)
+        chunks: dict[str, list[Chunk]] = {source_id: [] for source_id in source_ids}
+        ids = list(chunks)
+        with self._lock:
+            for start in range(0, len(ids), 500):
+                batch = ids[start : start + 500]
+                rows = self.db.execute(
+                    "SELECT * FROM evidence_chunks WHERE namespace=? AND source_id IN ("
+                    + ",".join("?" * len(batch))
+                    + ") ORDER BY source_id, chunk_index",
+                    (namespace, *batch),
+                ).fetchall()
+                for row in rows:
+                    chunks[row["source_id"]].append(self._chunk(row))
+        return chunks
 
     def lexical(self, namespace: str, query: str, limit: int) -> list[tuple[Chunk, float]]:
         scope(namespace)

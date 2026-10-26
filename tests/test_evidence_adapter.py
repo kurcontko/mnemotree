@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 import httpx
@@ -18,6 +19,12 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             assert (await client.get("/health")).status_code == 200
+            # Pre-run probes: HEAD with the key is 200, without it 401, GET stays 405.
+            assert (await client.head("/v1/memories/add")).status_code == 401
+            for route in ("/v1/memories/add", "/v1/memories/search"):
+                probe = await client.head(route, headers={"Authorization": "Bearer test-key"})
+                assert probe.status_code == 200 and probe.content == b""
+            assert (await client.get("/v1/memories/add")).status_code == 405
             payload = {
                 "request_id": "r",
                 "user_id": "u",
@@ -62,9 +69,26 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
             assert (
                 await client.post("/v1/memories/search", json={**request, "user_id": "other"})
             ).json() == {"data": []}
+            # Oversized top_k is clamped (a 4xx is never retried); unknown keys are ignored.
+            response = await client.post(
+                "/v1/memories/search", json={**request, "top_k": 500, "run_id": "x"}
+            )
+            assert response.status_code == 200 and len(response.json()["data"]) == 1
             assert (
-                await client.post("/v1/memories/search", json={**request, "top_k": 101})
+                await client.post("/v1/memories/search", json={**request, "top_k": 0})
             ).status_code == 422
+            replay = {**payload, "extra": {"ignored": True}}
+            assert (await client.post("/v1/memories/add", json=replay)).status_code == 200
+            for headers in ({"Authorization": "Token test-key"}, {"X-Api-Key": "test-key"}):
+                response = await client.post(
+                    "/v1/memories/search", json=request, headers={"Authorization": "", **headers}
+                )
+                assert response.status_code == 200
+            for headers in ({"Authorization": "Bearer wrong"}, {"X-Api-Key": "wrong"}):
+                response = await client.post(
+                    "/v1/memories/search", json=request, headers={"Authorization": "", **headers}
+                )
+                assert response.status_code == 401
             assert (
                 await client.post("/v1/memories/search", json={**request, "query": []})
             ).status_code == 422
@@ -228,3 +252,179 @@ async def test_payload_sampling_is_bounded(tmp_path):
     rows = [json.loads(line) for line in samples.read_text().splitlines()]
     assert [row["kind"] for row in rows] == ["add", "search"]
     assert rows[0]["messages"][0]["content"] == "Caroline: hello"
+
+
+def read_log(path):
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+async def test_request_log_records_add_and_search_metadata_only(tmp_path):
+    pytest.importorskip("fastapi")
+    from mnemotree.evidence.server import create_app
+
+    log = tmp_path / "logs" / "r.jsonl"  # the parent directory does not exist yet
+    with Memory(tmp_path / "m.db") as memory:
+        app = create_app(memory, api_key="k", request_log=log)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": "Bearer k"},
+        ) as client:
+            payload = {
+                "request_id": "r",
+                "user_id": "u",
+                "session_id": "s",
+                "messages": [
+                    {"role": "user", "content": "I moved to Warsaw", "timestamp": 1704067200000},
+                    {"role": "assistant", "content": "Warsaw sounds good"},
+                    {"role": "user", "content": " "},
+                ],
+            }
+            assert (await client.post("/v1/memories/add", json=payload)).status_code == 200
+            query = {"query": "Where did I move?", "options": ["A", "B"], "user_id": "u"}
+            response = await client.post("/v1/memories/search", json={**query, "top_k": 500})
+            assert response.status_code == 200
+            assert (await client.post("/v1/memories/add", json=payload)).status_code == 200
+    add, search, replay = read_log(log)
+    for row, route in ((add, "add"), (search, "search")):
+        assert row["route"] == f"/v1/memories/{route}" and row["method"] == "POST"
+        assert row["status"] == 200 and isinstance(row["ms"], float)
+        assert row["auth_scheme"] == "bearer" and row["user_id"] == "u"
+        assert row["ts"].endswith("+00:00") and len(row["boot"]) == 12
+    assert search["seq"] == add["seq"] + 1 and search["boot"] == add["boot"]
+    assert add["request_id"] == "r" and add["session_id"] == "s"
+    assert add["messages"] == 3 and add["blank_skipped"] == 1
+    assert add["words"] == 7 and add["chars"] == len("I moved to WarsawWarsaw sounds good ")
+    assert add["roles"] == {"user": 2, "assistant": 1} and add["with_timestamp"] == 1
+    assert add["replay"] is False and replay["replay"] is True
+    assert isinstance(add["add_ms"], float)
+    assert search["query_chars"] == len(query["query"]) and search["options"] == 2
+    assert search["top_k"] == 500 and search["limit"] == 100
+    assert search["items"] == 1 and search["sources"] == 2
+    assert search["packed_tokens"] > 0 and search["candidate_limit"] == 100
+    assert search["chunk_density"] == 1.0  # the service gate measured 2 chunks / 2 messages
+    assert set(search["channel_counts"]) == {"lexical"}
+    assert set(search["timings_ms"]) == {"embedding", "retrieval", "reranking", "packing", "total"}
+    assert search["returned_roles"] == {"user": 1}
+    ids = [item["id"] for item in response.json()["data"]]
+    assert search["ids_digest"] == hashlib.sha256(json.dumps(ids).encode()).hexdigest()[:16]
+    text = log.read_text()
+    assert "Warsaw" not in text and "Where did I move" not in text and "Bearer" not in text
+
+
+async def test_request_log_explains_validation_and_auth_failures(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi import FastAPI
+    from pydantic import BaseModel
+
+    from mnemotree.evidence.server import create_app
+
+    log = tmp_path / "r.jsonl"
+    with Memory(tmp_path / "m.db") as memory:
+        app = create_app(memory, api_key="k", request_log=log)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            invalid = {"query": [], "user_id": "secret-user", "top_k": 5}
+            response = await client.post(
+                "/v1/memories/search", json=invalid, headers={"X-Api-Key": "k"}
+            )
+            assert response.status_code == 422
+            denied = await client.post(
+                "/v1/memories/search",
+                json={"query": "x", "user_id": "u", "top_k": 1},
+                headers={"Authorization": "Token wrong"},
+            )
+            assert denied.status_code == 401
+            assert denied.json() == {"detail": "invalid credentials"}
+
+    # The 422 body is FastAPI's default, produced by an app without the logging hooks.
+    class Search(BaseModel):
+        query: str
+        user_id: str
+        top_k: int
+
+    plain = FastAPI()
+
+    @plain.post("/v1/memories/search")
+    async def search(request: Search):
+        return {}
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=plain), base_url="http://test"
+    ) as client:
+        expected = await client.post("/v1/memories/search", json=invalid)
+    assert response.content == expected.content
+
+    validation, unauthorized = read_log(log)
+    assert validation["status"] == 422 and validation["auth_scheme"] == "x-api-key"
+    assert validation["detail"] == ["body.query: Input should be a valid string"]
+    assert unauthorized["status"] == 401 and unauthorized["auth_scheme"] == "token"
+    assert unauthorized["detail"] == "invalid credentials"
+    assert "secret-user" not in log.read_text() and "wrong" not in log.read_text()
+
+
+async def test_unlimited_payload_sampling_joins_the_request_log(tmp_path):
+    pytest.importorskip("fastapi")
+    from mnemotree.evidence.server import create_app
+
+    log, samples = tmp_path / "r.jsonl", tmp_path / "samples" / "p.jsonl"
+    with Memory(tmp_path / "m.db") as memory:
+        app = create_app(
+            memory, api_key="k", sample_path=samples, sample_limit=None, request_log=log
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": "Bearer k"},
+        ) as client:
+            for index in range(60):
+                payload = {
+                    "request_id": f"r{index}",
+                    "user_id": "u",
+                    "session_id": "s",
+                    "messages": [{"role": "user", "content": f"note {index}"}],
+                }
+                assert (await client.post("/v1/memories/add", json=payload)).status_code == 200
+            query = {"query": "note", "user_id": "u", "top_k": 5}
+            assert (await client.post("/v1/memories/search", json=query)).status_code == 200
+    rows, logged = read_log(samples), read_log(log)
+    assert len(rows) == len(logged) == 61
+    assert [row["kind"] for row in rows] == ["add"] * 60 + ["search"]
+    for row, line in zip(rows, logged, strict=True):
+        assert (row["seq"], row["boot"], row["ts"]) == (line["seq"], line["boot"], line["ts"])
+    assert rows[-1]["query"] == "note" and rows[0]["messages"][0]["content"] == "note 0"
+
+
+async def test_provider_failure_logs_status_without_provider_body(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    from mnemotree.evidence.server import create_app
+
+    log = tmp_path / "r.jsonl"
+    secret = "rate limited for key sk-provider-SECRET"
+    with Memory(tmp_path / "m.db") as memory:
+
+        async def failing_search(*args, **kwargs):
+            request = httpx.Request("POST", "https://provider.test/v1/embeddings")
+            response = httpx.Response(
+                429, text=secret, headers={"x-request-key": secret}, request=request
+            )
+            raise httpx.HTTPStatusError(secret, request=request, response=response)
+
+        monkeypatch.setattr(memory, "search", failing_search)
+        app = create_app(memory, api_key="k", request_log=log)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": "Bearer k"},
+        ) as client:
+            query = {"query": "x", "user_id": "u", "top_k": 5}
+            response = await client.post("/v1/memories/search", json=query)
+            assert response.status_code == 503
+            assert response.json() == {"detail": "retrieval failed; retry this request"}
+    (row,) = read_log(log)
+    assert row["status"] == 503 and row["error"] == "HTTPStatusError"
+    assert row["provider_status"] == 429
+    assert row["detail"] == "retrieval failed; retry this request"
+    text = log.read_text()
+    assert "SECRET" not in text and "rate limited" not in text and "provider.test" not in text
