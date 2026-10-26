@@ -466,6 +466,10 @@ class Memory:
             selected = tuple(sorted(selected, key=chronological))
             context = "\n\n".join(entry.render() for entry in selected)
         requested_context = {item.id: item for values in neighbors.values() for item in values}
+        packed_anchors = [member.id for entry in selected for member in entry.members()]
+        # Only a packed anchor's neighbors can be omitted by budget or duplicate
+        # suppression; neighbors of unpacked candidates were never in play.
+        anchor_context = {item.id for id in packed_anchors for item in neighbors.get(id, ())}
         included_context = {
             item.id for entry in selected for member in entry.members() for item in member.neighbors
         }
@@ -478,7 +482,9 @@ class Memory:
                 atom_hits=tuple(hit.model_dump(mode="json") for hit in atom_hits),
                 context_candidates=tuple(requested_context.values()),
                 omitted_context_ids=tuple(
-                    id for id in requested_context if id not in included_context
+                    id
+                    for id in requested_context
+                    if id in anchor_context and id not in included_context
                 ),
                 channel_counts={channel: len(items) for channel, items in channels.items()},
                 packed_tokens=tokens,

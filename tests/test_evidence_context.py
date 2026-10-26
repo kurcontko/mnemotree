@@ -167,7 +167,31 @@ async def test_context_ablation_reports_anchor_and_expansion_recall(tmp_path):
         assert on["packed_anchor_source_recall"] == 0
         assert on["expanded_source_recall"] == 1
         assert on["packed_source_recall"] == 1
+        # The gold message is the neighbor after a non-gold anchor.
+        assert on["packed_reciprocal_rank"] == 0.5
+        assert on["packed_anchor_reciprocal_rank"] == 0
         assert report["shared_ingestion"]["sources"] == 2
+
+
+async def test_only_packed_anchors_can_omit_context(tmp_path):
+    with Memory(tmp_path / "m.db") as memory:
+        for session in ("s1", "s2"):
+            await memory.add(
+                "u",
+                [
+                    Message(id=f"{session}-before", content=f"{session} opening"),
+                    Message(id=f"{session}-hit", content=f"kiwi in {session}"),
+                    Message(id=f"{session}-after", content=f"{session} closing"),
+                ],
+                request_id=session,
+                session_id=session,
+            )
+        result = await memory.search(
+            "u", "kiwi", options=SearchOptions(mode="lexical", limit=1, neighbor_messages=1)
+        )
+        assert len(result.evidence) == 1 and len(result.evidence[0].neighbors) == 2
+        assert len(result.trace.context_candidates) == 4
+        assert result.trace.omitted_context_ids == ()
 
 
 async def test_merged_blocks_count_once_against_the_limit(tmp_path):

@@ -303,7 +303,10 @@ async def score_queries(
             (item.chunk.source_id, item.chunk.start, item.chunk.end)
             for item in result.trace.candidates
         ]
-        packed_anchors = {member.source_id for item in result.evidence for member in item.members()}
+        anchor_order = list(
+            dict.fromkeys(member.source_id for item in result.evidence for member in item.members())
+        )
+        packed_anchors = set(anchor_order)
         packed_spans = [
             (span.source_id, span.start, span.end)
             for item in result.evidence
@@ -360,6 +363,13 @@ async def score_queries(
             )
             if gold
             else None,
+            # Neighbors interleave with anchors in `packed`, so arms with and without
+            # context are compared on anchors alone.
+            "packed_anchor_reciprocal_rank": next(
+                (1 / rank for rank, id in enumerate(anchor_order, 1) if id in gold), 0.0
+            )
+            if gold
+            else None,
             "candidate_answer_span_coverage": _answer_span_coverage(
                 query.answer_spans or [], candidate_spans
             ),
@@ -406,6 +416,7 @@ async def score_queries(
                     "packed_source_recall",
                     "packed_all_sources",
                     "packed_reciprocal_rank",
+                    "packed_anchor_reciprocal_rank",
                 )
             },
             **{
