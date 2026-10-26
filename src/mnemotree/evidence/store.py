@@ -112,7 +112,8 @@ class SQLiteEvidenceStore:
                 ).fetchone()
                 if version and version[0] != SCHEMA_VERSION:
                     raise ValueError(
-                        "unsupported evidence schema version; rebuild into a fresh database"
+                        f"unsupported evidence schema version {version[0]!r} (this build reads "
+                        f"{SCHEMA_VERSION!r}); rebuild into a fresh database"
                     )
             # FTS5/extension failures are explicit startup failures, never silent fallbacks.
             self.db.executescript(_SCHEMA.format(tokenizer=FTS_TOKENIZER))

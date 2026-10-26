@@ -321,8 +321,30 @@ def test_rejects_previous_schema_version(tmp_path):
     db.execute("INSERT INTO evidence_config VALUES('schema_version', '1')")
     db.commit()
     db.close()
-    with pytest.raises(ValueError, match="rebuild"):
+    with pytest.raises(ValueError, match=r"version '1' \(this build reads '\d+'\); rebuild"):
         Memory(path)
+    # Refused before any DDL: the old file keeps exactly its own tables and version.
+    db = sqlite3.connect(path)
+    tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    version = db.execute("SELECT value FROM evidence_config WHERE key='schema_version'").fetchone()
+    db.close()
+    assert tables == [("evidence_config",)] and version == ("1",)
+
+
+async def test_forgotten_chunks_leave_no_lexical_rows_for_new_ingests(tmp_path):
+    with Memory(tmp_path / "m.db") as memory:
+        await add(memory, "apple orchard", id="old", request="r1")
+        assert memory.forget("alice", "old")
+        # The next chunk can reuse the forgotten chunk's rowid; a stale FTS row would
+        # then make it match the old text.
+        await add(memory, "banana grove", id="new", request="r2")
+        lexical = SearchOptions(mode="lexical")
+        assert not (await memory.search("alice", "apple", options=lexical)).evidence
+        found = await memory.search("alice", "banana", options=lexical)
+        assert [item.source_id for item in found.evidence] == ["new"]
+        db = memory.store.db
+        fts = db.execute("SELECT count(*) FROM evidence_fts").fetchone()[0]
+        assert fts == db.execute("SELECT count(*) FROM evidence_chunks").fetchone()[0]
 
 
 async def test_long_queries_are_clipped_for_the_embedder(tmp_path):
