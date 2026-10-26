@@ -7,9 +7,12 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-dev --no-install-project --extra serve --extra embeddings
+# Dependencies install from locked wheels only; no third-party build code runs.
+RUN uv sync --frozen --no-dev --no-install-project --no-build --extra serve --extra embeddings
 COPY src ./src
-RUN uv sync --frozen --no-dev --no-editable --extra serve --extra embeddings
+# Only this project is built from source, then installed like any other wheel.
+RUN uv build --wheel --out-dir /tmp/dist \
+    && uv pip install --python .venv --no-deps --no-build /tmp/dist/*.whl
 
 FROM python:3.12-slim-bookworm
 
