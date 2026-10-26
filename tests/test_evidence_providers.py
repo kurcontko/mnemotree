@@ -1,13 +1,16 @@
 import asyncio
 import json
 import logging
+import subprocess
+import sys
 from datetime import UTC, datetime
 from functools import partial
 
 import httpx
 import pytest
 
-from mnemotree.evidence.providers import OpenAIEmbedder, _RetryAfterOrBackoff
+from mnemotree.evidence.providers import OpenAIEmbedder
+from mnemotree.evidence.retry import RetryAfterOrBackoff
 
 ACTUAL_CLIENT = httpx.AsyncClient
 
@@ -81,7 +84,7 @@ def test_retry_after_header_sets_the_wait_for_rate_limits():
         def __init__(self, exc):
             self.outcome = Outcome(exc)
 
-    wait = _RetryAfterOrBackoff(lambda state: 1.5)
+    wait = RetryAfterOrBackoff(lambda state: 1.5)
     request = httpx.Request("POST", "http://x/embeddings")
 
     def error(status, headers=None):
@@ -159,7 +162,7 @@ def test_retry_after_http_date_and_reset_headers():
             self.outcome = type("Outcome", (), {"exception": lambda _: error})()
 
     now = datetime(2015, 10, 21, 7, 27, 48, tzinfo=UTC)
-    wait = _RetryAfterOrBackoff(lambda state: 1.5, now=lambda: now)
+    wait = RetryAfterOrBackoff(lambda state: 1.5, now=lambda: now)
     assert wait(State({"retry-after": "Wed, 21 Oct 2015 07:28:00 GMT"})) == 12.0
     assert wait(State({"retry-after": "Wed, 21 Oct 2015 09:00:00 GMT"})) == 60.0
     assert wait(State({"retry-after": "Wed, 21 Oct 2015 07:00:00 GMT"})) == 1.5
@@ -241,3 +244,12 @@ async def test_total_wait_budget_raises_the_last_error_instead_of_hanging(monkey
 
     with pytest.raises(ValueError):
         OpenAIEmbedder(model="toy", dimensions=2, revision="1", api_key="k", max_total_wait=-1)
+
+
+def test_providers_import_without_tenacity_for_local_embeddings():
+    # A lite install has sentence-transformers but not tenacity (embeddings extra).
+    code = (
+        "import sys; sys.modules['tenacity'] = None\n"
+        "from mnemotree.evidence.providers import OpenAIEmbedder, SentenceTransformerEmbedder"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True)
