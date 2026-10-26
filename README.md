@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kurcontko-mnemotree-badge.png)](https://mseep.ai/app/kurcontko-mnemotree)
+
 # 🌳 Mnemotree
 
 Local evidence memory for LLM agents: SQLite, FTS5, and sqlite-vec.
