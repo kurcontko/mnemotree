@@ -103,11 +103,11 @@ ui = ["streamlit>=1.40.0"]
 
 # MCP server
 # The MCP server runs on MemoryCore, so it needs the legacy dependencies.
-mcp = ["mnemotree[legacy]", "fastmcp<4"]
+mcp = ["mnemotree[legacy]", "fastmcp<5"]
 mcp_server = [
     "mnemotree[legacy]",
     "chromadb>=0.5.23",
-    "fastmcp<4",
+    "fastmcp<5",
     "sentence-transformers>=2.7.0",
 ]
 
@@ -134,7 +134,7 @@ all = [
     "sentence-transformers>=2.7.0",
     "yake>=0.4.8",
     "streamlit>=1.40.0",
-    "fastmcp<4",
+    "fastmcp<5",
     "langchain-google-genai>=2.0.7",
     "langchain-anthropic>=1.4.6",
     "langchain-aws>=0.2.0",
