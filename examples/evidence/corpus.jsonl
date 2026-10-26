@@ -1,0 +1,2 @@
+{"namespace":"demo","request_id":"r1","session_id":"s1","messages":[{"id":"move","role":"user","content":"I moved from Krakow to Warsaw in January.","timestamp":"2024-01-10T12:00:00Z"},{"id":"hobby","role":"user","content":"I grow orchids on my balcony."}]}
+{"namespace":"other-user","request_id":"r1","session_id":"s1","messages":[{"id":"move","role":"user","content":"I moved to Paris."}]}

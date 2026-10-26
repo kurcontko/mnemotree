@@ -1,0 +1,17 @@
+{
+  "extraction": {
+    "kind": "openai",
+    "model": "your-extraction-model",
+    "revision": "your-pinned-revision",
+    "base_url": "https://your-provider.example/v1",
+    "api_key_env": "EXTRACTION_API_KEY"
+  },
+  "extraction_batch_chars": 12000,
+  "search": {
+    "mode": "lexical",
+    "representation": "combined",
+    "candidate_limit": 100,
+    "limit": 10,
+    "token_budget": 8000
+  }
+}

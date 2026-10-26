@@ -2,6 +2,7 @@ name: Dependency Review
 
 on:
   pull_request:
+    types: [opened]
 
 permissions:
   contents: read
@@ -12,6 +13,8 @@ concurrency:
 
 jobs:
   dependency-review:
+    # Use the PR author so human-triggered reruns still review Dependabot PRs.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

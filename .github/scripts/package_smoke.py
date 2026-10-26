@@ -1,7 +1,8 @@
 """Exercise an installed distribution from outside its checkout, without an LLM.
 
 Run with ``--bare`` against a plain ``pip install mnemotree``, or ``--mcp``
-against ``mnemotree[mcp]``. CI's test lanes import the package from ``src/``
+against ``mnemotree[mcp]``. The bare install is the evidence engine alone;
+``mcp`` adds the legacy MemoryCore that the MCP server runs on. CI's test lanes import the package from ``src/``
 and never install the wheel, so this is the only place the wheel's file list,
 metadata, and console-script entry points are checked.
 """
@@ -20,6 +21,9 @@ from pathlib import Path
 # transitively, the soft-import paths in store/ and embeddings/ stop being
 # exercised anywhere, so fail loudly instead.
 OPTIONAL_MODULES = ("chromadb", "fastmcp", "sentence_transformers", "neo4j", "pymilvus")
+# MemoryCore's dependencies live in the legacy extra; a bare install that
+# pulls them in has lost the lean default.
+LEGACY_MODULES = ("langchain", "langchain_core", "numpy", "sklearn", "networkx", "spacy", "openai")
 
 
 def check_location() -> None:
@@ -35,12 +39,17 @@ def check_cli(version: str) -> None:
     assert out.strip() == version, (out, version)
 
 
+def check_evidence_cli() -> None:
+    cli = Path(sys.executable).parent / "mnemotree-evidence"
+    subprocess.check_output([str(cli), "--help"], text=True)
+
+
 def check_mcp_entry_point(*, bare: bool) -> None:
     mcp_cli = Path(sys.executable).parent / "mnemotree-mcp"
     assert mcp_cli.exists(), "mnemotree-mcp console script was not installed"
     if bare:
-        # Without fastmcp the server must refuse with an install hint, not a
-        # bare traceback from somewhere deeper.
+        # Without fastmcp and MemoryCore the server must refuse with an
+        # install hint, not a bare traceback from somewhere deeper.
         proc = subprocess.run(
             [str(mcp_cli)], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60
         )
@@ -54,7 +63,23 @@ def check_mcp_entry_point(*, bare: bool) -> None:
         assert server._get_mcp() is not None
 
 
-async def roundtrip(workdir: Path) -> None:
+async def evidence_roundtrip(workdir: Path) -> None:
+    from mnemotree import Memory, Message
+
+    with Memory(workdir / "evidence.sqlite") as memory:
+        await memory.add(
+            "smoke",
+            [Message(content="The package smoke test stored this evidence.")],
+            request_id="smoke-1",
+            session_id="smoke",
+        )
+        result = await memory.search("smoke", "package smoke evidence")
+        assert [item.text for item in result.evidence] == [
+            "The package smoke test stored this evidence."
+        ], result.evidence
+
+
+async def legacy_roundtrip(workdir: Path) -> None:
     from langchain_core.embeddings import DeterministicFakeEmbedding
 
     from mnemotree import MemoryCore
@@ -89,12 +114,15 @@ def main() -> None:
 
     check_location()
     if bare:
-        for name in OPTIONAL_MODULES:
+        for name in (*OPTIONAL_MODULES, *LEGACY_MODULES):
             assert importlib.util.find_spec(name) is None, f"Unexpected optional dependency: {name}"
     check_cli(version)
+    check_evidence_cli()
     check_mcp_entry_point(bare=bare)
     with tempfile.TemporaryDirectory() as tmp:
-        asyncio.run(roundtrip(Path(tmp)))
+        asyncio.run(evidence_roundtrip(Path(tmp)))
+        if not bare:
+            asyncio.run(legacy_roundtrip(Path(tmp)))
     print(f"mnemotree {version} ({'bare' if bare else 'mcp'}): ok")
 
 
