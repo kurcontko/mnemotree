@@ -1,0 +1,3 @@
+{"id":"location","namespace":"demo","query":"Where did I move? Warsaw","relevant_source_ids":["move"],"category":"single-source"}
+{"id":"two-sources","namespace":"demo","query":"Warsaw orchids","relevant_source_ids":["move","hobby"],"category":"multi-source"}
+{"id":"unknown","namespace":"demo","query":"What is my birthday?","relevant_source_ids":[],"category":"no-gold"}

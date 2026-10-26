@@ -421,11 +421,11 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
                 if query.vector is not None:
                     vector_blob = sqlite_vec.serialize_float32(query.vector)
                     sql = (
-                        f"SELECT m.*, distance(v.embedding, ?) AS distance "
+                        f"SELECT m.*, vec_distance_L2(v.embedding, ?) AS distance "
                         f'FROM "{self._vector_table}" v '
                         f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
                         f"{where_sql} "
-                        "ORDER BY distance "
+                        "ORDER BY distance, m.memory_id "
                         "LIMIT ? OFFSET ?"
                     )
                     rows = conn.execute(sql, [vector_blob, *params, limit, offset]).fetchall()
@@ -473,11 +473,11 @@ class SQLiteVecMemoryStore(BaseMemoryStore):
 
                 vector_blob = sqlite_vec.serialize_float32(query_embedding)
                 sql = (
-                    f"SELECT m.*, distance(v.embedding, ?) AS distance "
+                    f"SELECT m.*, vec_distance_L2(v.embedding, ?) AS distance "
                     f'FROM "{self._vector_table}" v '
                     f'JOIN "{self.collection_name}" m ON m.id = v.rowid '
                     f"{where_sql} "
-                    "ORDER BY distance "
+                    "ORDER BY distance, m.memory_id "
                     "LIMIT ?"
                 )
                 rows = conn.execute(sql, [vector_blob, *params, top_k]).fetchall()

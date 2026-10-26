@@ -4,32 +4,48 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
   schedule:
     - cron: "27 2 * * 1"
 
 permissions:
-  actions: read
   contents: read
-  security-events: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:
-    name: Analyze (Python)
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # The narrow scope that lets the analysis upload its results to the
+      # Security tab; `actions: read` lets it read this workflow run.
+      security-events: write
+      actions: read
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        language: [ "python" ]
+        # `actions` analyses the workflow YAML itself — the same surface
+        # workflow-sanity lints, from a different angle (data flow from
+        # untrusted event fields into shells and privileged steps).
+        language: [ "python", "actions" ]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           languages: ${{ matrix.language }}
+          queries: security-and-quality
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: "/language:${{ matrix.language }}"
