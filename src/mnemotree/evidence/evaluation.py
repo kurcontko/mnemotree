@@ -146,13 +146,9 @@ async def score_queries(
                 raise ValueError(f"query {query.id} references an absent source: {source_id}")
         result = await memory.search(query.namespace, query.query, options=options)
         candidates = {item.chunk.source_id for item in result.trace.candidates}
-        packed_anchors = {item.source_id for item in result.evidence}
+        packed_anchors = {member.source_id for item in result.evidence for member in item.members()}
         packed = list(
-            dict.fromkeys(
-                source_id
-                for item in result.evidence
-                for source_id in (item.source_id, *(n.source_id for n in item.neighbors))
-            )
+            dict.fromkeys(source_id for item in result.evidence for source_id in item.source_ids())
         )
         expanded = candidates | {span.source_id for span in result.trace.context_candidates}
         metrics = {
@@ -176,7 +172,9 @@ async def score_queries(
                 "packed_source_ids": packed,
                 "candidate_count": len(result.trace.candidates),
                 "atom_hit_count": len(result.trace.atom_hits),
-                "packed_context_count": sum(len(item.neighbors) for item in result.evidence),
+                "packed_context_count": sum(
+                    len(member.neighbors) for item in result.evidence for member in item.members()
+                ),
                 "packed_tokens": result.trace.packed_tokens,
                 "timings_ms": result.trace.timings_ms,
             }

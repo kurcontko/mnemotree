@@ -28,6 +28,26 @@ from .packing import TiktokenCounter, pack
 from .protocols import Embedder, Reranker, TokenCounter
 from .store import SQLiteEvidenceStore, now, vector_blob
 
+# Embedding APIs cap their input (text-embedding-v4: 8,192 tokens), and an AML query can
+# be a whole reference document. 6,000 characters stay under the cap even for CJK text.
+QUERY_EMBED_CHARS = 6000
+
+
+def chronological(item: Evidence) -> tuple[int, float, int]:
+    """Earliest member timestamp, then session order; untimed items follow timed ones."""
+    members = item.members()
+    stamps = [member.timestamp.timestamp() for member in members if member.timestamp is not None]
+    seq = min((member.seq for member in members if member.seq is not None), default=0)
+    return (0, min(stamps), seq) if stamps else (1, 0.0, seq)
+
+
+def model_query(query: str, limit: int = QUERY_EMBED_CHARS) -> str:
+    """The query as sent to an embedder or reranker: its start and end when it is too long."""
+    if len(query) <= limit:
+        return query
+    half = limit // 2
+    return query[:half] + "\n...\n" + query[-half:]
+
 
 def fuse(
     channels: dict[str, list[tuple[Chunk, float]]],
@@ -201,7 +221,7 @@ class Memory:
         if options.mode in ("dense", "hybrid"):
             if self.embedder is None:
                 raise ValueError("dense/hybrid retrieval requires the indexed embedder")
-            query_vector = await self.embedder.embed_query(query)
+            query_vector = await self.embedder.embed_query(model_query(query))
         embedding_ms = (perf_counter() - started) * 1000
         retrieval_start = perf_counter()
         channels: dict[str, list[tuple[Chunk, float]]] = {}
@@ -268,7 +288,9 @@ class Memory:
         rerank_start = perf_counter()
         if self.reranker and candidates:
             scores = list(
-                await self.reranker.score(query, [item.chunk.text for item in candidates])
+                await self.reranker.score(
+                    model_query(query), [item.chunk.text for item in candidates]
+                )
             )
             if len(scores) != len(candidates) or not all(math.isfinite(score) for score in scores):
                 raise ValueError("reranker must return one finite score per candidate")
@@ -298,15 +320,26 @@ class Memory:
                     rerank_score=candidate.rerank_score,
                     request_id=source.request_id if options.neighbor_messages else None,
                     position=source.position if options.neighbor_messages else None,
+                    seq=source.session_seq,
                     neighbors=neighbors[candidate.chunk.id],
                 )
             )
         packing_start = perf_counter()
         selected, context, tokens, omitted = pack(
-            evidence, self.counter, budget=options.token_budget, limit=options.limit
+            evidence,
+            self.counter,
+            budget=options.token_budget,
+            limit=options.limit,
+            # Anchors whose neighbor windows would touch share one item.
+            merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
         )
+        if options.order == "time":
+            selected = tuple(sorted(selected, key=chronological))
+            context = "\n\n".join(entry.render() for entry in selected)
         requested_context = {item.id: item for values in neighbors.values() for item in values}
-        included_context = {item.id for entry in selected for item in entry.neighbors}
+        included_context = {
+            item.id for entry in selected for member in entry.members() for item in member.neighbors
+        }
         return SearchResult(
             evidence=selected,
             context=context,

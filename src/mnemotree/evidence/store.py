@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import re
 import sqlite3
 import struct
 import threading
@@ -16,6 +15,7 @@ import sqlite_vec
 
 from .atom_store import AtomStore
 from .atoms import Atom
+from .lexical import FTS_TOKENIZER, index_text, scope_token, scoped_match
 from .models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
 
 _SCHEMA = """
@@ -27,11 +27,12 @@ CREATE TABLE IF NOT EXISTS evidence_requests(
 CREATE TABLE IF NOT EXISTS evidence_sources(
     rowid INTEGER PRIMARY KEY, namespace TEXT NOT NULL, id TEXT NOT NULL,
     request_id TEXT NOT NULL, session_id TEXT NOT NULL, position INTEGER NOT NULL,
+    -- Order within the session across Add requests; rowids interleave sessions.
+    session_seq INTEGER NOT NULL,
     content TEXT NOT NULL, role TEXT NOT NULL, timestamp TEXT,
-    ingested_at TEXT NOT NULL, UNIQUE(namespace, id)
+    ingested_at TEXT NOT NULL, UNIQUE(namespace, id),
+    UNIQUE(namespace, session_id, session_seq)
 );
-CREATE INDEX IF NOT EXISTS evidence_sources_session
-    ON evidence_sources(namespace, session_id, rowid);
 CREATE TABLE IF NOT EXISTS evidence_chunks(
     rowid INTEGER PRIMARY KEY, namespace TEXT NOT NULL, id TEXT NOT NULL,
     source_id TEXT NOT NULL, chunk_index INTEGER NOT NULL,
@@ -39,16 +40,16 @@ CREATE TABLE IF NOT EXISTS evidence_chunks(
     FOREIGN KEY(namespace, source_id) REFERENCES evidence_sources(namespace, id) ON DELETE CASCADE,
     UNIQUE(namespace, id), UNIQUE(namespace, source_id, chunk_index)
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS evidence_fts USING fts5(
-    text, content='evidence_chunks', content_rowid='rowid', tokenize='unicode61'
-);
-CREATE TRIGGER IF NOT EXISTS evidence_chunks_insert AFTER INSERT ON evidence_chunks BEGIN
-    INSERT INTO evidence_fts(rowid, text) VALUES(new.rowid, new.text);
-END;
+-- Holds lexical.index_text(chunk text), keyed by chunk rowid, so CJK bigrams
+-- are indexed without changing the stored source spans.
+CREATE VIRTUAL TABLE IF NOT EXISTS evidence_fts USING fts5(text, scope, tokenize='{tokenizer}');
 CREATE TRIGGER IF NOT EXISTS evidence_chunks_delete AFTER DELETE ON evidence_chunks BEGIN
-    INSERT INTO evidence_fts(evidence_fts, rowid, text) VALUES('delete', old.rowid, old.text);
+    DELETE FROM evidence_fts WHERE rowid=old.rowid;
 END;
 """
+
+
+SCHEMA_VERSION = "4"
 
 
 class IngestConflict(ValueError):
@@ -101,16 +102,25 @@ class SQLiteEvidenceStore:
                 sqlite_vec.load(self.db)
             finally:
                 self.db.enable_load_extension(False)
-            # FTS5/extension failures are explicit startup failures, never silent fallbacks.
-            self.db.executescript(_SCHEMA)
-            with self.transaction():
+            # Check before creating tables: an older lexical index must not be
+            # extended in place with a different tokenization.
+            if self.db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_config'"
+            ).fetchone():
                 version = self.db.execute(
                     "SELECT value FROM evidence_config WHERE key='schema_version'"
                 ).fetchone()
-                if version and version[0] != "1":
-                    raise ValueError("unsupported evidence schema version")
+                if version and version[0] != SCHEMA_VERSION:
+                    raise ValueError(
+                        f"unsupported evidence schema version {version[0]!r} (this build reads "
+                        f"{SCHEMA_VERSION!r}); rebuild into a fresh database"
+                    )
+            # FTS5/extension failures are explicit startup failures, never silent fallbacks.
+            self.db.executescript(_SCHEMA.format(tokenizer=FTS_TOKENIZER))
+            with self.transaction():
                 self.db.execute(
-                    "INSERT OR IGNORE INTO evidence_config VALUES('schema_version', '1')"
+                    "INSERT OR IGNORE INTO evidence_config VALUES('schema_version', ?)",
+                    (SCHEMA_VERSION,),
                 )
                 row = self.db.execute(
                     "SELECT value FROM evidence_config WHERE key='embedding_spec'"
@@ -130,10 +140,13 @@ class SQLiteEvidenceStore:
                     )
                 if self.embedding_spec:
                     dimensions = self.embedding_spec.dimensions
+                    # Partitioned by namespace: a KNN query reads only that namespace's
+                    # vectors, contiguously. Joining chunks to vec0 row by row instead
+                    # took ~0.4 ms per chunk (1 s for a 500K-token conversation).
                     self.db.execute(
                         f"CREATE VIRTUAL TABLE IF NOT EXISTS evidence_vec USING vec0("
-                        f"chunk_rowid INTEGER PRIMARY KEY, embedding float[{dimensions}] "
-                        "distance_metric=cosine)"
+                        f"chunk_rowid INTEGER PRIMARY KEY, namespace TEXT PARTITION KEY, "
+                        f"embedding float[{dimensions}] distance_metric=cosine)"
                     )
                     self.db.execute(
                         "CREATE TRIGGER IF NOT EXISTS evidence_vectors_delete "
@@ -260,17 +273,24 @@ class SQLiteEvidenceStore:
             replay = self.receipt(namespace, request_id, body_hash)
             if replay:
                 return replay
+            next_seq = self.db.execute(
+                "SELECT coalesce(max(session_seq) + 1, 0) FROM evidence_sources "
+                "WHERE namespace=? AND session_id=?",
+                (namespace, session_id),
+            ).fetchone()[0]
             try:
-                for source in sources:
+                for offset, source in enumerate(sources):
                     self.db.execute(
                         "INSERT INTO evidence_sources(namespace,id,request_id,session_id,position,"
-                        "content,role,timestamp,ingested_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                        "session_seq,content,role,timestamp,ingested_at) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?)",
                         (
                             namespace,
                             source.id,
                             request_id,
                             session_id,
                             source.position,
+                            next_seq + offset,
                             source.content,
                             source.role,
                             source.timestamp.isoformat() if source.timestamp else None,
@@ -291,10 +311,14 @@ class SQLiteEvidenceStore:
                             chunk.text,
                         ),
                     )
+                    self.db.execute(
+                        "INSERT INTO evidence_fts(rowid,text,scope) VALUES(?,?,?)",
+                        (cursor.lastrowid, index_text(chunk.text), scope_token(namespace)),
+                    )
                     if blobs:
                         self.db.execute(
-                            "INSERT INTO evidence_vec(chunk_rowid,embedding) VALUES(?,?)",
-                            (cursor.lastrowid, blobs[index]),
+                            "INSERT INTO evidence_vec(chunk_rowid,namespace,embedding) VALUES(?,?,?)",
+                            (cursor.lastrowid, namespace, blobs[index]),
                         )
                 self.atoms.insert(namespace, atoms, atom_blobs)
             except sqlite3.IntegrityError as exc:
@@ -338,13 +362,12 @@ class SQLiteEvidenceStore:
 
     def lexical(self, namespace: str, query: str, limit: int) -> list[tuple[Chunk, float]]:
         scope(namespace)
-        terms = list(dict.fromkeys(re.findall(r"[^\W_]+", query, flags=re.UNICODE)))[:64]
-        if not terms:
+        match = scoped_match(namespace, query)
+        if match is None:
             return []
-        match = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
         with self._lock:
             rows = self.db.execute(
-                "SELECT c.*, bm25(evidence_fts) AS score FROM evidence_fts "
+                "SELECT c.*, bm25(evidence_fts, 1.0, 0.0) AS score FROM evidence_fts "
                 "JOIN evidence_chunks c ON c.rowid=evidence_fts.rowid "
                 "WHERE evidence_fts MATCH ? AND c.namespace=? ORDER BY score,c.id LIMIT ?",
                 (match, namespace, limit),
@@ -360,9 +383,9 @@ class SQLiteEvidenceStore:
         blob = vector_blob(vector, self.embedding_spec.dimensions)
         with self._lock:
             rows = self.db.execute(
-                "SELECT c.*, vec_distance_cosine(v.embedding, ?) AS distance "
-                "FROM evidence_chunks c JOIN evidence_vec v ON v.chunk_rowid=c.rowid "
-                "WHERE c.namespace=? ORDER BY distance,c.id LIMIT ?",
+                "SELECT c.*, v.distance FROM (SELECT chunk_rowid, distance FROM evidence_vec "
+                "WHERE embedding MATCH ? AND namespace=? AND k=?) v "
+                "JOIN evidence_chunks c ON c.rowid=v.chunk_rowid ORDER BY v.distance,c.id",
                 (blob, namespace, limit),
             ).fetchall()
         return [(self._chunk(row), 1.0 - float(row["distance"])) for row in rows]
@@ -391,30 +414,31 @@ class SQLiteEvidenceStore:
     def conversation_context(
         self, namespace: str, source: Source, *, neighbors: int, max_chars: int
     ) -> tuple[ContextSpan, ...]:
+        """Adjacent messages of the same session, in acknowledged ingestion order.
+
+        AML splits one session into Add requests of at most 20 messages and sends
+        them in source order, so context continues across request boundaries.
+        Concurrent Adds to one session are ordered by commit, not by payload.
+        """
         scope(namespace)
         if source.namespace != namespace:
             raise ValueError("source is outside this namespace")
         if neighbors == 0:
             return ()
         with self._lock:
-            rows = self.db.execute(
-                "SELECT * FROM evidence_sources WHERE namespace=? AND request_id=? AND session_id=? "
-                "AND position BETWEEN ? AND ? AND id<>? ORDER BY position",
-                (
-                    namespace,
-                    source.request_id,
-                    source.session_id,
-                    source.position - neighbors,
-                    source.position + neighbors,
-                    source.id,
-                ),
-            ).fetchall()
-        result = []
-        for row in rows:
-            other = Source.model_validate({key: row[key] for key in Source.model_fields})
-            start = (
-                max(0, len(other.content) - max_chars) if other.position < source.position else 0
+            query = (
+                "SELECT * FROM evidence_sources WHERE namespace=? AND session_id=? "
+                "AND session_seq{} ? ORDER BY session_seq {} LIMIT ?"
             )
+            arguments = (namespace, source.session_id, source.session_seq, neighbors)
+            before = self.db.execute(query.format("<", "DESC"), arguments).fetchall()
+            after = self.db.execute(query.format(">", "ASC"), arguments).fetchall()
+        rows = [(-index, row) for index, row in enumerate(before, 1)][::-1]
+        rows += [(index, row) for index, row in enumerate(after, 1)]
+        result = []
+        for offset, row in rows:
+            other = Source.model_validate({key: row[key] for key in Source.model_fields})
+            start = max(0, len(other.content) - max_chars) if offset < 0 else 0
             end = min(len(other.content), start + max_chars)
             result.append(
                 ContextSpan(
@@ -423,6 +447,8 @@ class SQLiteEvidenceStore:
                     request_id=other.request_id,
                     session_id=other.session_id,
                     position=other.position,
+                    seq=other.session_seq,
+                    offset=offset,
                     role=other.role,
                     timestamp=other.timestamp,
                     start=start,
