@@ -5,17 +5,23 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from mnemotree.core.memory import (
-    MemoryCore,
-    ModeDefaultsConfig,
-    NerConfig,
-    RecallFilters,
-    RetrievalConfig,
-)
-from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
-from mnemotree.ner import create_ner
-from mnemotree.store.base import BaseMemoryStore
-from mnemotree.store.protocols import SupportsMemoryListing
+try:
+    from mnemotree.core.memory import (
+        MemoryCore,
+        ModeDefaultsConfig,
+        NerConfig,
+        RecallFilters,
+        RetrievalConfig,
+    )
+    from mnemotree.core.models import MemoryItem, MemoryType, coerce_datetime
+    from mnemotree.ner import create_ner
+    from mnemotree.store.base import BaseMemoryStore
+    from mnemotree.store.protocols import SupportsMemoryListing
+except ModuleNotFoundError as exc:
+    # The default install is the evidence engine; MemoryCore is an extra.
+    raise ModuleNotFoundError(
+        "The MCP server runs on the legacy MemoryCore. Install with `mnemotree[mcp_server]`."
+    ) from exc
 
 _memory_lock = asyncio.Lock()
 _memory_core: MemoryCore | None = None
