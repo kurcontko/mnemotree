@@ -218,13 +218,13 @@ async def test_a_failed_batch_cancels_its_siblings_and_raises_its_own_error(monk
         except asyncio.CancelledError:
             cancelled.append(True)
             raise
+        raise AssertionError("the slow batch outlived its failed sibling")
 
     fake_client(monkeypatch, respond)
     embedder = embedder_with(FakeTime(), batch_size=1)
     with pytest.raises(httpx.HTTPStatusError):
         await embedder.embed_documents(["slow", "bad"])
-    for _ in range(3):
-        await asyncio.sleep(0)
+    # The sibling is cancelled and awaited before embed_documents raises.
     assert cancelled == [True]
 
 
