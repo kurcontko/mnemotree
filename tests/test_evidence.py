@@ -214,6 +214,20 @@ async def test_embedding_signature_and_lexical_reopen(tmp_path):
         Memory(lexical, embedder=ToyEmbedder())
 
 
+async def test_stale_lexical_connection_cannot_write_into_a_dense_database(tmp_path):
+    # Two processes open a fresh path; the dense one records its embedding spec
+    # after the lexical one cached "no spec". Chunks written without vectors
+    # would be invisible to dense search, so the stale writer must be refused.
+    path = tmp_path / "m.db"
+    with Memory(path) as stale, Memory(path, embedder=ToyEmbedder()) as dense:
+        with pytest.raises(ValueError, match="configuration changed"):
+            await add(stale)
+        assert dense.store.db.execute("SELECT count(*) FROM evidence_chunks").fetchone()[0] == 0
+        await add(dense)
+        result = await dense.search("alice", "apple", options=SearchOptions(mode="dense"))
+        assert result.evidence
+
+
 @pytest.mark.parametrize(
     "vector", [[0, 0], [1], [float("nan"), 1], [float("inf"), 1], [1e100, 1], [1e-100, 0]]
 )
