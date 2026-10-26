@@ -1,6 +1,6 @@
 """Exercise MCP mutation and restart against SQLite rather than store mocks."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -24,7 +24,7 @@ class LocalTestEmbeddings(Embeddings):
 
 
 def memory(memory_id, content):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return MemoryItem(
         memory_id=memory_id,
         content=content,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from ..models import MemoryItem
@@ -43,7 +43,7 @@ class MemoryScorer:
         query_embedding: list[float] | None,
         _extra_signals: dict[str, Any] | None = None,
     ) -> list[MemoryItem]:
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         scored = [
             (
                 memory,

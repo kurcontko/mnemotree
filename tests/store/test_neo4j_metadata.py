@@ -1,6 +1,6 @@
 """Metadata writes use a mocked driver; no Neo4j service is contacted."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -33,7 +33,7 @@ async def test_metadata_write_includes_importance_and_serializes_dates(metadata_
     result = MagicMock()
     result.single = AsyncMock(return_value={"m": {"importance": 0.75}} if exists else None)
     session.run.return_value = result
-    instant = datetime(2024, 1, 2, tzinfo=timezone.utc)
+    instant = datetime(2024, 1, 2, tzinfo=UTC)
     updated = await store.update_memory_metadata(
         "occurrence-1",
         {
