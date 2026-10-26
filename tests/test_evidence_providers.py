@@ -207,6 +207,27 @@ async def test_rate_limit_puts_every_concurrent_call_into_a_shared_cool_down(mon
         assert secret not in caplog.text
 
 
+async def test_a_failed_batch_cancels_its_siblings_and_raises_its_own_error(monkeypatch):
+    cancelled = []
+
+    async def respond(request):
+        if json.loads(request.content)["input"] == ["bad"]:
+            return httpx.Response(401, json={"error": "invalid key"})
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.append(True)
+            raise
+
+    fake_client(monkeypatch, respond)
+    embedder = embedder_with(FakeTime(), batch_size=1)
+    with pytest.raises(httpx.HTTPStatusError):
+        await embedder.embed_documents(["slow", "bad"])
+    for _ in range(3):
+        await asyncio.sleep(0)
+    assert cancelled == [True]
+
+
 async def test_concurrency_limit_is_shared_by_all_calls_on_the_instance(monkeypatch):
     in_flight, peak = [0], [0]
 
