@@ -1,9 +1,9 @@
 import asyncio
 from datetime import UTC, datetime
+from importlib import import_module
 
 import pytest
 
-import mnemotree
 from mnemotree import Memory, Message, SearchOptions
 from mnemotree.evidence import EmbeddingSpec, IngestConflict, IngestReceipt
 from mnemotree.evidence.engine import fuse
@@ -272,8 +272,9 @@ async def test_invalid_embedding_and_reranker_responses(tmp_path):
 def test_every_top_level_export_resolves_in_this_install():
     # Holds in both the lean and the legacy install: star-imports resolve
     # every name in __all__, so a legacy name listed without its extra fails.
-    for name in mnemotree.__all__:
-        getattr(mnemotree, name)
+    package = import_module("mnemotree")
+    for name in package.__all__:
+        getattr(package, name)
 
 
 def test_stored_receipt_with_a_newer_field_still_replays():

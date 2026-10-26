@@ -51,10 +51,21 @@ _ERRORS = (
 )
 
 # Star-imports resolve every name in __all__, so the legacy names are listed
-# only where the legacy extra is installed.
+# only where the legacy extra is installed. Other extras (anthropic, google,
+# aws, huggingface) bring langchain_core alone, which is not enough.
+_LEGACY_MODULES = (
+    "langchain",
+    "langchain_core",
+    "langchain_openai",
+    "numpy",
+    "sklearn",
+    "networkx",
+    "spacy",
+    "openai",
+)
 __all__ = [
     *_EVIDENCE,
-    *(_LEGACY if find_spec("langchain_core") is not None else ()),
+    *(_LEGACY if all(find_spec(module) for module in _LEGACY_MODULES) else ()),
     *_ERRORS,
 ]
 
