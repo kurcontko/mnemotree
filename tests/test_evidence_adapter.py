@@ -1,5 +1,7 @@
+import asyncio
 import hashlib
 import json
+import threading
 
 import httpx
 import pytest
@@ -489,5 +491,46 @@ def test_service_refuses_a_dense_database_without_its_embedder(tmp_path):
         spec = EmbeddingSpec(provider="test", model="toy", revision="1", dimensions=2)
 
     Memory(tmp_path / "m.db", embedder=Embedder()).close()
+    lexical = SearchOptions(mode="lexical")
     with Memory(tmp_path / "m.db") as memory, pytest.raises(ValueError, match="embedder"):
-        create_app(memory, api_key="test-key", options=SearchOptions(mode="lexical"))
+        create_app(memory, api_key="test-key", options=lexical)
+
+
+async def test_health_answers_while_a_search_waits_in_the_store(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    from mnemotree.evidence.server import create_app
+
+    with Memory(tmp_path / "m.db") as memory:
+        entered, release, returned = threading.Event(), threading.Event(), threading.Event()
+        lexical = memory.store.lexical
+
+        def held_lexical(*args, **kwargs):
+            entered.set()
+            # Bounded, so store work on the event loop fails the test instead of hanging it.
+            release.wait(timeout=5)
+            returned.set()
+            return lexical(*args, **kwargs)
+
+        monkeypatch.setattr(memory.store, "lexical", held_lexical)
+        app = create_app(memory, api_key="k")
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": "Bearer k"},
+        ) as client:
+            payload = {
+                "request_id": "r",
+                "user_id": "u",
+                "session_id": "s",
+                "messages": [{"role": "user", "content": "I moved to Warsaw"}],
+            }
+            assert (await client.post("/v1/memories/add", json=payload)).status_code == 200
+            query = {"query": "Where did I move?", "user_id": "u", "top_k": 5}
+            search = asyncio.create_task(client.post("/v1/memories/search", json=query))
+            assert await asyncio.to_thread(entered.wait, 5)
+            health = await client.get("/health")
+            answered_while_held = not returned.is_set()
+            release.set()
+            assert (await search).status_code == 200
+    assert health.status_code == 200
+    assert answered_while_held
