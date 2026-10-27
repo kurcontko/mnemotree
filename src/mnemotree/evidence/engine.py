@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import math
 from collections.abc import Mapping, Sequence
-from functools import partial
 from pathlib import Path
 from time import perf_counter
 
@@ -476,16 +475,14 @@ class Memory:
         evidence = [to_evidence(c, neighbors[c.chunk.id]) for c in candidates]
         packing_start = perf_counter()
         selected, context, tokens, omitted = await asyncio.to_thread(
-            partial(
-                pack,
-                evidence,
-                self.counter,
-                budget=options.token_budget,
-                limit=options.limit,
-                overflow=[to_evidence(c, ()) for c in overflow],
-                # Anchors whose neighbor windows would touch share one item.
-                merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
-            )
+            pack,
+            evidence,
+            self.counter,
+            budget=options.token_budget,
+            limit=options.limit,
+            overflow=[to_evidence(c, ()) for c in overflow],
+            # Anchors whose neighbor windows would touch share one item.
+            merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
         )
         if options.order == "time":
             selected = tuple(sorted(selected, key=chronological))
