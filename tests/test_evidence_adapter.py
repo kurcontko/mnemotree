@@ -19,6 +19,7 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             assert (await client.get("/health")).status_code == 200
+            assert (await client.get("/openapi.json")).status_code == 404
             # Pre-run probes: HEAD with the key is 200, without it 401, GET stays 405.
             assert (await client.head("/v1/memories/add")).status_code == 401
             for route in ("/v1/memories/add", "/v1/memories/search"):
@@ -477,3 +478,16 @@ async def test_search_clamps_top_k_in_the_options_the_engine_receives(tmp_path, 
                 query = {"query": "anything", "user_id": "u", "top_k": top_k}
                 assert (await client.post("/v1/memories/search", json=query)).status_code == 200
     assert limits == [7, MAX_TOP_K, MAX_TOP_K]
+
+
+def test_service_refuses_a_dense_database_without_its_embedder(tmp_path):
+    pytest.importorskip("fastapi")
+    from mnemotree.evidence import EmbeddingSpec
+    from mnemotree.evidence.server import create_app
+
+    class Embedder:
+        spec = EmbeddingSpec(provider="test", model="toy", revision="1", dimensions=2)
+
+    Memory(tmp_path / "m.db", embedder=Embedder()).close()
+    with Memory(tmp_path / "m.db") as memory, pytest.raises(ValueError, match="embedder"):
+        create_app(memory, api_key="test-key", options=SearchOptions(mode="lexical"))

@@ -249,9 +249,14 @@ def create_app(
 
     if options.mode != "lexical" and memory.embedder is None:
         raise ValueError("dense/hybrid service requires an embedder")
+    if memory.store.embedding_spec and memory.embedder is None:
+        # Every Add would fail, and the client would be told to retry forever.
+        raise ValueError("a dense database requires its configured embedder")
     if options.representation != "raw" and memory.store.extractor_config is None:
         raise ValueError("atom retrieval service requires an extracted corpus")
-    app = FastAPI(title="Mnemotree evidence memory", docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="Mnemotree evidence memory", docs_url=None, redoc_url=None, openapi_url=None
+    )
 
     @app.middleware("http")
     async def log_requests(http: HTTPRequest, call_next):

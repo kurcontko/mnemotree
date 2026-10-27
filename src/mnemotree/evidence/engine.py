@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 from collections.abc import Mapping, Sequence
+from functools import partial
 from pathlib import Path
 from time import perf_counter
 
@@ -198,7 +200,7 @@ class Memory:
             raise ValueError("messages must not be empty")
         messages = tuple(Message.model_validate(message) for message in messages)
         body_hash = digest([session_id, [message.model_dump(mode="json") for message in messages]])
-        replay = self.store.receipt(namespace, request_id, body_hash)
+        replay = await asyncio.to_thread(self.store.receipt, namespace, request_id, body_hash)
         if replay is not None:
             return replay
         if self.store.embedding_spec and self.embedder is None:
@@ -249,7 +251,8 @@ class Memory:
             if self.embedder and atoms
             else None
         )
-        return self.store.ingest(
+        return await asyncio.to_thread(
+            self.store.ingest,
             namespace,
             request_id,
             session_id,
@@ -293,94 +296,113 @@ class Memory:
         neighbors: dict[str, tuple[ContextSpan, ...]] = {}
         atom_hits: list[AtomHit] = []
         atom_ranks: dict[str, dict[str, int]] = {}
-        # A single snapshot covers all channels and source materialization.
-        # Concurrent writes cannot mix different versions in the returned evidence.
-        with self.store.transaction(read=True):
-            source_cache: dict[str, Source] = {}
 
-            def window(chunk: Chunk) -> tuple[Source, int, int]:
-                source = source_cache.get(chunk.source_id)
-                if source is None:
-                    source = self.store.get_source(namespace, chunk.source_id)
+        def retrieve() -> tuple[float | None, int, float | None, list[Candidate], list[Candidate]]:
+            # Every store read of one search; blocking, so it runs on a worker thread.
+            # The store's lock is held for the whole transaction.
+            # A single snapshot covers all channels and source materialization.
+            # Concurrent writes cannot mix different versions in the returned evidence.
+            with self.store.transaction(read=True):
+                source_cache: dict[str, Source] = {}
+
+                def window(chunk: Chunk) -> tuple[Source, int, int]:
+                    source = source_cache.get(chunk.source_id)
                     if source is None:
-                        raise ValueError("retrieved chunk has no source")
-                    source_cache[chunk.source_id] = source
-                return self.store.window(namespace, chunk, options.neighbor_chunks, source=source)
+                        source = self.store.get_source(namespace, chunk.source_id)
+                        if source is None:
+                            raise ValueError("retrieved chunk has no source")
+                        source_cache[chunk.source_id] = source
+                    return self.store.window(
+                        namespace, chunk, options.neighbor_chunks, source=source
+                    )
 
-            assistant_share = (
-                self.store.assistant_share(namespace) if options.role_first is not None else None
-            )
-            candidate_limit = options.candidate_limit
-            chunk_density = None
-            if options.deep_candidate_limit is not None:
-                chunk_density = self.store.chunk_density(namespace)
-                if chunk_density > options.deep_history_density:
-                    candidate_limit = options.deep_candidate_limit
-            if options.representation != "atoms" and options.mode in ("lexical", "hybrid"):
-                channels["lexical"] = self.store.lexical(
-                    namespace, query, candidate_limit, options=query_options
+                assistant_share = (
+                    self.store.assistant_share(namespace)
+                    if options.role_first is not None
+                    else None
                 )
-            if options.representation != "atoms" and query_vector is not None:
-                channels["dense"] = self.store.dense(namespace, query_vector, candidate_limit)
-            if options.representation != "raw":
-                atom_channels = {}
-                if options.mode in ("lexical", "hybrid"):
-                    atom_channels["atom_lexical"] = self.store.atoms.lexical(
+                candidate_limit = options.candidate_limit
+                chunk_density = None
+                if options.deep_candidate_limit is not None:
+                    chunk_density = self.store.chunk_density(namespace)
+                    if chunk_density > options.deep_history_density:
+                        candidate_limit = options.deep_candidate_limit
+                if options.representation != "atoms" and options.mode in ("lexical", "hybrid"):
+                    channels["lexical"] = self.store.lexical(
                         namespace, query, candidate_limit, options=query_options
                     )
-                if query_vector is not None:
-                    assert self.store.embedding_spec is not None
-                    atom_channels["atom_dense"] = self.store.atoms.dense(
-                        namespace,
-                        vector_blob(query_vector, self.store.embedding_spec.dimensions),
-                        candidate_limit,
-                    )
-                for channel, hits in atom_channels.items():
-                    expanded: dict[str, tuple[Chunk, float]] = {}
-                    atom_ranks[channel] = {}
-                    for rank, (atom, score) in enumerate(hits, 1):
-                        atom_hits.append(
-                            AtomHit(atom=atom, channel=channel, rank=rank, score=score)
+                if options.representation != "atoms" and query_vector is not None:
+                    channels["dense"] = self.store.dense(namespace, query_vector, candidate_limit)
+                if options.representation != "raw":
+                    atom_channels = {}
+                    if options.mode in ("lexical", "hybrid"):
+                        atom_channels["atom_lexical"] = self.store.atoms.lexical(
+                            namespace, query, candidate_limit, options=query_options
                         )
-                        for chunk in self.store.atoms.chunks(namespace, atom):
-                            expanded.setdefault(chunk.id, (chunk, score))
-                            atom_ranks[channel].setdefault(chunk.id, rank)
-                    channels[channel] = list(expanded.values())
-            candidates = fuse(
-                channels,
-                weights={
-                    "lexical": options.lexical_weight,
-                    "dense": options.dense_weight,
-                    "atom_lexical": options.lexical_weight * options.atom_weight,
-                    "atom_dense": options.dense_weight * options.atom_weight,
-                },
-                k=options.rrf_k,
-                ranks=atom_ranks,
-            )
-            overflow: list[Candidate] = []
-            if options.chunks_per_source is not None:
-                candidates, overflow = cap_per_source(candidates, options.chunks_per_source)
-                # Complete each anchored message: the chunks of a long record that no
-                # channel retrieved follow its anchor, placed only into unused budget, so
-                # a trajectory or document is served whole when the budget allows.
-                known = {c.chunk.id for c in candidates} | {c.chunk.id for c in overflow}
-                anchored = list(dict.fromkeys(c.chunk.source_id for c in candidates))
-                for chunks in self.store.source_chunks(namespace, anchored).values():
-                    for chunk in chunks:
-                        if chunk.id not in known:
-                            known.add(chunk.id)
-                            overflow.append(Candidate(chunk=chunk, fusion_score=0.0, channels={}))
-            for candidate in overflow:
-                windows[candidate.chunk.id] = window(candidate.chunk)
-            for candidate in candidates:
-                windows[candidate.chunk.id] = window(candidate.chunk)
-                source = windows[candidate.chunk.id][0]
-                neighbors[candidate.chunk.id] = self.store.conversation_context(
-                    namespace,
-                    source,
-                    neighbors=options.neighbor_messages,
-                    max_chars=options.neighbor_chars,
+                    if query_vector is not None:
+                        assert self.store.embedding_spec is not None
+                        atom_channels["atom_dense"] = self.store.atoms.dense(
+                            namespace,
+                            vector_blob(query_vector, self.store.embedding_spec.dimensions),
+                            candidate_limit,
+                        )
+                    for channel, hits in atom_channels.items():
+                        expanded: dict[str, tuple[Chunk, float]] = {}
+                        atom_ranks[channel] = {}
+                        for rank, (atom, score) in enumerate(hits, 1):
+                            atom_hits.append(
+                                AtomHit(atom=atom, channel=channel, rank=rank, score=score)
+                            )
+                            for chunk in self.store.atoms.chunks(namespace, atom):
+                                expanded.setdefault(chunk.id, (chunk, score))
+                                atom_ranks[channel].setdefault(chunk.id, rank)
+                        channels[channel] = list(expanded.values())
+                candidates = fuse(
+                    channels,
+                    weights={
+                        "lexical": options.lexical_weight,
+                        "dense": options.dense_weight,
+                        "atom_lexical": options.lexical_weight * options.atom_weight,
+                        "atom_dense": options.dense_weight * options.atom_weight,
+                    },
+                    k=options.rrf_k,
+                    ranks=atom_ranks,
                 )
+                overflow: list[Candidate] = []
+                if options.chunks_per_source is not None:
+                    candidates, overflow = cap_per_source(candidates, options.chunks_per_source)
+                    # Complete each anchored message: the chunks of a long record that no
+                    # channel retrieved follow its anchor, placed only into unused budget, so
+                    # a trajectory or document is served whole when the budget allows.
+                    known = {c.chunk.id for c in candidates} | {c.chunk.id for c in overflow}
+                    anchored = list(dict.fromkeys(c.chunk.source_id for c in candidates))
+                    for chunks in self.store.source_chunks(namespace, anchored).values():
+                        for chunk in chunks:
+                            if chunk.id not in known:
+                                known.add(chunk.id)
+                                overflow.append(
+                                    Candidate(chunk=chunk, fusion_score=0.0, channels={})
+                                )
+                for candidate in overflow:
+                    windows[candidate.chunk.id] = window(candidate.chunk)
+                for candidate in candidates:
+                    windows[candidate.chunk.id] = window(candidate.chunk)
+                    source = windows[candidate.chunk.id][0]
+                    neighbors[candidate.chunk.id] = self.store.conversation_context(
+                        namespace,
+                        source,
+                        neighbors=options.neighbor_messages,
+                        max_chars=options.neighbor_chars,
+                    )
+            return assistant_share, candidate_limit, chunk_density, candidates, overflow
+
+        (
+            assistant_share,
+            candidate_limit,
+            chunk_density,
+            candidates,
+            overflow,
+        ) = await asyncio.to_thread(retrieve)
         retrieval_ms = (perf_counter() - retrieval_start) * 1000
         role_policy_enabled = options.role_first is not None and (
             options.role_first_min_assistant_share is None
@@ -453,14 +475,17 @@ class Memory:
 
         evidence = [to_evidence(c, neighbors[c.chunk.id]) for c in candidates]
         packing_start = perf_counter()
-        selected, context, tokens, omitted = pack(
-            evidence,
-            self.counter,
-            budget=options.token_budget,
-            limit=options.limit,
-            overflow=[to_evidence(c, ()) for c in overflow],
-            # Anchors whose neighbor windows would touch share one item.
-            merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
+        selected, context, tokens, omitted = await asyncio.to_thread(
+            partial(
+                pack,
+                evidence,
+                self.counter,
+                budget=options.token_budget,
+                limit=options.limit,
+                overflow=[to_evidence(c, ()) for c in overflow],
+                # Anchors whose neighbor windows would touch share one item.
+                merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
+            )
         )
         if options.order == "time":
             selected = tuple(sorted(selected, key=chronological))
