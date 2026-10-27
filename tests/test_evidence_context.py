@@ -290,6 +290,13 @@ def test_relative_dates_resolve_against_the_message_time():
     assert resolve("I'm going to the game on Saturday.", said) == [
         "on saturday = Saturday, 13 May 2023"
     ]
+    # The marker can follow the match; the next sentence's markers don't count.
+    assert resolve("On Saturday we're going to the beach.", said) == [
+        "on saturday = Saturday, 13 May 2023"
+    ]
+    assert resolve("We met on Saturday. Next we will rest.", said) == [
+        "on saturday = Saturday, 6 May 2023"
+    ]
     assert resolve("Last month was busy, next year too.", said) == [
         "last month = April 2023",
         "next year = 2024",

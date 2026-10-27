@@ -208,8 +208,15 @@ class OpenAIEmbedder:
             for start in range(0, len(texts), self.batch_size)
         ]
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            results = await asyncio.gather(*(embed(client, batch) for batch in batches))
-        return [vector for result in results for vector in result]
+            # A batch that fails after its retries cancels its siblings, so none keeps
+            # a request in flight on the client being closed. Callers still see the
+            # batch's own exception, as with gather.
+            try:
+                async with asyncio.TaskGroup() as group:
+                    tasks = [group.create_task(embed(client, batch)) for batch in batches]
+            except BaseExceptionGroup as failed:
+                raise failed.exceptions[0] from None
+        return [vector for task in tasks for vector in task.result()]
 
     async def embed_query(self, text: str) -> list[float]:
         return (await self.embed_documents([text]))[0]

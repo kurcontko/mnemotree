@@ -82,9 +82,12 @@ def _weekday(t: datetime, name: str, direction: int) -> datetime:
     return t + timedelta(days=delta * direction)
 
 
-def _future(text: str, start: int) -> bool:
-    sentence = _SENTENCE_END.split(text[:start])[-1]
-    return _FUTURE.search(sentence) is not None
+def _future(text: str, start: int, end: int) -> bool:
+    # The whole sentence counts: "On Friday we're going to the beach" marks the
+    # future after the match.
+    before = _SENTENCE_END.split(text[:start])[-1]
+    after = _SENTENCE_END.split(text[end:], maxsplit=1)[0]
+    return _FUTURE.search(before) is not None or _FUTURE.search(after) is not None
 
 
 Rule = Callable[[re.Match[str], datetime, str], str]
@@ -123,7 +126,7 @@ RULES: list[tuple[re.Pattern[str], Rule]] = [
     ),
     (
         re.compile(rf"\bon {_WEEKDAY}\b", re.I),
-        lambda m, t, s: _day(_weekday(t, m.group(1), 1 if _future(s, m.start()) else -1)),
+        lambda m, t, s: _day(_weekday(t, m.group(1), 1 if _future(s, m.start(), m.end()) else -1)),
     ),
 ]
 # Words every match of the rule at the same index contains (case aside); a rule whose words
