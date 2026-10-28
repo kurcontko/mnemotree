@@ -13,7 +13,7 @@ Key locations:
 - Public API: `src/mnemotree/memory.py` (`Memory`, `MemoryItem`, `Recall`)
 - MCP stdio server: `src/mnemotree/mcp/` (`mnemotree-mcp`, standard library only)
 - CLI: `mnemotree-evidence` (`src/mnemotree/evidence/cli.py`), `mnemotree-mcp`, `mnemotree` (`src/mnemotree/cli.py`)
-- Guide: `docs/EVIDENCE_CORE.md`; atomic projections: `docs/ATOMIC_MEMORY.md`
+- Guide: `docs/GUIDE.md` (API, MCP, configuration, retrieval, atomic projections, AML service, evaluation, limits)
 
 ## Common Commands
 
