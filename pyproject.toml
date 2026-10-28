@@ -38,16 +38,12 @@ package = true
 
 [project.urls]
 Homepage = "https://github.com/kurcontko/mnemotree"
-#Documentation = "https://mnemotree.readthedocs.io"
 Repository = "https://github.com/kurcontko/mnemotree.git"
 Issues = "https://github.com/kurcontko/mnemotree/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mnemotree"]
@@ -59,14 +55,6 @@ testpaths = [
     "tests",
 ]
 asyncio_mode = "auto"
-markers = [
-    "integration: end-to-end/integration smoke tests (may be slower than unit tests)",
-]
-
-[tool.black]
-line-length = 100
-target-version = ["py311", "py312", "py313"]
-include = '\.pyi?$'
 
 [tool.ruff]
 target-version = "py311"
@@ -113,15 +101,6 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = false
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
-line_length = 100
 
 [project.scripts]
 mnemotree-evidence = "mnemotree.evidence.cli:main"
