@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the sdist and wheel, then install the wheel into clean virtualenvs
-# outside the checkout and smoke-test it — bare, and with the mcp extra.
+# outside the checkout and smoke-test it — bare, and with the serve extra.
 #
 # Installs are constrained to uv.lock so a red run means the package broke,
 # not that some transitive dependency released overnight; the weekly
@@ -18,10 +18,10 @@ uvx --no-build --from "twine==7.0.0" twine check --strict dist/*
 uv export --frozen --all-extras --no-emit-project --no-hashes --no-header --no-annotate \
   > "$work/constraints.txt"
 wheel=$(find "$repo/dist" -maxdepth 1 -name '*.whl')
-for variant in bare mcp; do
+for variant in bare serve; do
   uv venv --quiet "$work/$variant"
   requirement="$wheel"
-  if [[ "$variant" == mcp ]]; then requirement="${wheel}[mcp]"; fi
+  if [[ "$variant" == serve ]]; then requirement="${wheel}[serve]"; fi
   # --no-build: dependencies install from wheels only, so no third-party
   # setup script runs here. Our own wheel is already built.
   uv pip install --quiet --no-build --python "$work/$variant/bin/python" \

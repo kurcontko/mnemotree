@@ -1,7 +1,7 @@
 # Evidence core: first iteration
 
-This branch replaces the default development path with a small, source-first
-memory engine. The existing MemoryCore remains an optional legacy interface.
+Mnemotree is a small, source-first memory engine. It replaced the earlier
+`MemoryCore`, which was removed after 0.4.0.
 
 ## Scope and acceptance
 
@@ -17,7 +17,7 @@ memory engine. The existing MemoryCore remains an optional legacy interface.
 - Provide a runnable Add/Search adapter and a reproducible retrieval evaluation
   path. Exercise real FTS5/sqlite-vec locally, without paid model calls.
 - Make the default import/install independent of LangChain, spaCy, NetworkX and
-  scikit-learn. Preserve legacy integrations behind an explicit extra.
+  scikit-learn.
 
 Deferred: automatic extraction, L1 facts, L2 scenes, L3 profiles, graphs,
 reflection, decay, learned memory policies, and additional storage backends.
@@ -161,7 +161,7 @@ chunking can split sentences or code blocks. FTS BM25 statistics are global to
 the database even though result eligibility is scoped. SQLite work is synchronous
 and is intended for a modest local baseline; it can block an async event loop.
 There is no extraction, temporal contradiction resolution, automatic compaction,
-cross-message context expansion, or automatic migration of legacy databases.
+cross-message context expansion, or import of databases from the removed `MemoryCore`.
 
 The tests exercise actual FTS5/sqlite-vec, reopen visibility, namespace isolation,
 rollback after partial SQL writes, concurrent retries from separate connections,
@@ -171,8 +171,6 @@ evaluation report. Deterministic test vectors do not demonstrate semantic qualit
 ```bash
 pip install -e '.[dev,serve]'
 pytest tests/test_evidence.py tests/test_evidence_adapter.py --no-cov
-# The complete historical suite additionally needs the legacy extra.
-pip install -e '.[dev,legacy]'
 make lint typecheck test
 ```
 

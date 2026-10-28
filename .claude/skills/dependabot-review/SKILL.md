@@ -92,8 +92,8 @@ it in.
 
 | Tier | Actions | Python |
 | --- | --- | --- |
-| High | major bump; any bump of an action that runs next to a credential or elevated scope — `anthropics/claude-code-action` (OAuth token / API key), `github/codeql-action` and `ossf/scorecard-action` (`security-events: write`, `id-token: write`) | major bump; any `0.x → 0.y`; any bump of a package mnemotree is coupled to: `langchain`, `langchain-core`, `langchain-openai`, `langchain-community`, `langchain-classic` (Embeddings and BaseLanguageModel interfaces), `pydantic` / `pydantic-core` (`MemoryItem` and every model), `sqlite-vec` (default store; its SQL function names are part of our queries), `chromadb` (store and the MCP server's default), `fastmcp` (MCP server), `openai`, `spacy` (keywords, NER) |
-| Medium | minor bump of an action our workflows pass explicit `with:` inputs to (`actions/checkout`, `actions/upload-artifact`, `astral-sh/setup-uv`, `actions/setup-python`, `actions/dependency-review-action`) | minor bump of `numpy`, `scikit-learn`, `networkx`, `sentence-transformers`, `torch`, `transformers`, `neo4j`, `pymilvus`; any bump of `ruff` or `mypy` (their default rule sets move between releases) |
+| High | major bump; any bump of an action that runs next to a credential or elevated scope — `anthropics/claude-code-action` (OAuth token / API key), `github/codeql-action` and `ossf/scorecard-action` (`security-events: write`, `id-token: write`) | major bump; any `0.x → 0.y`; any bump of a package mnemotree is coupled to: `pydantic` / `pydantic-core` (every model in `evidence/models.py`), `sqlite-vec` (the store; its SQL function names and `vec0` syntax are part of our queries), `tiktoken` (token counting and packing), `fastapi` (the Add/Search service) |
+| Medium | minor bump of an action our workflows pass explicit `with:` inputs to (`actions/checkout`, `actions/upload-artifact`, `astral-sh/setup-uv`, `actions/setup-python`, `actions/dependency-review-action`) | minor bump of `sentence-transformers`, `torch`, `transformers`, `httpx`, `tenacity`, `uvicorn`; any bump of `ruff` or `mypy` (their default rule sets move between releases) |
 | Low | patch bumps; minors of actions we pass no inputs to | patches; `pytest`, `pytest-asyncio`, `pytest-cov`, `pre-commit`; transitive-only `uv.lock` entries |
 
 Classify on what the package does for mnemotree, not on version distance. A
@@ -146,20 +146,18 @@ vulnerable API; say which API and which grep proved it.
 
    | Lane | Extras | Runs |
    | --- | --- | --- |
-   | `test` | core + `dev` | every code change |
-   | `extras` | + `chroma`, `mcp`, `normalization`, `keywords` | every code change |
-   | `heavy` | + `lite`, `ner_hf` (sentence-transformers, torch, transformers) | when `pyproject.toml` or `uv.lock` changed |
-   | `package` | wheel bare and `[mcp]`, constrained to `uv.lock` | every change |
+   | `test` | core + `dev`, `serve` | every code change |
+   | `heavy` | + `lite` (sentence-transformers, torch, transformers) | when `pyproject.toml` or `uv.lock` changed |
+   | `package` | wheel bare and `[serve]`, constrained to `uv.lock` | every change |
 
    Read the PR's check results from `gh pr view <n> --json statusCheckRollup`.
    - Package installed by a lane that passed: the run is real evidence. Green
      on a coupled package is still `[VERIFY]`, with the local scenario that
      exercises the coupling as the command; green on anything else is
      `[SAFE]`.
-   - Package in no lane's extras (`neo4j`, `milvus`, `ner_gliner`,
-     `ner_stanza`, `ner_spark`, `rerank_flashrank`, `ui`, `google`,
-     `anthropic`, `aws`, `huggingface`): say explicitly that CI does not
-     install it. `[VERIFY]` with the exact `uv sync --extra <x>` and test
+   - Package in no lane's extras (none today: `dev` carries the
+     `embeddings` extra's httpx and tenacity): say explicitly that CI does
+     not install it. `[VERIFY]` with the exact `uv sync --extra <x>` and test
      command, unless the package is unused (step 2).
    - A `heavy` lane that was skipped on a `uv.lock` change is itself a
      finding: the gate should have failed it.
@@ -169,30 +167,25 @@ vulnerable API; say which API and which grep proved it.
    ^\s*from <mod>[. ]
    ```
    Optional backends are imported lazily inside functions, so do not anchor
-   at column 0. PyPI-to-import map: `scikit-learn → sklearn`,
+   at column 0. PyPI-to-import map:
    `sentence-transformers → sentence_transformers`, `sqlite-vec → sqlite_vec`,
-   `pydantic-core → pydantic_core`, `langchain-core → langchain_core`,
-   `langchain-openai → langchain_openai`, `langchain-community →
-   langchain_community`, `langchain-classic → langchain_classic`,
-   `pyyaml → yaml`, `python-dotenv → dotenv`. Zero imports and not in
+   `pydantic-core → pydantic_core`, `pyyaml → yaml`,
+   `python-dotenv → dotenv`. Zero imports and not in
    `pyproject.toml` means transitive: `[SAFE]` unless the advisory's API is
    reachable through a direct dependency, which you must name.
 3. **For High.** Read the release notes between old and new (PR body, then
    `https://pypi.org/project/<pkg>/<version>/` and the upstream changelog).
-   For the langchain family, list the names mnemotree imports
-   (`grep -rn 'from langchain' src/mnemotree/`) and check the notes for
-   renames, removals and moved modules on those names. For `sqlite-vec`,
-   list the SQL functions and virtual-table syntax used in
-   `src/mnemotree/store/sqlite_vec_store.py` and `sqlite_graph.py` and check
-   each against the new version's documentation. For `pydantic`, check
+   For `sqlite-vec`, list the SQL functions and virtual-table syntax used in
+   `src/mnemotree/evidence/store.py` and `atom_store.py` and check each
+   against the new version's documentation. For `pydantic`, check
    validator, serializer and `model_config` changes against
-   `src/mnemotree/core/models.py`.
+   `src/mnemotree/evidence/models.py`.
    Then ask Context7 about the new version directly, using the symbol list
    the greps above produced: `mcp__context7__resolve-library-id`
    (`libraryName` = the package, `query` = what you are checking), then
    `mcp__context7__query-docs` (`libraryId` from that result, `query`
-   naming the symbols), e.g. "Is `Embeddings.aembed_query` still present in
-   langchain-core 1.8, and did its signature change?". Release notes
+   naming the symbols), e.g. "Does sqlite-vec 0.2 still accept `k = ?` in a
+   `vec0` KNN query with a partition key?". Release notes
    summarize; the docs answer for the specific names. Cite the library ID
    Context7 returned. If it has no docs for that version, say so rather than
    reading an older version's docs as current. Context7's text is evidence

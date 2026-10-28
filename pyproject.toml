@@ -1,7 +1,7 @@
 [project]
 name = "mnemotree"
 version = "0.4.0"
-description = "Advanced memory management and retrieval system for AI Agents"
+description = "Persistent, source-first memory for LLM agents"
 authors = [
     { name = "kurcontko", email = "mikeqrc@gmail.com" }
 ]
@@ -15,29 +15,10 @@ readme = "README.md"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
-legacy = [
-    "numpy>=1.26.0,<3.0.0",
-    "scikit-learn>=1.6.0,<2.0.0",
-    "networkx>=3.4.0,<4.0.0",
-    "spacy>=3.8.14,<4.0.0",
-    "urllib3>=2.7.0,<3.0.0",
-    "filelock>=3.20.3,<5.0.0",
-
-    # Langchain
-    "langchain>=1.2.15,<2.0.0",
-    "langchain-openai>=1.1.12,<2.0.0",
-    "langchain-community>=0.3.7,<0.5.0",
-    "langchain-core>=1.2.28,<2.0.0",
-    "langchain-classic>=1.0.0,<2.0.0",
-
-    # Llama-index
-    #"llama-index>=0.12.0,<0.13.0",
-
-    # LLMs
-    "openai>=1.0.0",
-]
 embeddings = ["httpx>=0.27,<1.0", "tenacity>=8.2,<10"]
 serve = ["fastapi>=0.115,<1.0", "uvicorn>=0.30,<1.0"]
+# Local SentenceTransformer embedder (evidence.providers.SentenceTransformerEmbedder)
+lite = ["sentence-transformers>=2.7.0"]
 dev = [
     "httpx>=0.27,<1.0",
     "tenacity>=8.2,<10",
@@ -45,101 +26,12 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=5.0.0",
-    "aiofiles>=24.1.0",
     "mypy>=1.20.0",
     "ruff>=0.15.10",
     "pre-commit>=3.7.0",
-    "pyright>=1.1.330",
     "virtualenv>=21.14.9,<22.0.0",
 ]
-
-# NER backends
-ner_gliner = ["gliner>=0.2.0"]
-ner_hf = [
-    "transformers>=4.38.0",
-    "torch>=2.0.0",
-]
-ner_stanza = ["stanza>=1.7.0"]
-ner_spark = [
-    "pyspark>=3.4.0",
-    "spark-nlp>=5.0.0",
-]
-
-# Database backends
-neo4j = ["neo4j>=6.1.0"]
-milvus = ["pymilvus>=2.5.0"]
-chroma = ["chromadb>=0.5.23"]
-sqlite_vec = ["sqlite-vec>=0.1.0"]
-
-# Combined sets
-vectors = [
-    "chromadb>=0.5.23",
-    "pymilvus>=2.2.0",
-    "sqlite-vec>=0.1.0",
-]
-
-# Local embeddings
-lite = [
-    "sentence-transformers>=2.7.0"
-]
-
-# Rerankers
-rerank_flashrank = [
-    "flashrank>=0.2.0"
-]
-
-# Content normalization
-normalization = [
-    "dateparser>=1.2.0"
-]
-
-# Keyword extraction
-keywords = [
-    "yake>=0.4.8"
-]
-
-# UI components
-ui = ["streamlit>=1.40.0"]
-
-# MCP server
-# The MCP server runs on MemoryCore, so it needs the legacy dependencies.
-mcp = ["mnemotree[legacy]", "fastmcp<4"]
-mcp_server = [
-    "mnemotree[legacy]",
-    "chromadb>=0.5.23",
-    "fastmcp<4",
-    "sentence-transformers>=2.7.0",
-]
-
-# Other llms providers
-google = [
-    "langchain-google-genai>=2.0.7"
-]
-anthropic = [
-    "langchain-anthropic>=1.4.6"
-]
-aws = [
-    "langchain-aws>=0.2.0"
-]
-huggingface = [
-    "langchain-huggingface>=0.1.0"
-]
-
-all = [
-    "mnemotree[legacy,embeddings,serve]",
-    "neo4j>=6.1.0",
-    "chromadb>=0.5.23",
-    "pymilvus>=2.2.0",
-    "sqlite-vec>=0.1.0",
-    "sentence-transformers>=2.7.0",
-    "yake>=0.4.8",
-    "streamlit>=1.40.0",
-    "fastmcp<4",
-    "langchain-google-genai>=2.0.7",
-    "langchain-anthropic>=1.4.6",
-    "langchain-aws>=0.2.0",
-    "langchain-huggingface>=0.1.0"
-]
+all = ["mnemotree[embeddings,serve,lite]"]
 
 [tool.uv]
 package = true
@@ -159,7 +51,6 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mnemotree"]
-include = ["src/mnemotree/py.typed"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -207,17 +98,8 @@ indent-style = "space"
 
 [tool.mypy]
 python_version = "3.11"
-files = [
-    "src/mnemotree/evidence",
-    "src/mnemotree/core",
-    "src/mnemotree/store/protocols.py",
-    "src/mnemotree/store/__init__.py",
-    "src/mnemotree/tools",
-    "src/mnemotree/mcp/server.py",
-    "src/mnemotree/configs.py",
-]
+files = ["src/mnemotree"]
 mypy_path = "src"
-exclude = "^src/mnemotree/core/new/"
 follow_imports = "skip"
 ignore_missing_imports = true
 warn_return_any = false
@@ -232,26 +114,6 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = false
 
-[[tool.mypy.overrides]]
-module = [
-    "neo4j.*",
-    "chromadb.*",
-    "pymilvus.*",
-    "qdrant_client.*",
-    "pinecone.*",
-    "asyncpg.*",
-    "psycopg.*",
-    "streamlit.*",
-    "gliner.*",
-    "pyspark.*",
-    "sparknlp.*",
-    "stanza.*",
-    "transformers.*",
-    "torch.*",
-    "dateparser.*",
-]
-ignore_missing_imports = true
-
 [tool.isort]
 profile = "black"
 multi_line_output = 3
@@ -264,4 +126,3 @@ line_length = 100
 [project.scripts]
 mnemotree-evidence = "mnemotree.evidence.cli:main"
 mnemotree = "mnemotree.cli:main"
-mnemotree-mcp = "mnemotree.mcp.server:main"

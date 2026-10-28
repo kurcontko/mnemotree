@@ -2,35 +2,30 @@
 
 ## Project Summary
 
-Mnemotree is a Python 3.11+ library for giving LLM agents biologically-inspired, persistent memory. The core API (`MemoryCore`) supports storing memories, recalling them via semantic similarity + filters, and optional analysis/enrichment (importance scoring, emotions, entities/keywords). It also ships a ready-to-run MCP server (`mnemotree-mcp`) so tools like Codex CLI / Claude Desktop can use the memory store over stdio or HTTP.
+Mnemotree is a Python 3.11+ library giving LLM agents persistent, source-first memory. `Memory` (in `src/mnemotree/evidence/`) stores original messages in SQLite with transactional ingestion, persistent FTS5 and sqlite-vec indexes, hybrid rank fusion, optional reranking, token-budget packing, and retrieval traces. The earlier `MemoryCore`, its storage backends and the MCP server were removed after 0.4.0; new layers are built on top of `Memory`.
 
 Key locations:
-- Core API: `src/mnemotree/core/` (`MemoryCore`, models, retrieval/scoring)
-- Storage backends: `src/mnemotree/store/` (ChromaDB, SQLite+sqlite-vec, Neo4j, Milvus)
-- MCP server: `src/mnemotree/mcp/server.py`
-- CLI entry points: `src/mnemotree/cli.py`
-- Examples: `examples/` (Streamlit chat app in `examples/memory_chat/`)
-- API stability policy: `docs/API.md` (public vs experimental internals)
+- Engine: `src/mnemotree/evidence/engine.py` (`Memory`), models in `models.py`, protocols in `protocols.py`
+- Storage and indexes: `src/mnemotree/evidence/store.py`, `atom_store.py`, `lexical.py`
+- Packing and context: `src/mnemotree/evidence/packing.py`, `temporal.py`
+- Providers (embedders, rerankers): `src/mnemotree/evidence/providers.py`
+- Add/Search HTTP service: `src/mnemotree/evidence/server.py`
+- CLI: `mnemotree-evidence` (`src/mnemotree/evidence/cli.py`), `mnemotree` (`src/mnemotree/cli.py`)
+- Guide: `docs/EVIDENCE_CORE.md`; atomic projections: `docs/ATOMIC_MEMORY.md`
 
 ## Common Commands
+
+### Install (uv)
+```bash
+uv sync --extra dev --extra serve
+# Optional extras: embeddings (HTTP embedder), lite (local SentenceTransformer), serve (HTTP service)
+```
 
 ### Install (pip)
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
-# Optional extras, e.g.:
-# pip install -e ".[dev]"
-# pip install -e ".[lite,chroma]"
-```
-
-### Install (uv)
-```bash
-uv venv
-uv pip install -e .
-# Optional extras, e.g.:
-# uv pip install -e ".[dev]"
-# uv pip install -e ".[lite,chroma]"
+pip install -e ".[dev,serve]"
 ```
 
 ### Common Make targets
