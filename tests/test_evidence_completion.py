@@ -2,7 +2,7 @@
 
 import pytest
 
-from mnemotree import Memory, Message, SearchOptions
+from mnemotree.evidence import Memory, Message, SearchOptions
 
 
 def completion_options():

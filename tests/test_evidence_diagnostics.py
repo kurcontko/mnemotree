@@ -6,8 +6,7 @@ import subprocess
 import httpx
 import pytest
 
-from mnemotree import Memory, Message, SearchOptions
-from mnemotree.evidence import cli
+from mnemotree.evidence import Memory, Message, SearchOptions, cli
 from mnemotree.evidence.models import ContextSpan, EmbeddingSpec, Evidence
 from mnemotree.evidence.server import create_app, returned_role_chars
 

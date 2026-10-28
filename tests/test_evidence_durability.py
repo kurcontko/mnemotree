@@ -10,8 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from mnemotree import Memory, Message, SearchOptions
-from mnemotree.evidence import EmbeddingSpec, IngestConflict
+from mnemotree.evidence import EmbeddingSpec, IngestConflict, Memory, Message, SearchOptions
 
 
 class DurabilityEmbedder:
