@@ -36,3 +36,26 @@ with Memory("mem.sqlite", namespace="alice", embedder=None) as memory:
 
 `MemoryItem` is `id, content, role, session, timestamp, created_at`. `content` is
 the raw text exactly as stored.
+
+## MCP server
+
+`mnemotree-mcp` serves one namespace over stdio. It is standard library only
+(newline-delimited JSON-RPC 2.0, protocol versions 2024-11-05 to 2025-11-25), so a
+bare install runs it. Tools: `remember`, `remember_many`, `recall`, `get`, `forget`.
+Results carry JSON text and, from 2025-06-18, `structuredContent`; argument and
+conflict errors are tool results with `isError`, so the model can correct itself.
+
+```bash
+claude mcp add mnemotree -- mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
+  --namespace "$USER" --config ~/.mnemotree/config.json   # or --lexical
+```
+
+A config without an embedding is refused unless `--lexical` is given: keyword-only
+retrieval misses paraphrases, so it is a choice, never a fallback. `--config` is the
+same JSON file `mnemotree-evidence` reads (embedding, chunking, search options).
+
+Each client session starts its own process. Processes pointed at the same `--db`
+share it: SQLite WAL serializes writes and every acknowledged write is visible to
+the next recall in any session. Concurrent first opens of a new file retry briefly.
+What separate processes do not share is memory: each loads its own embedder, which
+matters for the local `lite` model.

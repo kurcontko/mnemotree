@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-Mnemotree is a Python 3.11+ library giving LLM agents persistent, source-first memory. `Memory` (in `src/mnemotree/evidence/`) stores original messages in SQLite with transactional ingestion, persistent FTS5 and sqlite-vec indexes, hybrid rank fusion, optional reranking, token-budget packing, and retrieval traces. The earlier `MemoryCore`, its storage backends and the MCP server were removed after 0.4.0; new layers are built on top of `Memory`.
+Mnemotree is a Python 3.11+ library giving LLM agents persistent, source-first memory. `Memory` (in `src/mnemotree/evidence/`) stores original messages in SQLite with transactional ingestion, persistent FTS5 and sqlite-vec indexes, hybrid rank fusion, optional reranking, token-budget packing, and retrieval traces. The earlier `MemoryCore` and its storage backends were removed after 0.4.0; `mnemotree.Memory` binds one namespace over the engine, and new layers are built on top of it.
 
 Key locations:
 - Engine: `src/mnemotree/evidence/engine.py` (`Memory`), models in `models.py`, protocols in `protocols.py`
@@ -10,7 +10,9 @@ Key locations:
 - Packing and context: `src/mnemotree/evidence/packing.py`, `temporal.py`
 - Providers (embedders, rerankers): `src/mnemotree/evidence/providers.py`
 - Add/Search HTTP service: `src/mnemotree/evidence/server.py`
-- CLI: `mnemotree-evidence` (`src/mnemotree/evidence/cli.py`), `mnemotree` (`src/mnemotree/cli.py`)
+- Public API: `src/mnemotree/memory.py` (`Memory`, `MemoryItem`, `Recall`)
+- MCP stdio server: `src/mnemotree/mcp/` (`mnemotree-mcp`, standard library only)
+- CLI: `mnemotree-evidence` (`src/mnemotree/evidence/cli.py`), `mnemotree-mcp`, `mnemotree` (`src/mnemotree/cli.py`)
 - Guide: `docs/EVIDENCE_CORE.md`; atomic projections: `docs/ATOMIC_MEMORY.md`
 
 ## Common Commands

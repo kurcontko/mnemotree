@@ -68,6 +68,19 @@ Earlier releases (0.4.0 and before) shipped `MemoryCore`, pluggable vector/graph
 backends and an MCP server. They were removed so the library can be rebuilt
 around this engine; their databases are not read by `Memory`.
 
+## MCP server
+
+`mnemotree-mcp` exposes `remember`, `remember_many`, `recall`, `get` and `forget` over
+stdio to Claude Code, Claude Desktop, Codex and other MCP clients. It needs no extra.
+
+```bash
+claude mcp add mnemotree -- mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
+  --namespace "$USER" --lexical   # or --config with an embedding
+```
+
+Sessions pointed at the same `--db` share one memory. See
+[the API guide](docs/MEMORY_API.md#mcp-server) for configuration.
+
 ## 📦 Extras
 
 ```bash

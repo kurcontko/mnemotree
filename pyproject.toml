@@ -126,3 +126,4 @@ line_length = 100
 [project.scripts]
 mnemotree-evidence = "mnemotree.evidence.cli:main"
 mnemotree = "mnemotree.cli:main"
+mnemotree-mcp = "mnemotree.mcp.server:main"

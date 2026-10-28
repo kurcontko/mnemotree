@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime
 
 import pytest
@@ -138,3 +139,17 @@ def test_items_are_immutable():
     )
     with pytest.raises(ValueError):
         item.content = "changed"  # type: ignore[misc]
+
+
+async def test_from_engine_binds_and_owns_a_configured_engine(tmp_path):
+    from mnemotree import evidence
+
+    engine = evidence.Memory(tmp_path / "m.db")
+    with pytest.raises(ValueError):
+        Memory.from_engine(engine, namespace="")
+    with Memory.from_engine(engine, namespace="alice") as memory:
+        assert memory.engine is engine
+        await memory.remember("orchid", id="o")
+        assert (await memory.get("o")).content == "orchid"
+    with pytest.raises(sqlite3.ProgrammingError):
+        engine.source("alice", "o")  # closed with the Memory that owned it
