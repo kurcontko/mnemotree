@@ -24,7 +24,7 @@ install:
 	$(VENV)/bin/pip install -e .
 
 install-dev:
-	$(VENV)/bin/pip install -e ".[dev,legacy]"
+	$(VENV)/bin/pip install -e ".[dev,serve]"
 
 lint:
 	$(VENV)/bin/ruff check src tests

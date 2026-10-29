@@ -119,17 +119,18 @@ jobs:
             tests before judging a candidate. Try to falsify every candidate.
             Prioritize reachable correctness or security failures and these
             mnemotree invariants: the public surface exported from
-            src/mnemotree/__init__.py and the MCP tool signatures in
-            src/mnemotree/mcp/server.py (remember, recall, get_memories,
-            update_memory, forget) are client contracts; every store
-            serializes MemoryItem through store/_records.py and must round-trip
-            the same fields; optional backends (chromadb, neo4j, pymilvus,
-            sentence-transformers, torch, fastmcp) stay lazy imports so a bare
-            install imports and runs; lite mode works with no LLM and no
-            network; recall ranking, filters and decay (core/decay.py) keep
-            their semantics, and a silent retrieval miss is a correctness bug;
-            and async safety: no blocking I/O on the event loop, store locks
-            held across read-modify-write, connections closed on every path.
+            src/mnemotree/__init__.py and the HTTP Add/Search contract in
+            src/mnemotree/evidence/server.py are client contracts; ingestion
+            commits sources, chunks, FTS5, vectors and the request receipt in
+            one transaction, and a replayed request never duplicates or
+            resurrects content; every read and write is scoped to an exact
+            namespace, and eligibility applies before top-k; search is
+            read-only; optional providers (httpx, tenacity,
+            sentence-transformers, torch, fastapi) stay lazy imports so a bare
+            install imports and runs; a silent retrieval miss is a correctness
+            bug; and async safety: no blocking I/O on the event loop, store
+            locks held across read-modify-write, connections closed on every
+            path.
             Report only unique, actionable findings backed by direct diff
             evidence and high confidence. Do not report style nits, linter
             findings, speculative concerns, general cleanup, or test-coverage

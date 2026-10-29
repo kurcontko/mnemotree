@@ -67,20 +67,18 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-ci
-      # The same extras as CI's `extras` lane, resolved fresh within the
-      # bounds pyproject.toml publishes instead of from uv.lock. Wheels only,
-      # as in CI: the resolution is compiled, sdist-only pypika is dropped
-      # (chromadb's in-memory client never imports it), and the rest installs
-      # with --no-build --no-deps. mnemotree itself runs from src/.
+      # The same extras as CI's `test` lane, resolved fresh within the bounds
+      # pyproject.toml publishes instead of from uv.lock. Wheels only, as in
+      # CI: the resolution is compiled, then installs with --no-build
+      # --no-deps. mnemotree itself runs from src/.
       - name: Resolve fresh dependencies within published bounds
         run: |
           set -euo pipefail
           uv venv --clear
           uv pip compile pyproject.toml --no-header --no-annotate \
-            --extra dev --extra chroma --extra mcp --extra normalization --extra keywords \
+            --extra dev --extra serve \
             -o "$RUNNER_TEMP/fresh.txt"
-          grep -v '^pypika==' "$RUNNER_TEMP/fresh.txt" > "$RUNNER_TEMP/fresh-wheels.txt"
-          uv pip install --no-build --no-deps -r "$RUNNER_TEMP/fresh-wheels.txt"
+          uv pip install --no-build --no-deps -r "$RUNNER_TEMP/fresh.txt"
           uv pip freeze > "$RUNNER_TEMP/resolved.txt"
       - name: Tests
         env:

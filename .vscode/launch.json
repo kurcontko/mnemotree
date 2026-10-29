@@ -8,33 +8,6 @@
       "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": true
-    },
-    {
-      "name": "Example: Streamlit Memory Chat",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "streamlit",
-      "args": [
-        "run",
-        "${workspaceFolder}/examples/memory_chat/app.py"
-      ],
-      "console": "integratedTerminal",
-      "env": {
-        "STREAMLIT_SERVER_PORT": "8501"
-      },
-      "justMyCode": true
-    },
-    {
-      "name": "Example: Langchain Agent",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/examples/agents/langchain_agent.py",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}"
-      },
-      "cwd": "${workspaceFolder}"
     }
   ]
 }
