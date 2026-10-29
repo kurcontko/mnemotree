@@ -52,8 +52,17 @@ def check_serve(*, bare: bool) -> None:
         assert server is not None
 
 
+async def memory_roundtrip(workdir: Path) -> None:
+    from mnemotree import Memory
+
+    with Memory(workdir / "memory.sqlite", namespace="smoke") as memory:
+        item = await memory.remember("The package smoke test stored this memory.")
+        recall = await memory.recall("package smoke memory")
+        assert [found.id for found in recall.items] == [item.id], recall.items
+
+
 async def evidence_roundtrip(workdir: Path) -> None:
-    from mnemotree import Memory, Message
+    from mnemotree.evidence import Memory, Message
 
     with Memory(workdir / "evidence.sqlite") as memory:
         await memory.add(
@@ -77,6 +86,7 @@ def main() -> None:
     check_evidence_cli()
     check_serve(bare=bare)
     with tempfile.TemporaryDirectory() as tmp:
+        asyncio.run(memory_roundtrip(Path(tmp)))
         asyncio.run(evidence_roundtrip(Path(tmp)))
     print(f"mnemotree {version} ({'bare' if bare else 'serve'}): ok")
 

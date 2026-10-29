@@ -5,8 +5,14 @@ from importlib import import_module
 
 import pytest
 
-from mnemotree import Memory, Message, SearchOptions
-from mnemotree.evidence import EmbeddingSpec, IngestConflict, IngestReceipt
+from mnemotree.evidence import (
+    EmbeddingSpec,
+    IngestConflict,
+    IngestReceipt,
+    Memory,
+    Message,
+    SearchOptions,
+)
 from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
 from mnemotree.evidence.models import Chunk
 from mnemotree.evidence.packing import LINE_SAFE_ENCODINGS, TiktokenCounter

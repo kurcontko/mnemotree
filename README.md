@@ -24,20 +24,22 @@ pip install -e .
 
 ```python
 import asyncio
-from mnemotree import Memory, Message
+from mnemotree import Memory
 
 async def main():
-    with Memory("memory.sqlite") as memory:  # lexical-only without an embedder
-        await memory.add(
-            "alice", [Message(content="I grow orchids on my balcony.")],
-            request_id="request-1", session_id="conversation-1",
-        )
-        result = await memory.search("alice", "orchids")
-        print(result.context)
-        print(result.trace.packed_tokens)
+    with Memory("memory.sqlite", namespace="alice") as memory:  # lexical without an embedder
+        await memory.remember("I grow orchids on my balcony.", role="user")
+        recall = await memory.recall("orchids")
+        print(recall.context)               # packed, attributed evidence
+        print([item.id for item in recall.items], recall.trace.packed_tokens)
 
 asyncio.run(main())
 ```
+
+`Memory` binds one namespace and offers `remember`, `remember_many` (ordered turns of
+one session), `recall`, `get` and `forget`; see [the API guide](docs/MEMORY_API.md).
+The engine underneath, with per-call namespaces and every retrieval option, is
+`mnemotree.evidence.Memory`.
 
 The default install needs Pydantic, sqlite-vec, and tiktoken. Python must support
 SQLite loadable extensions and FTS5. Tiktoken downloads its vocabulary once;

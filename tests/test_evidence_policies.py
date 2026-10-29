@@ -1,7 +1,6 @@
 import pytest
 
-from mnemotree import Memory, Message, SearchOptions
-from mnemotree.evidence import EmbeddingSpec
+from mnemotree.evidence import EmbeddingSpec, Memory, Message, SearchOptions
 
 
 class RecordingEmbedder:
