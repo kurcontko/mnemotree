@@ -6,7 +6,7 @@ engine (`mnemotree.evidence.Memory`). It keeps what worked in the earlier
 option objects) and drops its data model: there is one small record, and
 anything optional will be metadata, not a field.
 
-## Today
+## Usage
 
 ```python
 from mnemotree import Memory, Message, SearchOptions
@@ -36,28 +36,3 @@ with Memory("mem.sqlite", namespace="alice", embedder=None) as memory:
 
 `MemoryItem` is `id, content, role, session, timestamp, created_at`. `content` is
 the raw text exactly as stored.
-
-## Next, in order
-
-Each step is its own pull request. Steps that change `src/mnemotree/evidence/`
-wait until after the AML Full run, and land bench-neutral or behind a flag.
-
-1. **Metadata and filters (engine).** A JSON metadata object per source, written
-   in the ingestion transaction. Filters on metadata keys apply inside every
-   retrieval channel and context expansion, before top-k. `MemoryItem` gains
-   `metadata`; `remember(..., metadata=)` and `recall(..., filters=)` follow.
-2. **Edits (engine).** `update(id, content=..., metadata=..., expected_version=)`
-   with optimistic versions and request receipts, so a retry never undoes a later
-   edit. `MemoryItem` gains `version`. `forget` keeps only the ID and receipts,
-   never the old text.
-3. **MCP server** over these verbs: remember, recall, get, update, forget. The
-   namespace and embedder are explicit configuration; no keyword-only default.
-4. **Extension protocols.** `Enricher` writes derived metadata (summaries, entities,
-   tags) next to the raw text and never rewrites it. `Scorer` reorders recalled
-   candidates (recency, importance) and never changes which memories are eligible.
-5. **Links**, as one edge table (`source, target, type`), only when a feature needs
-   them.
-
-Access counters, decay state and graph fields do not return as record fields.
-Decay is computed from timestamps at scoring time; anything else starts as
-metadata until it proves it needs more.
