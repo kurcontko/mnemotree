@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -9,8 +10,10 @@ import pytest
 
 import mnemotree
 from mnemotree import Memory
+from mnemotree.evidence import cli as evidence_cli
 from mnemotree.mcp import TOOLS, Server, serve_stdio
-from mnemotree.mcp.server import PROTOCOL_VERSIONS, main
+from mnemotree.mcp import server as mcp_server
+from mnemotree.mcp.server import PROTOCOL_VERSIONS, main, open_engine
 
 
 def request(id, method, params=None):
@@ -224,6 +227,40 @@ def test_cli_requires_scope_and_an_explicit_retrieval_choice(tmp_path, capsys, m
         )
     assert "conflicts" in capsys.readouterr().err
     assert not (tmp_path / "m.db").exists()
+
+
+def flaky_open(monkeypatch, errors):
+    """Patch open_memory to raise ``errors`` in turn, then succeed; return the call log."""
+    calls = []
+
+    def fake(path, config):
+        calls.append(path)
+        if len(calls) <= len(errors):
+            raise errors[len(calls) - 1]
+        return "engine"
+
+    monkeypatch.setattr(evidence_cli, "open_memory", fake)
+    monkeypatch.setattr(mcp_server.time, "sleep", lambda seconds: None)
+    return calls
+
+
+def test_open_engine_retries_only_a_locked_database(tmp_path, monkeypatch):
+    locked = sqlite3.OperationalError("database is locked")
+    calls = flaky_open(monkeypatch, [locked, locked])
+    assert open_engine(tmp_path / "m.db", evidence_cli.Config()) == "engine"
+    assert len(calls) == 3
+
+    calls = flaky_open(monkeypatch, [sqlite3.OperationalError("disk I/O error")])
+    with pytest.raises(sqlite3.OperationalError, match="disk I/O"):
+        open_engine(tmp_path / "m.db", evidence_cli.Config())
+    assert len(calls) == 1
+
+
+def test_open_engine_gives_up_after_its_attempts(tmp_path, monkeypatch):
+    calls = flaky_open(monkeypatch, [sqlite3.OperationalError("database is locked")] * 6)
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        open_engine(tmp_path / "m.db", evidence_cli.Config())
+    assert len(calls) == 6
 
 
 def test_separate_stdio_sessions_share_one_database(tmp_path):

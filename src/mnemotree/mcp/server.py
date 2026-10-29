@@ -17,12 +17,16 @@ import threading
 import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
 from ..memory import Memory
 from .tools import TOOLS
+
+if TYPE_CHECKING:
+    from ..evidence import Memory as Engine
+    from ..evidence.cli import Config
 
 # Newest first. Tools behave the same in each; only structured results are newer.
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -40,8 +44,8 @@ class InvalidParams(Exception):
     pass
 
 
-def error(id: Any, code: int, message: str) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}}
+def error(request_id: Any, code: int, message: str) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
 
 def describe(exc: ValidationError) -> str:
@@ -74,9 +78,12 @@ class Server:
             return None  # A response to a request; this server sends none.
         if "id" not in message:
             return None  # Notifications (initialized, cancelled) need no answer.
-        id, method, params = message["id"], message["method"], message.get("params", {})
+        request_id, method = message["id"], message["method"]
+        params = message.get("params", {})
         if not isinstance(method, str) or not isinstance(params, dict):
-            return error(id, INVALID_REQUEST, "method must be a string and params an object")
+            return error(
+                request_id, INVALID_REQUEST, "method must be a string and params an object"
+            )
         try:
             if method == "initialize":
                 result = self.initialize(params)
@@ -87,10 +94,10 @@ class Server:
             elif method == "tools/call":
                 result = await self.call(params)
             else:
-                return error(id, METHOD_NOT_FOUND, f"method not found: {method}")
+                return error(request_id, METHOD_NOT_FOUND, f"method not found: {method}")
         except InvalidParams as exc:
-            return error(id, INVALID_PARAMS, str(exc))
-        return {"jsonrpc": "2.0", "id": id, "result": result}
+            return error(request_id, INVALID_PARAMS, str(exc))
+        return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
     def initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         requested = params.get("protocolVersion")
@@ -200,8 +207,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def open_engine(path: Path, config: Config, attempts: int = 6) -> Engine:
+    """Sessions started together may all create the same new file. SQLite reports
+    the one-time switch to WAL as busy without waiting, so retry the open briefly."""
+    from ..evidence.cli import open_memory
+
+    for attempt in range(attempts - 1):
+        try:
+            return open_memory(path, config)
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc):
+                raise
+            time.sleep(0.05 * 2**attempt)
+    return open_memory(path, config)
+
+
 def main(argv: list[str] | None = None) -> int:
-    from ..evidence.cli import Config, open_memory
+    from ..evidence.cli import Config
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -216,17 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s: %(message)s")
     path = Path(args.db)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Sessions started together may all create the same new file. SQLite reports
-    # the one-time switch to WAL as busy without waiting, so retry the open briefly.
-    for attempt in range(6):
-        try:
-            engine = open_memory(path, config)
-            break
-        except sqlite3.OperationalError as exc:
-            if "locked" not in str(exc) or attempt == 5:
-                raise
-            time.sleep(0.05 * 2**attempt)
-    memory = Memory.from_engine(engine, namespace=args.namespace, search=config.search)
+    memory = Memory.from_engine(
+        open_engine(path, config), namespace=args.namespace, search=config.search
+    )
     with memory:
         asyncio.run(serve_stdio(Server(memory)))
     return 0
