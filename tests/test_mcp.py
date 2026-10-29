@@ -245,21 +245,23 @@ def flaky_open(monkeypatch, errors):
 
 
 def test_open_engine_retries_only_a_locked_database(tmp_path, monkeypatch):
+    path, config = tmp_path / "m.db", evidence_cli.Config()
     locked = sqlite3.OperationalError("database is locked")
     calls = flaky_open(monkeypatch, [locked, locked])
-    assert open_engine(tmp_path / "m.db", evidence_cli.Config()) == "engine"
+    assert open_engine(path, config) == "engine"
     assert len(calls) == 3
 
     calls = flaky_open(monkeypatch, [sqlite3.OperationalError("disk I/O error")])
     with pytest.raises(sqlite3.OperationalError, match="disk I/O"):
-        open_engine(tmp_path / "m.db", evidence_cli.Config())
+        open_engine(path, config)
     assert len(calls) == 1
 
 
 def test_open_engine_gives_up_after_its_attempts(tmp_path, monkeypatch):
+    path, config = tmp_path / "m.db", evidence_cli.Config()
     calls = flaky_open(monkeypatch, [sqlite3.OperationalError("database is locked")] * 6)
     with pytest.raises(sqlite3.OperationalError, match="locked"):
-        open_engine(tmp_path / "m.db", evidence_cli.Config())
+        open_engine(path, config)
     assert len(calls) == 6
 
 
