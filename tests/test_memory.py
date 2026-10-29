@@ -27,7 +27,8 @@ async def test_remember_get_recall_forget_round_trip(tmp_path):
         )
         assert item.id == "orchids"
         assert item.content == "  I grow orchids\non my balcony. "
-        assert item.role == "user" and item.timestamp == when
+        assert item.role == "user"
+        assert item.timestamp == when
         assert await memory.get("orchids") == item
 
         recall = await memory.recall("orchids")
