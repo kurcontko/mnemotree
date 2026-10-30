@@ -170,3 +170,6 @@ cython_debug/
 /draft
 
 .serena
+
+# Claude Code local notes
+CLAUDE.local.md
