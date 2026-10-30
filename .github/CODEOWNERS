@@ -1,0 +1,11 @@
+# Files that decide what an agent may do and what CI enforces. A change here
+# needs the owner's review, and main requires code-owner review. Keep CODEOWNERS
+# itself covered: otherwise a PR could remove a path from this list unreviewed.
+/.github/              @kurcontko
+/AGENTS.md             @kurcontko
+/CLAUDE.md             @kurcontko
+/.claude/              @kurcontko
+/.mcp.json             @kurcontko
+/pyproject.toml        @kurcontko
+/uv.lock               @kurcontko
+/src/mnemotree/mcp/    @kurcontko
