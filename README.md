@@ -1,6 +1,6 @@
 # 🌳 Mnemotree
 
-Local evidence memory for LLM agents: SQLite, FTS5, and sqlite-vec.
+Local, source-first memory for LLM agents: SQLite, FTS5 and sqlite-vec.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/release/python-3110/)
@@ -12,15 +12,37 @@ Local evidence memory for LLM agents: SQLite, FTS5, and sqlite-vec.
   <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
 </p>
 
-`Memory` preserves original messages and retrieves attributed source spans. It provides transactional ingestion, persistent lexical/vector indexes,
-hybrid rank fusion, optional reranking, token-budget packing, and retrieval traces.
-This is a baseline for measured experiments, with no benchmark-quality claim yet.
+Mnemotree keeps every message exactly as written and recalls attributed source spans
+instead of rewritten summaries.
 
-## Quickstart
+- **Durable:** sources, chunks, both indexes and an idempotency receipt commit in one
+  transaction.
+- **Hybrid:** FTS5 BM25 and sqlite-vec cosine search, fused with RRF, with optional
+  reranking.
+- **Bounded:** evidence is packed into an exact token budget, with a trace of every
+  candidate, rank and packing loss.
+- **Isolated:** every read and write is scoped to one namespace.
+
+The default install needs only Pydantic, sqlite-vec and tiktoken. Retrieval quality
+has not been benchmarked yet.
+
+## Install
 
 ```bash
 pip install -e .
 ```
+
+Python's `sqlite3` must support loadable extensions and FTS5. Tiktoken downloads its
+vocabulary once; see [the guide](docs/GUIDE.md#configuration) to run offline.
+
+| Extra | Adds |
+| --- | --- |
+| `embeddings` | OpenAI-compatible HTTP embedder and extractor |
+| `lite` | Local SentenceTransformer embedder |
+| `serve` | AML Add/Search HTTP service |
+| `all` | All of the above |
+
+## Quickstart
 
 ```python
 import asyncio
@@ -36,59 +58,45 @@ async def main():
 asyncio.run(main())
 ```
 
-`Memory` binds one namespace and offers `remember`, `remember_many` (ordered turns of
-one session), `recall`, `get` and `forget`; see [the API guide](docs/MEMORY_API.md).
-The engine underneath, with per-call namespaces and every retrieval option, is
-`mnemotree.evidence.Memory`.
-
-The default install needs Pydantic, sqlite-vec, and tiktoken. Python must support
-SQLite loadable extensions and FTS5. Tiktoken downloads its vocabulary once;
-prewarm and preserve `TIKTOKEN_CACHE_DIR` when running offline.
-
-```bash
-# Small plumbing demonstration; requires a fresh database path.
-mnemotree-evidence --db demo.sqlite --config examples/evidence/lexical.json \
-  evaluate examples/evidence/corpus.jsonl examples/evidence/queries.jsonl \
-  --output demo-results.json
-
-# Textual AML Add/Search service, authenticated with a bearer key.
-pip install -e '.[serve]'
-export MNEMOTREE_API_KEY='replace-with-your-service-key'
-mnemotree-evidence --db service.sqlite serve
-```
-
-See [the evidence core guide](docs/EVIDENCE_CORE.md) for embeddings, API contracts,
-evaluation format, and current limits. Every query requires an exact namespace;
-search spans all sessions within it.
-
-Optional [atomic search projections](docs/ATOMIC_MEMORY.md) and a three-way
-`ablate` command are available. Raw-only behavior remains the default.
-
-Earlier releases (0.4.0 and before) shipped `MemoryCore`, pluggable vector/graph
-backends and an older MCP server. They were removed so the library can be rebuilt
-around this engine; their databases are not read by `Memory`.
+`Memory` binds one namespace and offers `remember`, `remember_many`, `recall`, `get`
+and `forget`. Pass an `embedder` for hybrid retrieval.
 
 ## MCP server
 
-`mnemotree-mcp` exposes `remember`, `remember_many`, `recall`, `get` and `forget` over
-stdio to Claude Code, Claude Desktop, Codex and other MCP clients. It needs no extra.
+`mnemotree-mcp` gives Claude Code, Claude Desktop, Codex and other MCP clients the
+same five tools over stdio. It needs no extra.
 
 ```bash
 claude mcp add mnemotree -- mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
   --namespace "$USER" --lexical   # or --config with an embedding
 ```
 
-Sessions pointed at the same `--db` share one memory. See
-[the API guide](docs/MEMORY_API.md#mcp-server) for configuration.
+Sessions pointed at the same `--db` share one memory.
 
-## 📦 Extras
+## Command line
 
 ```bash
-uv pip install -e ".[embeddings]"  # OpenAI-compatible HTTP embedder
-uv pip install -e ".[lite]"        # Local SentenceTransformer embedder
-uv pip install -e ".[serve]"       # AML Add/Search HTTP adapter
-uv pip install -e ".[all]"         # Everything above
+# Retrieval evaluation on the bundled plumbing example (needs a fresh database).
+mnemotree-evidence --db demo.sqlite --config examples/evidence/lexical.json \
+  evaluate examples/evidence/corpus.jsonl examples/evidence/queries.jsonl \
+  --output demo-results.json
+
+# AML Add/Search service with a bearer key (the serve extra).
+export MNEMOTREE_API_KEY='replace-with-your-service-key'
+mnemotree-evidence --db service.sqlite serve
 ```
+
+`mnemotree-evidence` also runs `add`, `search`, and the `ablate`, `ablate-context` and
+`ablate-retrieval` comparisons.
+
+## Documentation
+
+[docs/GUIDE.md](docs/GUIDE.md) covers the API contract, MCP configuration, embeddings,
+storage and retrieval behavior, atomic projections, the AML service, evaluation
+and limits.
+
+Releases up to 0.4.0 shipped `MemoryCore`, pluggable vector/graph backends and an
+older MCP server. They have been removed, and `Memory` does not read their databases.
 
 ## Development
 
@@ -98,10 +106,8 @@ make lint typecheck test
 make precommit-install
 ```
 
-## 🤝 Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Contributions welcome! Fork the repo, create a branch, add tests, and submit a PR.
+## License
 
-## 📝 License
-
-MIT - see [LICENSE](LICENSE)
+MIT, see [LICENSE](LICENSE).

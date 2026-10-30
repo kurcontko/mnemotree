@@ -1,57 +1,42 @@
 # Contributing to mnemotree
 
-Thank you for your interest in contributing to mnemotree! We welcome contributions from the community to help improve this project.
+Thank you for your interest in contributing to mnemotree!
 
-## Development Environment Setup
+## Development environment
 
-This project uses `uv` for dependency management.
-
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/kurcontko/mnemotree.git
-    cd mnemotree
-    ```
-
-2.  **Install dependencies**:
-    ```bash
-    uv pip install -e ".[dev]"
-    ```
-    Or if you are just using pip:
-    ```bash
-    pip install -e ".[dev]"
-    ```
-
-## Code Quality
-
-We strictly enforce code quality standards using `ruff` for linting and formatting, and `mypy` for static type checking.
-
-Before submitting a Pull Request, please ensure you run the following commands:
-
-### Formatting and Linting
 ```bash
-ruff check .
-ruff format .
+git clone https://github.com/kurcontko/mnemotree.git
+cd mnemotree
+uv sync --extra dev --extra serve
+make precommit-install
 ```
 
-### Type Checking
+Without uv, create `.venv` and run `pip install -e ".[dev,serve]"`; the Makefile uses
+the tools in `.venv`.
+
+## Checks
+
+Run these before opening a pull request; CI runs the same checks.
+
 ```bash
-mypy src
+make lint        # ruff check
+make format      # ruff format
+make typecheck   # mypy
+make test        # pytest with coverage
 ```
 
-### Tests
-Run the test suite to ensure no regressions:
-```bash
-pytest
-```
+Tests exercise real FTS5 and sqlite-vec and make no paid model calls. Keep it that
+way: use deterministic embedders and stubs for providers.
 
-## Pull Request Process
+## Pull requests
 
-1.  Fork the repository and branch off from `main`.
-2.  Make your changes, ensuring you add tests for any new functionality or bug fixes.
-3.  Run the linters and tests as described above.
-4.  Submit a Pull Request targeting the `main` branch.
-5.  Provide a clear description of your changes and reference any related issues.
+1. Branch off `main`.
+2. Add tests for new behavior and bug fixes.
+3. Update [README.md](README.md) or [docs/GUIDE.md](docs/GUIDE.md) when behavior a
+   user sees changes.
+4. Open the pull request against `main` with a clear description, and reference any
+   related issues.
 
-## Reporting Issues
+## Reporting issues
 
-If you find a bug or have a feature request, please verify that it hasn't already been reported. If not, please submit a new issue using the provided templates.
+Search existing issues first, then open a new one using the provided templates.
