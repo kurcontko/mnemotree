@@ -65,7 +65,7 @@ Optional [atomic search projections](docs/ATOMIC_MEMORY.md) and a three-way
 `ablate` command are available. Raw-only behavior remains the default.
 
 Earlier releases (0.4.0 and before) shipped `MemoryCore`, pluggable vector/graph
-backends and an MCP server. They were removed so the library can be rebuilt
+backends and an older MCP server. They were removed so the library can be rebuilt
 around this engine; their databases are not read by `Memory`.
 
 ## MCP server

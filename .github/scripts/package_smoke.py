@@ -1,9 +1,10 @@
 """Exercise an installed distribution from outside its checkout, without an LLM.
 
 Run with ``--bare`` against a plain ``pip install mnemotree``, or ``--serve``
-against ``mnemotree[serve]``. The MCP stdio server needs no extra, so both run it. CI's test lanes import the package from ``src/``
-and never install the wheel, so this is the only place the wheel's file list,
-metadata, and console-script entry points are checked.
+against ``mnemotree[serve]``. The MCP stdio server needs no extra, so both run
+it. CI's test lanes import the package from ``src/`` and never install the
+wheel, so this is the only place the wheel's file list, metadata, and
+console-script entry points are checked.
 """
 
 from __future__ import annotations
