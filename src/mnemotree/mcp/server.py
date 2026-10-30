@@ -233,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.db or not args.namespace:
         parser.error("--db and --namespace are required")
     try:
-        namespace = scope(args.namespace)
+        scope(args.namespace)
     except ValueError as exc:
         parser.error(str(exc))
     # S8707 is a false positive here and at mkdir below: the operator sets these flags, no tool can.
@@ -260,8 +260,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         engine = open_engine(path, config)
     except ValueError as exc:
-        parser.error(f"--config: {exc}")
-    memory = Memory.from_engine(engine, namespace=namespace, search=config.search)
+        return parser.error(f"--config: {exc}")
+    memory = Memory.from_engine(engine, namespace=args.namespace, search=config.search)
     with memory:
         asyncio.run(serve_stdio(Server(memory)))
     return 0
