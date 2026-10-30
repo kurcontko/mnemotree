@@ -59,3 +59,10 @@ share it: SQLite WAL serializes writes and every acknowledged write is visible t
 the next recall in any session. Concurrent first opens of a new file retry briefly.
 What separate processes do not share is memory: each loads its own embedder, which
 matters for the local `lite` model.
+
+Stored text is plain text in the database and comes back verbatim, so anything
+stored can reach the model: keep secrets out of it. Text that a model saved from
+an untrusted page can also carry instructions into later sessions. The server
+tells clients to read memories as records, not instructions, but only the client
+can enforce that. Approval is the client's job too: `forget` is marked
+`destructiveHint` so clients can ask before deleting, and deletion is permanent.
