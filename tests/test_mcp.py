@@ -178,12 +178,29 @@ async def test_stdio_loop_answers_each_line(server):
     assert replies[2]["result"]["structuredContent"]["memory"]["content"] == "naïve café"
 
 
-def run_server(db: Path, *messages: dict) -> list[dict]:
+async def test_stdio_loop_survives_lines_it_cannot_answer_normally(server):
+    too_deep = b"[" * 200_000 + b"]" * 200_000
+    surrogate_id = b'{"jsonrpc": "2.0", "id": "\\ud800", "method": "ping"}'
+    surrogate_method = b'{"jsonrpc": "2.0", "id": 1, "method": "\\ud800"}'
+    ping = json.dumps(request(2, "ping")).encode()
+    stdin = io.BytesIO(b"\n".join([too_deep, surrogate_id, surrogate_method, ping]) + b"\n")
+    stdout = io.BytesIO()
+    await serve_stdio(server, stdin, stdout)
+    replies = [json.loads(line) for line in stdout.getvalue().splitlines()]
+    assert [reply.get("id") for reply in replies] == [None, "\ud800", 1, 2]
+    assert replies[0]["error"]["code"] == -32700
+    assert replies[1]["result"] == {}
+    assert replies[2]["error"]["code"] == -32601
+
+
+def run_server(
+    db: Path | str, *messages: dict, namespace: str = "t", extra: tuple[str, ...] = ()
+) -> list[dict]:
     env = {key: value for key, value in os.environ.items() if not key.startswith("MNEMOTREE_MCP")}
     env["PYTHONPATH"] = str(Path(mnemotree.__file__).parents[1])
     proc = subprocess.run(
-        [sys.executable, "-m", "mnemotree.mcp", "--db", str(db), "--namespace", "t"]
-        + ["--lexical"],
+        [sys.executable, "-m", "mnemotree.mcp", "--db", str(db), "--namespace", namespace]
+        + ["--lexical", *extra],
         input="".join(json.dumps(message) + "\n" for message in messages),
         capture_output=True,
         text=True,
@@ -213,6 +230,24 @@ def test_real_stdio_process_persists_across_restarts(tmp_path):
     assert [found["id"] for found in memories] == ["key"]
 
 
+def test_namespace_flag_scopes_the_process(tmp_path):
+    db = tmp_path / "m.db"
+    run_server(db, call(1, "remember", {"content": "Alice's note", "id": "n"}), namespace="alice")
+    read = call(1, "get", {"ids": ["n"]})
+    other = run_server(db, read, namespace="bob")[0]["result"]["structuredContent"]
+    assert other["missing"] == ["n"]
+    same = run_server(db, read, namespace="alice")[0]["result"]["structuredContent"]
+    assert [memory["id"] for memory in same["memories"]] == ["n"]
+
+
+def test_cli_expands_home_in_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "c.json").write_text(json.dumps({"search": {"mode": "lexical"}}))
+    replies = run_server("~/nested/m.db", request(1, "ping"), extra=("--config", "~/c.json"))
+    assert replies[0]["result"] == {}
+    assert (tmp_path / "nested" / "m.db").exists()
+
+
 def test_cli_requires_scope_and_an_explicit_retrieval_choice(tmp_path, capsys, monkeypatch):
     for name in ("MNEMOTREE_MCP_DB", "MNEMOTREE_MCP_NAMESPACE", "MNEMOTREE_MCP_CONFIG"):
         monkeypatch.delenv(name, raising=False)
@@ -230,6 +265,13 @@ def test_cli_requires_scope_and_an_explicit_retrieval_choice(tmp_path, capsys, m
             + ["--lexical"]
         )
     assert "conflicts" in capsys.readouterr().err
+    config.write_text(json.dumps({"search": {"limit": 5}}))
+    with pytest.raises(SystemExit):
+        main(
+            ["--db", str(tmp_path / "m.db"), "--namespace", "t", "--config", str(config)]
+            + ["--lexical"]
+        )
+    assert "search mode 'hybrid'" in capsys.readouterr().err
     assert not (tmp_path / "m.db").exists()
 
 
@@ -295,11 +337,11 @@ def test_separate_stdio_sessions_share_one_database(tmp_path):
         sessions.append((proc, "\n".join(lines) + "\n"))
     for proc, payload in sessions:
         proc.stdin.write(payload)
-        proc.stdin.close()
+        proc.stdin.flush()
     for proc, _ in sessions:
-        with proc.stdout, proc.stderr:
-            replies = [json.loads(line) for line in proc.stdout.read().splitlines()]
-            assert proc.wait(timeout=60) == 0, proc.stderr.read()
+        out, err = proc.communicate(timeout=60)
+        assert proc.returncode == 0, err
+        replies = [json.loads(line) for line in out.splitlines()]
         assert all(not reply["result"].get("isError") for reply in replies[1:]), replies
     reader = run_server(db, request(0, "initialize", {}), call(1, "get", {"ids": ["a20", "b20"]}))
     found = reader[1]["result"]["structuredContent"]["memories"]

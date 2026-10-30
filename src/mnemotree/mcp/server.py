@@ -175,12 +175,13 @@ async def serve_stdio(
             continue
         try:
             message = json.loads(line)
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
             response: Any = error(None, PARSE_ERROR, "parse error")
         else:
             response = await server.handle(message)
         if response is not None:
-            writer.write(json.dumps(response, ensure_ascii=False).encode() + b"\n")
+            # ASCII escapes, because a parsed id or method can hold a lone surrogate.
+            writer.write(json.dumps(response).encode() + b"\n")
             writer.flush()
 
 
@@ -232,14 +233,18 @@ def main(argv: list[str] | None = None) -> int:
     # S8707 is a false positive here and at mkdir below: the operator sets these flags, no tool can.
     config = Config()
     if args.config:
-        config = Config.model_validate_json(Path(args.config).read_text())  # NOSONAR
+        config_path = Path(args.config).expanduser()
+        config = Config.model_validate_json(config_path.read_text())  # NOSONAR
     # Keyword-only retrieval misses paraphrases, so it must be chosen, never a fallback.
     if config.embedding is None and not args.lexical:
         parser.error("no embedding configured: pass --config with an embedding, or --lexical")
     if config.embedding is not None and args.lexical:
         parser.error("--lexical conflicts with the configured embedding")
+    if args.lexical and config.search is not None and config.search.mode != "lexical":
+        parser.error(f"--lexical conflicts with search mode {config.search.mode!r}")
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s: %(message)s")
-    path = Path(args.db)
+    # Clients that spawn the server directly pass a "~" through unexpanded.
+    path = Path(args.db).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)  # NOSONAR
     memory = Memory.from_engine(
         open_engine(path, config), namespace=args.namespace, search=config.search
