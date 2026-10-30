@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 import mnemotree
-from mnemotree import Memory
 from mnemotree.evidence import cli as evidence_cli
 from mnemotree.mcp import TOOLS, Server, serve_stdio
 from mnemotree.mcp import server as mcp_server
@@ -29,7 +28,7 @@ def call(id, name, arguments):
 
 @pytest.fixture
 def server(tmp_path):
-    with Memory(tmp_path / "m.db", namespace="alice") as memory:
+    with mnemotree.Memory(tmp_path / "m.db", namespace="alice") as memory:
         yield Server(memory)
 
 
