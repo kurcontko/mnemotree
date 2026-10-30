@@ -49,7 +49,8 @@ async def test_tools_list_advertises_self_contained_schemas(server):
     assert [tool["name"] for tool in tools] == list(TOOLS)
     for tool in tools:
         schema = json.dumps(tool["inputSchema"])
-        assert "$ref" not in schema and "$defs" not in schema
+        assert "$ref" not in schema
+        assert "$defs" not in schema
         assert tool["inputSchema"]["type"] == "object"
         assert tool["inputSchema"]["additionalProperties"] is False
     by_name = {tool["name"]: tool for tool in tools}
@@ -82,7 +83,8 @@ async def test_remember_recall_get_forget_through_tools(server):
     recalled = (await server.handle(call(2, "recall", {"query": "orchids"})))["result"]
     data = recalled["structuredContent"]
     assert [found["id"] for found in data["memories"]] == ["orchids"]
-    assert "orchids on my balcony" in data["context"] and data["packed_tokens"] > 0
+    assert "orchids on my balcony" in data["context"]
+    assert data["packed_tokens"] > 0
 
     got = (await server.handle(call(3, "get", {"ids": ["orchids", "nope"]})))["result"]
     assert [found["id"] for found in got["structuredContent"]["memories"]] == ["orchids"]
@@ -117,7 +119,8 @@ async def test_remember_many_keeps_order(server):
 
 async def test_bad_arguments_and_conflicts_are_tool_errors(server):
     missing = (await server.handle(call(1, "recall", {})))["result"]
-    assert missing["isError"] is True and "query" in missing["content"][0]["text"]
+    assert missing["isError"] is True
+    assert "query" in missing["content"][0]["text"]
     extra = (await server.handle(call(2, "recall", {"query": "x", "mode": "dense"})))["result"]
     assert extra["isError"] is True
     naive = (
@@ -125,12 +128,14 @@ async def test_bad_arguments_and_conflicts_are_tool_errors(server):
             call(3, "remember", {"content": "x", "timestamp": "2026-10-28T09:30:00"})
         )
     )["result"]
-    assert naive["isError"] is True and "timezone" in naive["content"][0]["text"]
+    assert naive["isError"] is True
+    assert "timezone" in naive["content"][0]["text"]
     await server.handle(call(4, "remember", {"content": "first", "request_id": "r"}))
     conflict = (await server.handle(call(5, "remember", {"content": "second", "request_id": "r"})))[
         "result"
     ]
-    assert conflict["isError"] is True and "different payload" in conflict["content"][0]["text"]
+    assert conflict["isError"] is True
+    assert "different payload" in conflict["content"][0]["text"]
 
 
 async def test_protocol_errors(server):
