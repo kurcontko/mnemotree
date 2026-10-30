@@ -160,7 +160,7 @@ class OpenAIEmbedder:
             retry=retry_if_exception(retryable),
             stop=stop_after_attempt(self.max_attempts),
             wait=RetryAfterOrBackoff(
-                wait_exponential_jitter(initial=self.backoff_seconds, max=16)
+                wait_exponential_jitter(multiplier=self.backoff_seconds, max=16)
                 if self.backoff_seconds > 0
                 else wait_none()
             ),
