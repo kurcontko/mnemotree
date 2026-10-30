@@ -23,13 +23,20 @@ instead of rewritten summaries.
   candidate, rank and packing loss.
 - **Isolated:** every read and write is scoped to one namespace.
 
-The default install needs only Pydantic, sqlite-vec and tiktoken. Retrieval quality
-has not been benchmarked yet.
+The default install needs only Pydantic, sqlite-vec and tiktoken. This repository
+does not yet publish reproducible retrieval-quality benchmarks.
 
 ## Install
 
 ```bash
-pip install -e .
+pip install mnemotree
+```
+
+This README describes the 0.5 API. When using it before the 0.5 release, install
+the development version instead:
+
+```bash
+pip install "mnemotree @ git+https://github.com/kurcontko/mnemotree.git@main"
 ```
 
 Python's `sqlite3` must support loadable extensions and FTS5. Tiktoken downloads its
@@ -97,12 +104,16 @@ and limits.
 
 Releases up to 0.4.0 shipped `MemoryCore`, pluggable vector/graph backends and an
 older MCP server. They have been removed, and `Memory` does not read their databases.
+See the [0.5 release notes](docs/RELEASE_NOTES.md) for API and compatibility changes.
 
 ## Development
 
 ```bash
+git clone https://github.com/kurcontko/mnemotree.git
+cd mnemotree
 uv sync --extra dev --extra serve
 make lint typecheck test
+make build
 make precommit-install
 ```
 

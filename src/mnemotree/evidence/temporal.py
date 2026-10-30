@@ -2,7 +2,7 @@
 
 "I went yesterday" said on 8 May 2023 renders as "... (yesterday = Sunday, 7 May 2023)",
 so the reader need not do calendar arithmetic. Week-level phrases resolve to the week's
-Monday. On LoCoMo with qwen3.6 this added 13-16 points on temporal questions.
+Monday. These annotations are derived hints; original source text stays unchanged.
 """
 
 from __future__ import annotations

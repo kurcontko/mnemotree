@@ -45,7 +45,8 @@ async def test_context_recovers_unmatched_response_with_attribution(tmp_path):
         assert result.context == (
             "assistant: What was your Boston marathon finish time?\nuser: 3 hours and 42 minutes."
         )
-        assert result.trace.packed_tokens == sum(
+        assert result.trace.packed_tokens == memory.counter.count(result.context)
+        assert result.trace.evidence_tokens == sum(
             memory.counter.count(item.render()) for item in result.evidence
         )
 
@@ -217,7 +218,8 @@ async def test_merged_blocks_count_once_against_the_limit(tmp_path):
             assert len({member.session_id for member in item.members()}) == 1
         block = next(item for item in merged.evidence if "m1" in item.source_ids())
         assert block.render() == "user: kiwi first\nuser: kiwi second"
-        assert merged.trace.packed_tokens == sum(
+        assert merged.trace.packed_tokens == memory.counter.count(merged.context)
+        assert merged.trace.evidence_tokens == sum(
             memory.counter.count(item.render()) for item in merged.evidence
         )
 

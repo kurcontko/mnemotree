@@ -77,7 +77,7 @@ async def test_remember_recall_get_forget_through_tools(server):
     assert result["isError"] is False
     assert result["structuredContent"]["memory"]["id"] == "orchids"
     assert json.loads(result["content"][0]["text"]) == result["structuredContent"]
-    assert result["structuredContent"]["memory"]["timestamp"] == "2026-10-28T08:30:00Z"
+    assert result["structuredContent"]["memory"]["timestamp"] == "2026-10-28T09:30:00+01:00"
 
     recalled = (await server.handle(call(2, "recall", {"query": "orchids"})))["result"]
     data = recalled["structuredContent"]
@@ -93,6 +93,20 @@ async def test_remember_recall_get_forget_through_tools(server):
     assert gone["structuredContent"] == {"forgotten": True}
     recalled = (await server.handle(call(5, "recall", {"query": "orchids"})))["result"]
     assert recalled["structuredContent"]["memories"] == []
+
+
+async def test_recall_large_source_returns_metadata_and_get_fetches_full_text(server):
+    content = "orchid " * 80000
+    await server.memory.remember(content, id="long")
+    response = (await server.handle(call(1, "recall", {"query": "orchid", "limit": 1})))["result"]
+    data = response["structuredContent"]
+    assert data["memories"][0]["id"] == "long"
+    assert "content" not in data["memories"][0]
+    counter = server.memory.engine.counter
+    assert data["packed_tokens"] == counter.count(data["context"])
+    assert counter.count(response["content"][0]["text"]) < 1000
+    full = (await server.handle(call(2, "get", {"ids": ["long"]})))["result"]
+    assert full["structuredContent"]["memories"][0]["content"] == content
 
 
 async def test_remember_many_keeps_order(server):

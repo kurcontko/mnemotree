@@ -60,7 +60,8 @@ async def test_persistence_scope_idempotency_and_forgetting(tmp_path):
             result = await memory.search("alice", "apple", options=SearchOptions(mode=mode))
             assert [item.source_id for item in result.evidence] == ["same"]
             assert result.evidence[0].text == "apple orchard"
-            assert result.trace.packed_tokens == sum(
+            assert result.trace.packed_tokens == memory.counter.count(result.context)
+            assert result.trace.evidence_tokens == sum(
                 memory.counter.count(item.render()) for item in result.evidence
             )
         assert memory.source("unknown", "same") is None
@@ -197,6 +198,37 @@ async def test_reranking_candidate_depth_and_exact_budget(tmp_path):
             "alice", "apple", options=SearchOptions(mode="lexical", token_budget=0)
         )
         assert not empty.evidence and empty.context == "" and empty.trace.packed_tokens == 0
+
+
+@pytest.mark.parametrize("order", ["rank", "time"])
+async def test_context_budget_includes_separators_in_presentation_order(tmp_path, order):
+    with Memory(tmp_path / "m.db") as memory:
+        await memory.add(
+            "alice",
+            [
+                Message(id="red", content="orchid red", timestamp=None),
+                Message(
+                    id="blue", content="orchid blue", timestamp=datetime(2024, 1, 1, tzinfo=UTC)
+                ),
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        settings = SearchOptions(mode="lexical", order=order)
+        full = await memory.search("alice", "orchid", options=settings)
+        encoding = memory.counter.encoding
+        exact = len(encoding.encode(full.context))
+        assert len(full.evidence) == 2
+        assert full.trace.packed_tokens == exact
+        assert full.trace.evidence_tokens < exact
+        tight = await memory.search(
+            "alice", "orchid", options=settings.model_copy(update={"token_budget": exact - 1})
+        )
+        assert len(tight.evidence) == 1
+        assert tight.trace.packed_tokens == len(encoding.encode(tight.context)) <= exact - 1
+        assert tight.trace.evidence_tokens <= exact - 1
+        assert len(tight.sources) == 1
+        assert "sources" not in tight.model_dump()
 
 
 async def test_embedding_signature_and_lexical_reopen(tmp_path):
