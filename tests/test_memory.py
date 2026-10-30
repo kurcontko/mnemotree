@@ -121,6 +121,13 @@ async def test_embedder_enables_hybrid_recall(tmp_path):
         assert recall.items[0].id == "orchid"
 
 
+async def test_limit_above_a_small_deep_candidate_limit_is_honored(tmp_path):
+    search = SearchOptions(mode="lexical", limit=5, deep_candidate_limit=5)
+    with Memory(tmp_path / "m.db", namespace="alice", search=search) as memory:
+        await memory.remember("I grow orchids.")
+        assert len((await memory.recall("orchids", limit=20)).items) == 1
+
+
 def test_namespace_is_required():
     with pytest.raises(TypeError):
         Memory(":memory:")  # type: ignore[call-arg]

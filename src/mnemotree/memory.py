@@ -154,11 +154,13 @@ class Memory:
         options = options or self.search
         if limit is not None:
             base = options or SearchOptions(mode="hybrid" if self.engine.embedder else "lexical")
+            deep = base.deep_candidate_limit
             options = SearchOptions.model_validate(
                 {
                     **base.model_dump(),
                     "limit": limit,
                     "candidate_limit": max(limit, base.candidate_limit),
+                    "deep_candidate_limit": None if deep is None else max(limit, deep),
                 }
             )
         result = await self.engine.search(self.namespace, query, options=options)

@@ -10,7 +10,7 @@ import pytest
 
 import mnemotree
 from mnemotree.evidence import cli as evidence_cli
-from mnemotree.mcp import TOOLS, Server, serve_stdio
+from mnemotree.mcp import TOOLS, Server, serve_stdio, tools
 from mnemotree.mcp import server as mcp_server
 from mnemotree.mcp.server import PROTOCOL_VERSIONS, main, open_engine
 
@@ -135,6 +135,32 @@ async def test_bad_arguments_and_conflicts_are_tool_errors(server):
     ]
     assert conflict["isError"] is True
     assert "different payload" in conflict["content"][0]["text"]
+
+
+async def test_recall_limit_and_retried_writes_through_tools(server):
+    await server.handle(request(0, "initialize", {"protocolVersion": "2025-11-25"}))
+    write = {"content": "orchids and ferns", "request_id": "r"}
+    first = (await server.handle(call(1, "remember", write)))["result"]["structuredContent"]
+    retried = (await server.handle(call(2, "remember", write)))["result"]["structuredContent"]
+    assert retried == first
+    await server.handle(call(3, "remember", {"content": "more orchids"}))
+    limited = (await server.handle(call(4, "recall", {"query": "orchids", "limit": 1})))["result"]
+    assert len(limited["structuredContent"]["memories"]) == 1
+
+
+async def test_oversized_arguments_are_tool_errors(server):
+    too_long = "x" * (tools.MAX_CONTENT + 1)
+    half = "x" * (tools.MAX_CONTENT // 2 + 1)
+    calls = [
+        call(1, "remember", {"content": too_long}),
+        call(2, "recall", {"query": "x" * (tools.MAX_QUERY + 1)}),
+        call(3, "remember_many", {"session": "s", "messages": [{"content": half}] * 2}),
+        call(4, "remember_many", {"session": "s", "messages": [{"content": "x"}] * 1001}),
+    ]
+    for message in calls:
+        assert (await server.handle(message))["result"]["isError"] is True
+    recalled = (await server.handle(call(5, "recall", {"query": "x"})))["result"]
+    assert recalled["structuredContent"]["memories"] == []
 
 
 async def test_protocol_errors(server):
@@ -273,6 +299,28 @@ def test_cli_requires_scope_and_an_explicit_retrieval_choice(tmp_path, capsys, m
         )
     assert "search mode 'hybrid'" in capsys.readouterr().err
     assert not (tmp_path / "m.db").exists()
+
+
+@pytest.mark.parametrize(
+    "contents",
+    ["{not json", '{"search": {"limit": 0}}', '{"embedding": {"kind": "nope"}}', None],
+)
+def test_cli_reports_a_bad_config_without_a_traceback(tmp_path, capsys, contents):
+    config = tmp_path / "c.json"
+    if contents is not None:
+        config.write_text(contents)
+    with pytest.raises(SystemExit):
+        main(["--db", str(tmp_path / "m.db"), "--namespace", "t", "--config", str(config)])
+    assert "--config:" in capsys.readouterr().err
+    assert not (tmp_path / "m.db").exists()
+
+
+def test_cli_refuses_a_bad_namespace_before_creating_the_database(tmp_path, capsys):
+    db = tmp_path / "nested" / "m.db"
+    with pytest.raises(SystemExit):
+        main(["--db", str(db), "--namespace", "   ", "--lexical"])
+    assert "nonblank" in capsys.readouterr().err
+    assert not db.parent.exists()
 
 
 def flaky_open(monkeypatch, errors):
