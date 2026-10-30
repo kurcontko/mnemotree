@@ -229,9 +229,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.db or not args.namespace:
         parser.error("--db and --namespace are required")
+    # S8707 is a false positive here and at mkdir below: the operator sets these flags, no tool can.
     config = Config()
     if args.config:
-        config = Config.model_validate_json(Path(args.config).read_text())  # NOSONAR: operator flag
+        config = Config.model_validate_json(Path(args.config).read_text())  # NOSONAR
     # Keyword-only retrieval misses paraphrases, so it must be chosen, never a fallback.
     if config.embedding is None and not args.lexical:
         parser.error("no embedding configured: pass --config with an embedding, or --lexical")
@@ -239,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--lexical conflicts with the configured embedding")
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s: %(message)s")
     path = Path(args.db)
-    path.parent.mkdir(parents=True, exist_ok=True)  # NOSONAR: operator flag, no tool can set it
+    path.parent.mkdir(parents=True, exist_ok=True)  # NOSONAR
     memory = Memory.from_engine(
         open_engine(path, config), namespace=args.namespace, search=config.search
     )
