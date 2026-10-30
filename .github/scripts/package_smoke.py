@@ -20,6 +20,10 @@ from pathlib import Path
 # The serve extra's dependencies. A bare install that pulls them in has lost
 # the lean default.
 SERVE_MODULES = ("fastapi", "uvicorn")
+# The embeddings and lite extras' dependencies, which neither variant installs.
+# If one starts arriving transitively, the lazy-import paths in
+# mnemotree.evidence stop being exercised anywhere, so fail loudly instead.
+OPTIONAL_MODULES = ("httpx", "tenacity", "sentence_transformers", "torch", "transformers")
 
 
 def check_location() -> None:
@@ -68,17 +72,97 @@ def check_mcp(workdir: Path) -> None:
     assert replies[2]["result"]["isError"] is False, replies[2]
 
 
+def check_optional_absent() -> None:
+    present = [name for name in OPTIONAL_MODULES if importlib.util.find_spec(name) is not None]
+    assert not present, f"Unexpected optional dependency: {present}"
+
+
 def check_serve(*, bare: bool) -> None:
     for name in SERVE_MODULES:
         present = importlib.util.find_spec(name) is not None
         assert present != bare, (
             f"{name} present={present} in a {'bare' if bare else 'serve'} install"
         )
-    if not bare:
-        # Importing the app module is where a broken import or route shows up.
-        from mnemotree.evidence import server
 
-        assert server is not None
+
+async def asgi_call(app, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
+    """One request through the app with no HTTP client: the serve extra has none."""
+    import json
+
+    payload = json.dumps(body).encode() if body is not None else b""
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"authorization", b"Bearer smoke-key"),
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(payload)).encode()),
+        ],
+        "client": ("127.0.0.1", 0),
+        "server": ("127.0.0.1", 8000),
+    }
+    sent = False
+    status = 0
+    chunks: list[bytes] = []
+
+    async def receive() -> dict:
+        nonlocal sent
+        if sent:
+            return {"type": "http.disconnect"}
+        sent = True
+        return {"type": "http.request", "body": payload, "more_body": False}
+
+    async def send(message: dict) -> None:
+        nonlocal status
+        if message["type"] == "http.response.start":
+            status = message["status"]
+        elif message["type"] == "http.response.body":
+            chunks.append(message.get("body", b""))
+
+    await app(scope, receive, send)
+    data = b"".join(chunks)
+    return status, json.loads(data) if data else {}
+
+
+async def service_roundtrip(workdir: Path) -> None:
+    """Build the AML app and send Add and Search through its routes and middleware."""
+    from mnemotree.evidence import Memory
+    from mnemotree.evidence.server import create_app
+
+    with Memory(workdir / "service.sqlite") as memory:
+        app = create_app(memory, api_key="smoke-key")
+        assert await asgi_call(app, "GET", "/health") == (200, {"status": "ok"})
+        status, body = await asgi_call(
+            app,
+            "POST",
+            "/v1/memories/add",
+            {
+                "request_id": "smoke-1",
+                "user_id": "smoke",
+                "session_id": "smoke",
+                "messages": [
+                    {"role": "user", "content": "The package smoke test reached the service."}
+                ],
+            },
+        )
+        assert status == 200, (status, body)
+        status, body = await asgi_call(
+            app,
+            "POST",
+            "/v1/memories/search",
+            {"user_id": "smoke", "query": "package smoke service", "top_k": 5},
+        )
+        assert status == 200, (status, body)
+        assert [item["content"] for item in body["data"]] == [
+            "user: The package smoke test reached the service."
+        ], body
 
 
 async def memory_roundtrip(workdir: Path) -> None:
@@ -111,6 +195,7 @@ def main() -> None:
     version = importlib.metadata.version("mnemotree")
 
     check_location()
+    check_optional_absent()
     check_cli(version)
     check_evidence_cli()
     check_serve(bare=bare)
@@ -118,6 +203,8 @@ def main() -> None:
         asyncio.run(memory_roundtrip(Path(tmp)))
         check_mcp(Path(tmp))
         asyncio.run(evidence_roundtrip(Path(tmp)))
+        if not bare:
+            asyncio.run(service_roundtrip(Path(tmp)))
     print(f"mnemotree {version} ({'bare' if bare else 'serve'}): ok")
 
 
