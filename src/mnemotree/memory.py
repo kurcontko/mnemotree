@@ -18,6 +18,12 @@ from .evidence.models import Evidence, Message, Record, SearchOptions, SearchTra
 from .evidence.protocols import Embedder, Reranker, TokenCounter
 
 
+def _namespace(value: str) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > 256:
+        raise ValueError("namespace must be a nonblank string of at most 256 characters")
+    return value
+
+
 class MemoryItem(Record):
     """One remembered message, exactly as it was stored."""
 
@@ -69,9 +75,7 @@ class Memory:
         chunk_overlap: int = 200,
         search: SearchOptions | None = None,
     ) -> None:
-        if not isinstance(namespace, str) or not namespace.strip() or len(namespace) > 256:
-            raise ValueError("namespace must be a nonblank string of at most 256 characters")
-        self.namespace = namespace
+        self.namespace = _namespace(namespace)
         self.search = search
         self.engine = engine.Memory(
             path,
@@ -81,6 +85,20 @@ class Memory:
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
         )
+
+    @classmethod
+    def from_engine(
+        cls, memory: engine.Memory, *, namespace: str, search: SearchOptions | None = None
+    ) -> Memory:
+        """Bind an already configured engine, such as one built from a CLI config.
+
+        The returned Memory owns the engine: closing it closes the engine.
+        """
+        self = cls.__new__(cls)
+        self.namespace = _namespace(namespace)
+        self.search = search
+        self.engine = memory
+        return self
 
     def close(self) -> None:
         self.engine.close()
@@ -136,11 +154,13 @@ class Memory:
         options = options or self.search
         if limit is not None:
             base = options or SearchOptions(mode="hybrid" if self.engine.embedder else "lexical")
+            deep = base.deep_candidate_limit
             options = SearchOptions.model_validate(
                 {
                     **base.model_dump(),
                     "limit": limit,
                     "candidate_limit": max(limit, base.candidate_limit),
+                    "deep_candidate_limit": None if deep is None else max(limit, deep),
                 }
             )
         result = await self.engine.search(self.namespace, query, options=options)

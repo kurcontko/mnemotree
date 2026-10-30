@@ -1,9 +1,10 @@
 """Exercise an installed distribution from outside its checkout, without an LLM.
 
 Run with ``--bare`` against a plain ``pip install mnemotree``, or ``--serve``
-against ``mnemotree[serve]``. CI's test lanes import the package from ``src/``
-and never install the wheel, so this is the only place the wheel's file list,
-metadata, and console-script entry points are checked.
+against ``mnemotree[serve]``. The MCP stdio server needs no extra, so both run
+it. CI's test lanes import the package from ``src/`` and never install the
+wheel, so this is the only place the wheel's file list, metadata, and
+console-script entry points are checked.
 """
 
 from __future__ import annotations
@@ -37,6 +38,34 @@ def check_cli(version: str) -> None:
 def check_evidence_cli() -> None:
     cli = Path(sys.executable).parent / "mnemotree-evidence"
     subprocess.check_output([str(cli), "--help"], text=True)
+
+
+def check_mcp(workdir: Path) -> None:
+    import json
+
+    cli = Path(sys.executable).parent / "mnemotree-mcp"
+    lines = [
+        {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "remember", "arguments": {"content": "MCP smoke memory."}},
+        },
+    ]
+    out = subprocess.run(
+        [str(cli), "--db", str(workdir / "mcp.sqlite"), "--namespace", "smoke", "--lexical"],
+        input="".join(json.dumps(line) + "\n" for line in lines),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    ).stdout
+    replies = [json.loads(line) for line in out.splitlines()]
+    assert [reply["id"] for reply in replies] == [0, 1, 2], replies
+    assert replies[2]["result"]["isError"] is False, replies[2]
 
 
 def check_serve(*, bare: bool) -> None:
@@ -87,6 +116,7 @@ def main() -> None:
     check_serve(bare=bare)
     with tempfile.TemporaryDirectory() as tmp:
         asyncio.run(memory_roundtrip(Path(tmp)))
+        check_mcp(Path(tmp))
         asyncio.run(evidence_roundtrip(Path(tmp)))
     print(f"mnemotree {version} ({'bare' if bare else 'serve'}): ok")
 

@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime
 
 import pytest
@@ -120,6 +121,13 @@ async def test_embedder_enables_hybrid_recall(tmp_path):
         assert recall.items[0].id == "orchid"
 
 
+async def test_limit_above_a_small_deep_candidate_limit_is_honored(tmp_path):
+    search = SearchOptions(mode="lexical", limit=5, deep_candidate_limit=5)
+    with Memory(tmp_path / "m.db", namespace="alice", search=search) as memory:
+        await memory.remember("I grow orchids.")
+        assert len((await memory.recall("orchids", limit=20)).items) == 1
+
+
 def test_namespace_is_required():
     with pytest.raises(TypeError):
         Memory(":memory:")  # type: ignore[call-arg]
@@ -138,3 +146,17 @@ def test_items_are_immutable():
     )
     with pytest.raises(ValueError):
         item.content = "changed"  # type: ignore[misc]
+
+
+async def test_from_engine_binds_and_owns_a_configured_engine(tmp_path):
+    from mnemotree import evidence
+
+    engine = evidence.Memory(tmp_path / "m.db")
+    with pytest.raises(ValueError):
+        Memory.from_engine(engine, namespace="")
+    with Memory.from_engine(engine, namespace="alice") as memory:
+        assert memory.engine is engine
+        await memory.remember("orchid", id="o")
+        assert (await memory.get("o")).content == "orchid"
+    with pytest.raises(sqlite3.ProgrammingError):
+        engine.source("alice", "o")  # closed with the Memory that owned it
