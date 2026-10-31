@@ -10,7 +10,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import sqlite_vec
 
@@ -68,6 +68,14 @@ def vector_blob(values: Sequence[float], dimensions: int) -> bytes:
     # prevents finite large values from overflowing those products.
     norm = math.hypot(*floats)
     return struct.pack(f"<{dimensions}f", *(value / norm for value in floats))
+
+
+class Window(NamedTuple):
+    """The span of a source a retrieved chunk is served as (widened by neighbor chunks)."""
+
+    source: Source
+    start: int
+    end: int
 
 
 class SQLiteEvidenceStore:
@@ -449,7 +457,7 @@ class SQLiteEvidenceStore:
         neighbors: int,
         *,
         source: Source | None = None,
-    ) -> tuple[Source, int, int]:
+    ) -> Window:
         """Materialize a chunk window, optionally reusing a source from this read snapshot."""
         scope(namespace)
         with self._lock:
@@ -460,13 +468,13 @@ class SQLiteEvidenceStore:
             if source.namespace != namespace or source.id != chunk.source_id:
                 raise ValueError("source does not match this chunk's namespace and ID")
             if neighbors == 0:
-                return source, chunk.start, chunk.end
+                return Window(source, chunk.start, chunk.end)
             row = self.db.execute(
                 "SELECT min(start),max(end) FROM evidence_chunks "
                 "WHERE namespace=? AND source_id=? AND chunk_index BETWEEN ? AND ?",
                 (namespace, chunk.source_id, chunk.index - neighbors, chunk.index + neighbors),
             ).fetchone()
-            return source, row[0], row[1]
+            return Window(source, row[0], row[1])
 
     def forget(self, namespace: str, source_id: str) -> bool:
         scope(namespace)
