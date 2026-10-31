@@ -15,7 +15,7 @@ import sqlite_vec
 
 from .atom_store import AtomStore
 from .atoms import Atom
-from .lexical import FTS_TOKENIZER, index_text, scope_token, scoped_match
+from .lexical import create_fts, fts_table, index_text, match_expression
 from .models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
 
 _SCHEMA = """
@@ -40,16 +40,13 @@ CREATE TABLE IF NOT EXISTS evidence_chunks(
     FOREIGN KEY(namespace, source_id) REFERENCES evidence_sources(namespace, id) ON DELETE CASCADE,
     UNIQUE(namespace, id), UNIQUE(namespace, source_id, chunk_index)
 );
--- Holds lexical.index_text(chunk text), keyed by chunk rowid, so CJK bigrams
--- are indexed without changing the stored source spans.
-CREATE VIRTUAL TABLE IF NOT EXISTS evidence_fts USING fts5(text, scope, tokenize='{tokenizer}');
-CREATE TRIGGER IF NOT EXISTS evidence_chunks_delete AFTER DELETE ON evidence_chunks BEGIN
-    DELETE FROM evidence_fts WHERE rowid=old.rowid;
-END;
 """
 
-
-SCHEMA_VERSION = "4"
+# One FTS5 table per namespace, created by its first chunk. It holds
+# lexical.index_text(chunk text), keyed by chunk rowid, so CJK bigrams are indexed
+# without changing the stored source spans.
+CHUNK_FTS = "evidence_fts"
+SCHEMA_VERSION = "5"
 
 
 class IngestConflict(ValueError):
@@ -116,7 +113,7 @@ class SQLiteEvidenceStore:
                         f"{SCHEMA_VERSION!r}); rebuild into a fresh database"
                     )
             # FTS5/extension failures are explicit startup failures, never silent fallbacks.
-            self.db.executescript(_SCHEMA.format(tokenizer=FTS_TOKENIZER))
+            self.db.executescript(_SCHEMA)
             with self.transaction():
                 self.db.execute(
                     "INSERT OR IGNORE INTO evidence_config VALUES('schema_version', ?)",
@@ -278,7 +275,10 @@ class SQLiteEvidenceStore:
                 "WHERE namespace=? AND session_id=?",
                 (namespace, session_id),
             ).fetchone()[0]
+            table = fts_table(CHUNK_FTS, namespace)
             try:
+                if chunks:
+                    self.db.execute(create_fts(table))
                 for offset, source in enumerate(sources):
                     self.db.execute(
                         "INSERT INTO evidence_sources(namespace,id,request_id,session_id,position,"
@@ -312,8 +312,8 @@ class SQLiteEvidenceStore:
                         ),
                     )
                     self.db.execute(
-                        "INSERT INTO evidence_fts(rowid,text,scope) VALUES(?,?,?)",
-                        (cursor.lastrowid, index_text(chunk.text), scope_token(namespace)),
+                        f"INSERT INTO {table}(rowid,text) VALUES(?,?)",
+                        (cursor.lastrowid, index_text(chunk.text)),
                     )
                     if blobs:
                         self.db.execute(
@@ -405,14 +405,19 @@ class SQLiteEvidenceStore:
         self, namespace: str, query: str, limit: int, *, options: Sequence[str] | None = None
     ) -> list[tuple[Chunk, float]]:
         scope(namespace)
-        match = scoped_match(namespace, query, options=options)
+        match = match_expression(query, options=options)
         if match is None:
             return []
+        table = fts_table(CHUNK_FTS, namespace)
         with self._lock:
+            if not self.db.execute(
+                "SELECT 1 FROM evidence_chunks WHERE namespace=? LIMIT 1", (namespace,)
+            ).fetchone():
+                return []
             rows = self.db.execute(
-                "SELECT c.*, bm25(evidence_fts, 1.0, 0.0) AS score FROM evidence_fts "
-                "JOIN evidence_chunks c ON c.rowid=evidence_fts.rowid "
-                "WHERE evidence_fts MATCH ? AND c.namespace=? ORDER BY score,c.id LIMIT ?",
+                f"SELECT c.*, bm25({table}) AS score FROM {table} "
+                f"JOIN evidence_chunks c ON c.rowid={table}.rowid "
+                f"WHERE {table} MATCH ? AND c.namespace=? ORDER BY score,c.id LIMIT ?",
                 (match, namespace, limit),
             ).fetchall()
         return [(self._chunk(row), -float(row["score"])) for row in rows]
@@ -462,9 +467,22 @@ class SQLiteEvidenceStore:
     def forget(self, namespace: str, source_id: str) -> bool:
         scope(namespace)
         with self.transaction():
+            # Read first: the cascade and triggers below remove these rows, and a trigger
+            # cannot name a table per namespace.
+            chunks = self.db.execute(
+                "SELECT rowid FROM evidence_chunks WHERE namespace=? AND source_id=?",
+                (namespace, source_id),
+            ).fetchall()
+            atoms = self.atoms.source_rows(namespace, source_id)
             cursor = self.db.execute(
                 "DELETE FROM evidence_sources WHERE namespace=? AND id=?", (namespace, source_id)
             )
+            if chunks:
+                self.db.executemany(
+                    f"DELETE FROM {fts_table(CHUNK_FTS, namespace)} WHERE rowid=?",
+                    [tuple(row) for row in chunks],
+                )
+            self.atoms.unindex(namespace, atoms)
             return cursor.rowcount > 0
 
     def conversation_context(
