@@ -1,6 +1,6 @@
 # Usage (from this directory, after `cp .env.example .env` and filling it in):
 #   docker compose --profile caddy up -d --build    # cloud VM: public IP + DNS A record, direct TLS
-#   docker compose --profile tunnel up -d --build   # behind a NAT: Cloudflare tunnel (100 s proxy limit)
+#   docker compose --profile tunnel up -d --build   # behind a NAT: Cloudflare tunnel (proxy read timeout applies)
 services:
   memory:
     build:

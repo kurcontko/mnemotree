@@ -10,6 +10,8 @@
     "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     "api_key_env": "DASHSCOPE_API_KEY",
     "batch_size": 10,
-    "timeout": 60
+    "timeout": 15,
+    "max_attempts": 3,
+    "max_total_wait": 20
   }
 }
