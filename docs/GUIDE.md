@@ -160,7 +160,9 @@ backups.
 
 **Retrieval.** Chunks are fixed character spans within one message, with
 configurable overlap. The namespace filter runs before each channel's candidate cap.
-FTS5 uses sanitized OR query terms and BM25; dense search uses exact cosine distance
+FTS5 uses sanitized OR query terms and BM25, with statistics from that namespace's own
+table, so one namespace's writes cannot change another's ranking; dense search uses
+exact cosine distance
 over every eligible row in sqlite-vec. The union is fused with weighted RRF,
 optionally reranked, then packed. `candidate_limit` sets the depth of each channel;
 `limit` sets how much evidence is returned. Search is read-only: it updates no
@@ -320,7 +322,6 @@ a reranker or another representation.
 
 - Dense scoring is exact, so it is linear in eligible corpus size; there is no ANN.
 - Fixed character chunking can split sentences or code blocks.
-- FTS BM25 statistics are global to the database, though eligibility is scoped.
 - SQLite work is synchronous and can block an async event loop; the target is a
   modest local store.
 - No temporal contradiction resolution, automatic compaction, or import of

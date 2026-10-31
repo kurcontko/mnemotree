@@ -33,5 +33,9 @@ service are optional extras. See the [guide](GUIDE.md) for their configuration.
 - A timestamp's offset is part of a request's payload identity. Replaying a
   `request_id` with the same instant at a different offset raises `IngestConflict`,
   so a retry should resend the original timestamp unchanged.
+- Each namespace has its own FTS5 table, so BM25 statistics come from that namespace
+  alone and one namespace's writes cannot change another's ranking. Lexical scores
+  differ from earlier snapshots, whose statistics covered the whole database. Those
+  databases are refused; reingest original messages into a fresh database.
 - HTTP embeddings require Tenacity 9.2.1 or later, matching the retry API in use.
 - Distributions include `py.typed`, and the development extra includes `build`.
