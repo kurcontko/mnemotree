@@ -161,29 +161,21 @@ class SearchRequest(Request):
         return scope(value)
 
 
-# AML keeps a 117,760-token prefix of the returned evidence, but filling it does
-# not pay: with qwen3.6 answering, 16K never beat 8K on LoCoMo, LongMemEval-S,
-# BEAM, ScriptMem or PersonaMem, and the extra turns cost abstention on BEAM.
+# Leave room for the question and answer-model instructions. This is a configurable
+# evidence allowance, not a claim about retrieval quality or a provider's context limit.
 AML_TOKEN_BUDGET = 8_000
 
 
 def aml_options(memory: Memory) -> SearchOptions:
-    """Service defaults: adjacent turns merged into passages, within 8K tokens.
-
-    Merging with one neighbor raised LoCoMo all-evidence coverage at 8K from
-    72.7% to 86.7%, and answer accuracy on LoCoMo, BEAM and ScriptMem by 2-8 points.
-    """
+    """Service defaults: adjacent turns merged into passages, within 8K tokens."""
     return SearchOptions(
         mode="hybrid" if memory.embedder else "lexical",
         limit=100,
         token_budget=AML_TOKEN_BUDGET,
         neighbor_messages=1,
         merge_blocks=True,
-        # Role stack (24 Oct, gpt-4o-mini answers on the sweep contexts): one chunk per
-        # message and user turns first are neutral-to-positive on every public set; the
-        # deeper pool pays only where long assistant turns crowd the candidates (BEAM
-        # +2 to +3) and costs 3-6 points on short-session sets, so it is gated on the
-        # history's chunks per message (BEAM 2.1-3.7, LME <= 1.7, LoCoMo 1.0).
+        # Select diverse source anchors before completing long messages. Prefer user
+        # turns only in assistant-heavy histories; deepen the pool for long messages.
         chunks_per_source=1,
         role_first="user",
         # Retain the measured hard partition; bounded priors require explicit opt-in.
@@ -420,6 +412,7 @@ def create_app(
             items=len(ids),
             sources=len({source for item in result.evidence for source in item.source_ids()}),
             packed_tokens=trace.packed_tokens,
+            evidence_tokens=trace.evidence_tokens,
             candidate_limit=trace.candidate_limit,
             chunk_density=(
                 round(trace.chunk_density, 3) if trace.chunk_density is not None else None

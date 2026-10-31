@@ -52,7 +52,7 @@ class MemoryItem(Record):
 class Recall(Record):
     """Packed evidence for a query, with the memories it came from."""
 
-    # Distinct source memories of the packed evidence, in rank order.
+    # Distinct sources of the packed evidence, including neighboring turns.
     items: tuple[MemoryItem, ...]
     evidence: tuple[Evidence, ...]
     context: str
@@ -167,12 +167,8 @@ class Memory:
                 }
             )
         result = await self.engine.search(self.namespace, query, options=options)
-        ids = list(
-            dict.fromkeys(member.source_id for item in result.evidence for member in item.members())
-        )
-        sources = await asyncio.to_thread(self._sources, ids)
         return Recall(
-            items=tuple(MemoryItem.from_source(sources[id]) for id in ids if id in sources),
+            items=tuple(MemoryItem.from_source(source) for source in result.sources),
             evidence=result.evidence,
             context=result.context,
             trace=result.trace,

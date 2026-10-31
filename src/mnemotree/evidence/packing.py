@@ -1,7 +1,7 @@
 """Exact token accounting and deterministic evidence selection."""
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import lru_cache
 from importlib.metadata import version
 
@@ -43,6 +43,7 @@ def pack(
     limit: int,
     merge_reach: int | None = None,
     overflow: Sequence[Evidence] = (),
+    order_key: Callable[[Evidence], tuple[int, float, int]] | None = None,
 ) -> tuple[tuple[Evidence, ...], str, int, tuple[str, ...]]:
     """Select ranked anchors, then add their neighbors while the budget allows.
 
@@ -50,17 +51,37 @@ def pack(
     anchored); they are placed last, only into budget the anchors and neighbors
     left unused, so a long single-message history is not cut to one chunk.
 
-    The budget is the sum of each returned item's exact token count: AML
-    receives items separately, and counting per item means a change re-counts
-    only that item. With ``merge_reach``, an anchor within that many messages
-    of a selected anchor in the same session joins its item instead of using
-    another slot of ``limit``. Blocks keep the rank of their best anchor.
+    Both the joined context (including separators) and the sum of separately
+    rendered blocks must fit the budget. ``order_key`` sets presentation order
+    before counting; selection still follows relevance. With ``merge_reach``, an
+    anchor within that many messages of a selected anchor in the same session
+    joins its item instead of using another slot of ``limit``.
     """
     selected: list[Evidence] = []
-    counts: list[int] = []
     covered: dict[str, list[tuple[int, int]]] = {}
     omitted = []
     by_id = {item.id: item for item in (*evidence, *overflow)}
+    rendered: dict[str, tuple[Evidence, str, int]] = {}
+
+    def render(items: Sequence[Evidence]) -> tuple[list[str], int]:
+        ordered = sorted(items, key=order_key) if order_key is not None else items
+        texts = []
+        tokens = 0
+        for item in ordered:
+            cached = rendered.get(item.id)
+            # A merge or added neighbor creates a new immutable block with the same
+            # ID. Unchanged blocks keep their rendering and standalone token count.
+            if cached is None or cached[0] is not item:
+                text = item.render()
+                cached = (item, text, counter.count(text))
+                rendered[item.id] = cached
+            texts.append(cached[1])
+            tokens += cached[2]
+        return texts, tokens
+
+    def fits(items: Sequence[Evidence]) -> bool:
+        texts, evidence_tokens = render(items)
+        return evidence_tokens <= budget and counter.count("\n\n".join(texts)) <= budget
 
     def contained(source_id: str, start: int, end: int) -> bool:
         return any(low <= start and high >= end for low, high in covered.get(source_id, ()))
@@ -94,17 +115,17 @@ def pack(
                 block = members[0].model_copy(update={"merged": tuple(members[1:])})
             else:
                 block = item
-            count = counter.count(block.render())
-            if sum(counts) - sum(counts[index] for index in touching) + count > budget:
+            proposed = selected.copy()
+            for index in reversed(touching[1:]):
+                del proposed[index]
+            if touching:
+                proposed[touching[0]] = block
+            else:
+                proposed.append(block)
+            if not fits(proposed):
                 omitted.append(item.id)
                 continue
-            for index in reversed(touching[1:]):
-                del selected[index], counts[index]
-            if touching:
-                selected[touching[0]], counts[touching[0]] = block, count
-            else:
-                selected.append(block)
-                counts.append(count)
+            selected[:] = proposed
             cover(item)
 
     # First reserve room for ranked anchors. Neighbor text only uses what
@@ -120,11 +141,15 @@ def pack(
                     update={"neighbors": (*members[position].neighbors, neighbor)}
                 )
                 block = members[0].model_copy(update={"merged": tuple(members[1:])})
-                count = counter.count(block.render())
-                if sum(counts) - counts[index] + count <= budget:
-                    selected[index], counts[index] = block, count
+                proposed = selected.copy()
+                proposed[index] = block
+                if fits(proposed):
+                    selected[index] = block
                     cover(neighbor)
     # Last, the remaining chunks of already-anchored messages, into unused budget.
     place(overflow)
-    context = "\n\n".join(entry.render() for entry in selected)
-    return tuple(selected), context, sum(counts), tuple(omitted)
+    if order_key is not None:
+        selected.sort(key=order_key)
+    texts, _ = render(selected)
+    context = "\n\n".join(texts)
+    return tuple(selected), context, counter.count(context), tuple(omitted)

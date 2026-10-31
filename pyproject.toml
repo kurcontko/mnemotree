@@ -1,6 +1,6 @@
 [project]
 name = "mnemotree"
-version = "0.5.0.dev0"
+version = "1.0.0"
 description = "Persistent, source-first memory for LLM agents"
 authors = [
     { name = "kurcontko", email = "mikeqrc@gmail.com" }
@@ -15,13 +15,14 @@ readme = "README.md"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
-embeddings = ["httpx>=0.27,<1.0", "tenacity>=8.2,<10"]
+embeddings = ["httpx>=0.27,<1.0", "tenacity>=9.2.1,<10"]
 serve = ["fastapi>=0.115,<1.0", "uvicorn>=0.30,<1.0"]
 # Local SentenceTransformer embedder (evidence.providers.SentenceTransformerEmbedder)
 lite = ["sentence-transformers>=2.7.0"]
 dev = [
+    "build>=1.4.0,<2",
     "httpx>=0.27,<1.0",
-    "tenacity>=8.2,<10",
+    "tenacity>=9.2.1,<10",
     "fastapi>=0.115,<1.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=0.24.0",

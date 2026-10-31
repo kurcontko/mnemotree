@@ -21,8 +21,8 @@ with Memory("mem.sqlite", namespace="alice", embedder=None) as memory:
          Message(content="Lisbon has mild winters.", role="assistant")],
         session="chat-7",
     )
-    recall = await memory.recall("where do I live", limit=5)
-    recall.items      # MemoryItem records behind the packed evidence, rank order
+    recall = await memory.recall("Lisbon", limit=5)  # lexical matching without an embedder
+    recall.items      # MemoryItem source snapshots, including neighboring turns
     recall.context    # the packed text a reader sees
     recall.trace      # candidates, channel ranks, packing losses, timings
     await memory.get(item.id)
@@ -35,11 +35,14 @@ with Memory("mem.sqlite", namespace="alice", embedder=None) as memory:
 | `Memory.from_engine(engine, *, namespace, search)` | Bind an engine that is already configured, such as one built from a CLI config. Closing the `Memory` closes the engine. |
 | `remember(content, *, role, session, timestamp, id, request_id)` | One durable, indexed message. Without `session` it is its own session, so it never becomes a neighbouring turn. Same `request_id` and body replays; a different body conflicts. |
 | `remember_many(messages, *, session, request_id)` | Consecutive turns of one session, in order, as one atomic write. |
-| `recall(query, *, limit, options)` | Read-only. Returns `Recall(items, evidence, context, trace)`. `items` are the sources of packed evidence, so a zero token budget returns none. |
+| `recall(query, *, limit, options)` | Read-only. Returns `Recall(items, evidence, context, trace)`. `items` are distinct source snapshots of packed evidence, including neighboring turns; a zero token budget returns none. `limit` caps evidence blocks, which can contain multiple sources. |
 | `get(id)` / `forget(id)` | Read one memory / delete it with its chunks and index entries. |
 
 `MemoryItem` is `id, content, role, session, timestamp, created_at`. `content` is the
-raw text exactly as stored.
+raw text exactly as stored. Sources and evidence come from the same read snapshot,
+even if another process replaces or deletes a source during retrieval. The source
+order follows evidence blocks, with each anchor followed by its neighbors; a source
+appears only once. `timestamp` preserves the supplied timezone offset.
 
 Deliberate failures derive from `mnemotree.MnemotreeError` and from `ValueError`:
 `InvalidInput` for an unusable argument (blank query, bad namespace or ID),
@@ -54,6 +57,11 @@ Deliberate failures derive from `mnemotree.MnemotreeError` and from `ValueError`
 bare install runs it. Tools: `remember`, `remember_many`, `recall`, `get`, `forget`.
 Results carry JSON text and, from 2025-06-18, `structuredContent`; argument and
 conflict errors are tool results with `isError`, so the model can correct itself.
+
+`recall` returns `context`, `packed_tokens` and `memories`. Here `memories` contains
+source metadata (ID, role, session and timestamps), without full message content.
+Use `get` to fetch full messages by ID. `packed_tokens` counts the context only;
+JSON framing and source metadata add response overhead.
 
 ```bash
 claude mcp add mnemotree -- mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
@@ -88,8 +96,9 @@ rejects a different signature: rebuild into a fresh database when changing model
 or adding embeddings to a lexical corpus. Reopening a vector database without an
 embedder permits lexical reads but rejects new ingestion.
 
-Install `.[embeddings]` for the OpenAI-compatible HTTP provider, or `.[lite]` for the
-local SentenceTransformer provider. The CLIs accept a JSON config:
+Install `mnemotree[embeddings]` for the OpenAI-compatible HTTP provider, or
+`mnemotree[lite]` for the local SentenceTransformer provider. The CLIs accept a JSON
+config:
 
 ```json
 {
@@ -145,8 +154,9 @@ it, and eligibility is applied before top-k.
 **Ingestion.** Each add is an ordered batch: source position is within the request,
 and the session ID groups batches. Message text is preserved exactly; identical text
 in different occurrences is not deduplicated. The optional timestamp is a
-timezone-aware source time, separate from ingestion time. Explicit source IDs must be
-unique per namespace; otherwise IDs derive from request and position. The same
+timezone-aware source time, separate from ingestion time; its offset is retained.
+Explicit source IDs must be unique per namespace; otherwise IDs derive from request
+and position. The same
 request and payload returns its receipt without calling the embedding provider
 again; a different payload under an existing request ID is a conflict.
 
@@ -159,7 +169,9 @@ backups.
 
 **Retrieval.** Chunks are fixed character spans within one message, with
 configurable overlap. The namespace filter runs before each channel's candidate cap.
-FTS5 uses sanitized OR query terms and BM25; dense search uses exact cosine distance
+FTS5 uses sanitized OR query terms and BM25, with statistics from that namespace's own
+table, so one namespace's writes cannot change another's ranking; dense search uses
+exact cosine distance
 over every eligible row in sqlite-vec. The union is fused with weighted RRF,
 optionally reranked, then packed. `candidate_limit` sets the depth of each channel;
 `limit` sets how much evidence is returned. Search is read-only: it updates no
@@ -167,16 +179,31 @@ importance or access counters.
 
 **Packing.** `neighbor_chunks` expands a hit within its source message. The packer
 skips fully contained duplicate spans and evidence that does not fit, then continues
-down the ranking. It counts the exact rendered JSON evidence plus separators with the
-selected tiktoken encoding. Partially overlapping spans can still repeat text. Each
-rendered evidence block carries source ID, session, role, timestamp and character
-offsets. The trace reports candidates, channel scores and ranks, packing losses and
-timings.
+down the ranking. `trace.packed_tokens` counts the exact `context` string, including
+blank-line separators, using the selected tokenizer. `trace.evidence_tokens` is
+the sum of separately rendered blocks, as delivered by the AML service. Both counts
+must fit `token_budget`. JSON framing, source records and trace metadata are outside
+that evidence budget. Partially overlapping spans can still repeat text.
+
+Context is a plain transcript, for example `user: I grow orchids.` A timestamped
+message includes its date, weekday, time and UTC offset. Recognized relative dates
+also receive rule-based notes, resolved against the source's own calendar day:
+
+```text
+[2026-10-30 Fri 00:30 UTC+02:00] user: I adopted a cat yesterday. (yesterday = Thursday, 29 October 2026)
+```
+
+These notes are derived hints, not part of the stored text. Source IDs, sessions,
+roles, timestamps and character offsets are available on `evidence`; the trace adds
+candidates, channel scores and ranks, packing losses and timings. The engine's
+`SearchResult.sources` contains full source snapshots for Python callers and is
+excluded from JSON serialization.
 
 ## Atomic projections
 
 An optional `Extractor` turns ordered passages into standalone statements used only
-for retrieval; answer context always contains the original source text. Raw-only
+for retrieval; answer context uses source spans rather than generated statements.
+Transcript headers and date notes follow the rendering rules above. Raw-only
 retrieval stays the default. The design follows Tencent's standalone L1 statements
 and source-link attribution in TencentDB-Agent-Memory at commit
 `6a4bb55ea54834d8265ce52024d3e3c75db30d38`
@@ -211,24 +238,49 @@ before citation expansion; returned evidence and the token budget stay bounded. 
 trace includes atom text and source spans and may contain sensitive material; AML
 responses never include it.
 
-Use `Memory(..., extractor=OpenAIExtractor(...))` from Python (the `embeddings`
-extra), or configure `examples/evidence/atomic.json`, whose key defaults to
-`EXTRACTION_API_KEY`.
+The extractor is an **engine** option. Configure `examples/evidence/atomic.json`
+(key variable `EXTRACTION_API_KEY`), or bind a configured engine to the public API:
+
+```python
+import os
+from mnemotree import Memory, SearchOptions
+from mnemotree.evidence import Memory as EvidenceMemory
+from mnemotree.evidence.atoms import OpenAIExtractor
+
+engine = EvidenceMemory(
+    "atoms.sqlite",
+    extractor=OpenAIExtractor(
+        model="your-extraction-model",
+        revision="your-pinned-model-revision",
+        api_key=os.environ["EXTRACTION_API_KEY"],
+    ),
+)
+with Memory.from_engine(
+    engine, namespace="alice",
+    search=SearchOptions(mode="lexical", representation="combined"),
+) as memory:
+    item = await memory.remember("I grow orchids on my balcony.")
+    recall = await memory.recall("orchids")
+```
+
+This example needs the `embeddings` extra and runs inside an async function or a
+notebook with top-level `await`, like the API example above.
 
 ## AML Add/Search service
 
 `mnemotree-evidence serve` (the `serve` extra) implements the
 [textual Agent Memory Leaderboard API](https://agentmemoryleaderboard.ai/api-guide):
-`POST /add`, `POST /search` and unauthenticated `GET /health`. Add and Search require
-`Authorization: Bearer <key>`, read from `MNEMOTREE_API_KEY` (or `--key-env`). It
+`POST /v1/memories/add`, `POST /v1/memories/search` and unauthenticated `GET /health`.
+Add and Search require the key from `MNEMOTREE_API_KEY` (or `--key-env`), sent as
+`Authorization: Bearer <key>`, `Authorization: Token <key>` or `X-Api-Key: <key>`. It
 accepts ordered user/assistant messages with optional Unix-millisecond timestamps,
 echoes IDs exactly, acknowledges writes durably and synchronously, isolates by
 `user_id`, appends multiple-choice options to the retrieval query, and returns ranked
-`{id, content}` results capped by `top_k`. Multimodal payloads are rejected, and no
-answer is generated.
+`{id, content, score}` results capped by `top_k`, with `created_at` on dated evidence.
+Multimodal payloads are rejected, and no answer is generated.
 
 ```bash
-pip install -e '.[serve]'
+pip install 'mnemotree[serve]'
 export MNEMOTREE_API_KEY='replace-with-your-service-key'
 mnemotree-evidence --db service.sqlite serve
 ```
@@ -239,7 +291,27 @@ input-token ceiling is not an evidence allowance: leave headroom and count with 
 answer model's tokenizer. `--request-log` (`AML_REQUEST_LOG`) appends one
 metadata-only line per request; `--sample-payloads` (`AML_SAMPLE_PAYLOADS`) and
 `--sample-limit` (`AML_SAMPLE_LIMIT`, default 50) sample payloads for smoke
-inspection. `docker/aml/` holds a Caddy-fronted deployment and its smoke test.
+inspection.
+
+Without a `search` block, the service applies its defaults (`aml_options` in
+`evidence/server.py`): hybrid retrieval when an embedder is configured, one neighboring
+message merged into each hit, one chunk per source message and at most 100 items. Each
+channel returns 100 candidates, or 300 when a history averages more than 2 chunks per
+message. User turns rank first when assistant text is at least 65% of a history. A
+`search` block replaces these defaults rather than merging with them.
+
+`docker/aml/` holds a Caddy-fronted deployment and its smoke test. Its
+`config.example.json` uses `text-embedding-v4` at 1,024 dimensions through DashScope's
+OpenAI-compatible endpoint, with no LLM or reranker. On a host with ports 80 and 443
+open and a DNS A record:
+
+```bash
+cd docker/aml
+cp .env.example .env  # fill in the keys, AML_DOMAIN and a fresh AML_DB
+docker compose --profile caddy up -d --build
+set -a; . ./.env; set +a
+./smoke.sh "https://$AML_DOMAIN"
+```
 
 ## Evaluation
 
@@ -279,7 +351,6 @@ a reranker or another representation.
 
 - Dense scoring is exact, so it is linear in eligible corpus size; there is no ANN.
 - Fixed character chunking can split sentences or code blocks.
-- FTS BM25 statistics are global to the database, though eligibility is scoped.
 - SQLite work is synchronous and can block an async event loop; the target is a
   modest local store.
 - No temporal contradiction resolution, automatic compaction, or import of

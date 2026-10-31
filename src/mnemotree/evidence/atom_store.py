@@ -9,7 +9,7 @@ from typing import Any
 
 from ..errors import ConfigurationError
 from .atoms import Atom
-from .lexical import FTS_TOKENIZER, index_text, scope_token, scoped_match
+from .lexical import create_fts, fts_table, index_text, match_expression
 from .models import Chunk, scope
 
 SCHEMA = """
@@ -23,13 +23,13 @@ CREATE TABLE IF NOT EXISTS evidence_atom_spans(
  FOREIGN KEY(namespace,atom_id) REFERENCES evidence_atoms(namespace,id) ON DELETE CASCADE,
  FOREIGN KEY(namespace,source_id) REFERENCES evidence_sources(namespace,id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS evidence_atom_source ON evidence_atom_spans(namespace,source_id);
-CREATE VIRTUAL TABLE IF NOT EXISTS evidence_atom_fts USING fts5(text, scope, tokenize='{tokenizer}');
-CREATE TRIGGER IF NOT EXISTS evidence_atom_delete AFTER DELETE ON evidence_atoms BEGIN
- DELETE FROM evidence_atom_fts WHERE rowid=old.rowid; END;
 CREATE TRIGGER IF NOT EXISTS evidence_source_atoms_delete BEFORE DELETE ON evidence_sources BEGIN
  DELETE FROM evidence_atoms WHERE namespace=old.namespace AND id IN
  (SELECT atom_id FROM evidence_atom_spans WHERE namespace=old.namespace AND source_id=old.id); END;
 """
+
+# One FTS5 table per namespace, as for chunks; see store.CHUNK_FTS.
+ATOM_FTS = "evidence_atom_fts"
 
 
 class AtomStore:
@@ -37,7 +37,7 @@ class AtomStore:
 
     def __init__(self, db: sqlite3.Connection, dimensions: int | None):
         self.db = db
-        db.executescript(SCHEMA.format(tokenizer=FTS_TOKENIZER))
+        db.executescript(SCHEMA)
         if dimensions is not None:
             db.execute(
                 f"CREATE VIRTUAL TABLE IF NOT EXISTS evidence_atom_vec USING vec0("
@@ -68,14 +68,17 @@ class AtomStore:
         return saved
 
     def insert(self, namespace: str, atoms: Sequence[Atom], blobs: Sequence[bytes]) -> None:
+        table = fts_table(ATOM_FTS, namespace)
+        if atoms:
+            self.db.execute(create_fts(table))
         for index, atom in enumerate(atoms):
             cursor = self.db.execute(
                 "INSERT INTO evidence_atoms(namespace,id,text,payload) VALUES(?,?,?,?)",
                 (namespace, atom.id, atom.text, atom.model_dump_json()),
             )
             self.db.execute(
-                "INSERT INTO evidence_atom_fts(rowid,text,scope) VALUES(?,?,?)",
-                (cursor.lastrowid, index_text(atom.text), scope_token(namespace)),
+                f"INSERT INTO {table}(rowid,text) VALUES(?,?)",
+                (cursor.lastrowid, index_text(atom.text)),
             )
             for span in atom.spans:
                 self.db.execute(
@@ -92,16 +95,34 @@ class AtomStore:
         self, namespace: str, query: str, limit: int, *, options: Sequence[str] | None = None
     ) -> list[tuple[Atom, float]]:
         scope(namespace)
-        match = scoped_match(namespace, query, options=options)
+        match = match_expression(query, options=options)
         if match is None:
             return []
+        if not self.db.execute(
+            "SELECT 1 FROM evidence_atoms WHERE namespace=? LIMIT 1", (namespace,)
+        ).fetchone():
+            return []
+        table = fts_table(ATOM_FTS, namespace)
         rows = self.db.execute(
-            "SELECT a.payload, bm25(evidence_atom_fts, 1.0, 0.0) AS score FROM evidence_atom_fts "
-            "JOIN evidence_atoms a ON a.rowid=evidence_atom_fts.rowid "
-            "WHERE evidence_atom_fts MATCH ? AND a.namespace=? ORDER BY score,a.id LIMIT ?",
+            f"SELECT a.payload, bm25({table}) AS score FROM {table} "
+            f"JOIN evidence_atoms a ON a.rowid={table}.rowid "
+            f"WHERE {table} MATCH ? AND a.namespace=? ORDER BY score,a.id LIMIT ?",
             (match, namespace, limit),
         ).fetchall()
         return [(Atom.model_validate_json(row[0]), -float(row[1])) for row in rows]
+
+    def source_rows(self, namespace: str, source_id: str) -> list[tuple[int]]:
+        """Rowids of the atoms that deleting this source removes."""
+        rows = self.db.execute(
+            "SELECT DISTINCT a.rowid FROM evidence_atom_spans s JOIN evidence_atoms a "
+            "ON a.namespace=s.namespace AND a.id=s.atom_id WHERE s.namespace=? AND s.source_id=?",
+            (namespace, source_id),
+        ).fetchall()
+        return [(row[0],) for row in rows]
+
+    def unindex(self, namespace: str, rows: Sequence[tuple[int]]) -> None:
+        if rows:
+            self.db.executemany(f"DELETE FROM {fts_table(ATOM_FTS, namespace)} WHERE rowid=?", rows)
 
     def dense(self, namespace: str, blob: bytes, limit: int) -> list[tuple[Atom, float]]:
         scope(namespace)

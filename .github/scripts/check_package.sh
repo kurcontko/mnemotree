@@ -31,3 +31,14 @@ for variant in bare serve; do
     "$work/$variant/bin/python" -I "$repo/.github/scripts/package_smoke.py" "--$variant"
   )
 done
+
+# Check a consumer outside the checkout, after the bare-runtime assertions above.
+# assert_type in the smoke file also catches APIs silently degrading to Any.
+uv pip install --quiet --no-build --python "$work/bare/bin/python" \
+  -c "$work/constraints.txt" mypy
+cp "$repo/.github/scripts/typing_smoke.py" "$work/typing_smoke.py"
+(
+  cd "$work"
+  "$work/bare/bin/python" -m mypy --strict --follow-imports=silent \
+    --ignore-missing-imports "$work/typing_smoke.py"
+)
