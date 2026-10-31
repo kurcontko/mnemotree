@@ -387,7 +387,7 @@ def test_input_validation():
     with pytest.raises(ValueError):
         Message(content="  ")
     with pytest.raises(ValueError):
-        Message(content="valid", timestamp=datetime(2024, 1, 1))
+        Message(content="valid", timestamp=datetime(2024, 1, 1))  # noqa: DTZ001 - naive on purpose
     with pytest.raises(ValueError):
         SearchOptions(limit=10, candidate_limit=1)
 

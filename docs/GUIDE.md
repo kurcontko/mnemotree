@@ -44,6 +44,12 @@ even if another process replaces or deletes a source during retrieval. The sourc
 order follows evidence blocks, with each anchor followed by its neighbors; a source
 appears only once. `timestamp` preserves the supplied timezone offset.
 
+Deliberate failures derive from `mnemotree.MnemotreeError` and from `ValueError`:
+`InvalidInput` for an unusable argument (blank query, bad namespace or ID),
+`ConfigurationError` when the configuration or database cannot serve the call
+(schema version, embedding or extractor signature, missing provider), and
+`IngestConflict` when a request or source ID is reused for different content.
+
 ## MCP server
 
 `mnemotree-mcp` serves one namespace over stdio. It uses only the standard library
@@ -116,7 +122,10 @@ config:
 ```
 
 Keys never go in the config: `api_key_env` names the environment variable that holds
-them (`EMBEDDING_API_KEY` by default). Set `send_dimensions` to false if the endpoint
+them (`EMBEDDING_API_KEY` by default). The config is validated when it loads
+(`mnemotree.config.Config`): an unknown `kind`, a missing `model` or `revision`, or an
+unrecognized key is reported before any database is opened, and provider settings left
+out keep the provider's defaults. Set `send_dimensions` to false if the endpoint
 does not accept that parameter. A revision label cannot force an upstream API to pin
 weights, so use an explicit revision and rebuild when provider behavior changes. For
 local embeddings, set `kind` to `sentence-transformers` and supply `model`,

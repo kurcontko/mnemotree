@@ -23,9 +23,9 @@ def main() -> int:
         if not root.is_dir():
             continue
         for suffix in ("*.yml", "*.yaml"):
-            for path in sorted(root.rglob(suffix)):
-                if b"\t" in path.read_bytes():
-                    bad.append(str(path))
+            bad.extend(
+                str(path) for path in sorted(root.rglob(suffix)) if b"\t" in path.read_bytes()
+            )
 
     if bad:
         print("Tab characters found in workflow file(s):")

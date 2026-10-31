@@ -243,7 +243,8 @@ class SentenceTransformerEmbedder:
         result = await asyncio.to_thread(
             self.model.encode, list(texts), prompt=prompt, normalize_embeddings=True
         )
-        return result.tolist()
+        vectors: list[list[float]] = result.tolist()
+        return vectors
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         return await self._encode(texts, self.document_prompt)
