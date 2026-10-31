@@ -4,6 +4,7 @@
 namespaces and the full retrieval options, is `mnemotree.evidence.Memory`.
 """
 
+from .errors import ConfigurationError, InvalidInput, MnemotreeError
 from .evidence import (
     EmbeddingSpec,
     Evidence,
@@ -16,14 +17,17 @@ from .evidence import (
 from .memory import Memory, MemoryItem, Recall
 
 __all__ = [
-    "Memory",
-    "MemoryItem",
-    "Recall",
-    "Message",
-    "SearchOptions",
-    "SearchResult",
+    "ConfigurationError",
     "EmbeddingSpec",
     "Evidence",
-    "IngestReceipt",
     "IngestConflict",
+    "IngestReceipt",
+    "InvalidInput",
+    "Memory",
+    "MemoryItem",
+    "Message",
+    "MnemotreeError",
+    "Recall",
+    "SearchOptions",
+    "SearchResult",
 ]

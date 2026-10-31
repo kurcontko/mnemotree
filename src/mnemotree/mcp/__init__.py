@@ -3,4 +3,4 @@
 from .server import Server, serve_stdio
 from .tools import TOOLS
 
-__all__ = ["Server", "TOOLS", "serve_stdio"]
+__all__ = ["TOOLS", "Server", "serve_stdio"]
