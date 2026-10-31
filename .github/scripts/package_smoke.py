@@ -31,6 +31,7 @@ def check_location() -> None:
 
     origin = Path(mnemotree.__file__).resolve()
     assert "site-packages" in origin.parts, f"mnemotree imported from a checkout: {origin}"
+    assert origin.with_name("py.typed").is_file(), "installed package lacks its typing marker"
 
 
 def check_cli(version: str) -> None:

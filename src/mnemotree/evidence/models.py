@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Literal
 
@@ -33,10 +33,9 @@ class Message(Record):
     @field_validator("timestamp")
     @classmethod
     def aware_time(cls, value: datetime | None) -> datetime | None:
-        if value is not None:
-            if value.tzinfo is None:
-                raise ValueError("timestamp must include a timezone")
-            return value.astimezone(UTC)
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("timestamp must include a timezone")
+        # Relative dates refer to the speaker's calendar day, not the UTC day.
         return value
 
 
@@ -199,7 +198,11 @@ def _render_line(
         return f"{role}: {text}"
     # Weekday helps resolve "last Friday"; computed directly to stay locale-free.
     day = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[timestamp.weekday()]
-    return f"[{timestamp:%Y-%m-%d} {day} {timestamp:%H:%M} UTC] {role}: {annotate(text, timestamp)}"
+    offset = timestamp.isoformat(timespec="minutes")[16:]
+    zone = "UTC" if offset == "+00:00" else f"UTC{offset}"
+    return (
+        f"[{timestamp:%Y-%m-%d} {day} {timestamp:%H:%M} {zone}] {role}: {annotate(text, timestamp)}"
+    )
 
 
 class SearchOptions(Record):
@@ -261,7 +264,10 @@ class SearchTrace(Record):
     context_candidates: tuple[ContextSpan, ...] = ()
     omitted_context_ids: tuple[str, ...] = ()
     channel_counts: dict[str, int]
+    # Exact count of the joined context, including separators.
     packed_tokens: int
+    # Sum of separately rendered blocks, as delivered by the AML service.
+    evidence_tokens: int = 0
     tokenizer: str
     omitted_ids: tuple[str, ...]
     timings_ms: dict[str, float]
@@ -282,6 +288,9 @@ class SearchResult(Record):
     evidence: tuple[Evidence, ...]
     context: str
     trace: SearchTrace
+    # Full sources from the retrieval snapshot, in evidence order, including neighbors.
+    # Python callers can inspect them; JSON responses do not duplicate unbounded source text.
+    sources: tuple[Source, ...] = Field(default=(), exclude=True, repr=False)
 
 
 def digest(value: object) -> str:

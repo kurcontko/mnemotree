@@ -14,14 +14,17 @@ from pathlib import Path
 from uuid import uuid4
 
 from .evidence import engine
-from .evidence.models import Evidence, Message, Record, SearchOptions, SearchTrace, Source, digest
+from .evidence.models import (
+    Evidence,
+    Message,
+    Record,
+    SearchOptions,
+    SearchTrace,
+    Source,
+    digest,
+    scope,
+)
 from .evidence.protocols import Embedder, Reranker, TokenCounter
-
-
-def _namespace(value: str) -> str:
-    if not isinstance(value, str) or not value.strip() or len(value) > 256:
-        raise ValueError("namespace must be a nonblank string of at most 256 characters")
-    return value
 
 
 class MemoryItem(Record):
@@ -49,7 +52,7 @@ class MemoryItem(Record):
 class Recall(Record):
     """Packed evidence for a query, with the memories it came from."""
 
-    # Distinct source memories of the packed evidence, in rank order.
+    # Distinct sources of the packed evidence, including neighboring turns.
     items: tuple[MemoryItem, ...]
     evidence: tuple[Evidence, ...]
     context: str
@@ -75,7 +78,7 @@ class Memory:
         chunk_overlap: int = 200,
         search: SearchOptions | None = None,
     ) -> None:
-        self.namespace = _namespace(namespace)
+        self.namespace = scope(namespace)
         self.search = search
         self.engine = engine.Memory(
             path,
@@ -95,7 +98,7 @@ class Memory:
         The returned Memory owns the engine: closing it closes the engine.
         """
         self = cls.__new__(cls)
-        self.namespace = _namespace(namespace)
+        self.namespace = scope(namespace)
         self.search = search
         self.engine = memory
         return self
@@ -164,12 +167,8 @@ class Memory:
                 }
             )
         result = await self.engine.search(self.namespace, query, options=options)
-        ids = list(
-            dict.fromkeys(member.source_id for item in result.evidence for member in item.members())
-        )
-        sources = await asyncio.to_thread(self._sources, ids)
         return Recall(
-            items=tuple(MemoryItem.from_source(sources[id]) for id in ids if id in sources),
+            items=tuple(MemoryItem.from_source(source) for source in result.sources),
             evidence=result.evidence,
             context=result.context,
             trace=result.trace,

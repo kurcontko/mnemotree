@@ -1,6 +1,6 @@
 import asyncio
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from importlib import import_module
 
 import pytest
@@ -60,7 +60,8 @@ async def test_persistence_scope_idempotency_and_forgetting(tmp_path):
             result = await memory.search("alice", "apple", options=SearchOptions(mode=mode))
             assert [item.source_id for item in result.evidence] == ["same"]
             assert result.evidence[0].text == "apple orchard"
-            assert result.trace.packed_tokens == sum(
+            assert result.trace.packed_tokens == memory.counter.count(result.context)
+            assert result.trace.evidence_tokens == sum(
                 memory.counter.count(item.render()) for item in result.evidence
             )
         assert memory.source("unknown", "same") is None
@@ -197,6 +198,123 @@ async def test_reranking_candidate_depth_and_exact_budget(tmp_path):
             "alice", "apple", options=SearchOptions(mode="lexical", token_budget=0)
         )
         assert not empty.evidence and empty.context == "" and empty.trace.packed_tokens == 0
+
+
+@pytest.mark.parametrize("order", ["rank", "time"])
+async def test_context_budget_includes_separators_in_presentation_order(tmp_path, order):
+    with Memory(tmp_path / "m.db") as memory:
+        await memory.add(
+            "alice",
+            [
+                Message(id="red", content="orchid red", timestamp=None),
+                Message(
+                    id="blue", content="orchid blue", timestamp=datetime(2024, 1, 1, tzinfo=UTC)
+                ),
+            ],
+            request_id="r",
+            session_id="s",
+        )
+        settings = SearchOptions(mode="lexical", order=order)
+        full = await memory.search("alice", "orchid", options=settings)
+        encoding = memory.counter.encoding
+        exact = len(encoding.encode(full.context))
+        assert len(full.evidence) == 2
+        assert full.trace.packed_tokens == exact
+        assert full.trace.evidence_tokens < exact
+        ranked = await memory.search("alice", "orchid", options=SearchOptions(mode="lexical"))
+        if order == "time":
+            # Dated items come first, undated ones after.
+            assert [item.source_id for item in full.evidence] == ["blue", "red"]
+        else:
+            assert full.evidence == ranked.evidence
+        tight = await memory.search(
+            "alice", "orchid", options=settings.model_copy(update={"token_budget": exact - 1})
+        )
+        assert len(tight.evidence) == 1
+        # Presentation order never decides what is kept.
+        assert tight.evidence[0].source_id == ranked.evidence[0].source_id
+        assert tight.trace.packed_tokens == len(encoding.encode(tight.context)) <= exact - 1
+        assert tight.trace.evidence_tokens <= exact - 1
+        assert len(tight.sources) == 1
+        assert "sources" not in tight.model_dump()
+
+
+async def test_joined_budget_holds_through_merges_and_neighbors(tmp_path):
+    with Memory(tmp_path / "m.db") as memory:
+        await memory.add(
+            "u",
+            [
+                Message(id="a0", content="Boston marathon plans for spring"),
+                Message(id="a1", content="Boston marathon finish was 3 hours"),
+                Message(id="a2", content="Thanks for the pacing advice"),
+            ],
+            request_id="a",
+            session_id="a",
+        )
+        await memory.add(
+            "u",
+            [
+                Message(id="b0", content="Boston again next year"),
+                Message(id="b1", content="That sounds like a fun trip"),
+            ],
+            request_id="b",
+            session_id="b",
+        )
+        # No closing punctuation: ".\n\n" is one token, which would hide the separator cost.
+        settings = SearchOptions(mode="lexical", neighbor_messages=1, merge_blocks=True)
+        full = await memory.search("u", "Boston", options=settings)
+        assert len(full.evidence) == 2
+        assert any(item.merged for item in full.evidence)
+        assert any(member.neighbors for item in full.evidence for member in item.members())
+
+        contexts = set()
+        for budget in range(full.trace.packed_tokens + 1):
+            result = await memory.search(
+                "u", "Boston", options=settings.model_copy(update={"token_budget": budget})
+            )
+            assert result.trace.packed_tokens == memory.counter.count(result.context) <= budget
+            assert result.trace.evidence_tokens <= budget
+            contexts.add(result.context)
+        assert result.context == full.context
+        # The sweep reaches partial packings, not only empty and complete ones.
+        assert len(contexts) > 2
+
+
+async def test_sources_list_a_message_once_across_its_chunks(tmp_path):
+    content = "apple orchard harvest notes\n" * 12
+    with Memory(tmp_path / "m.db", chunk_size=40, chunk_overlap=10) as memory:
+        await memory.add(
+            "u",
+            [Message(id="long", content=content), Message(id="other", content="apple pie")],
+            request_id="r",
+            session_id="s",
+        )
+        result = await memory.search("u", "apple", options=SearchOptions(mode="lexical"))
+        ids = [item.source_id for item in result.evidence]
+        assert ids.count("long") > 1
+        assert [source.id for source in result.sources] == list(dict.fromkeys(ids))
+        assert sorted(source.id for source in result.sources) == ["long", "other"]
+        assert next(s for s in result.sources if s.id == "long").content == content
+
+
+async def test_replay_payload_identity_includes_the_timestamp_offset(tmp_path):
+    utc = datetime(2024, 1, 1, 8, 30, tzinfo=UTC)
+    paris = utc.astimezone(timezone(timedelta(hours=1)))
+    with Memory(tmp_path / "m.db") as memory:
+
+        async def send(when):
+            return await memory.add(
+                "u",
+                [Message(id="m", content="Lunch at noon.", timestamp=when)],
+                request_id="r",
+                session_id="s",
+            )
+
+        assert not (await send(utc)).replayed
+        assert (await send(utc)).replayed
+        with pytest.raises(IngestConflict):
+            await send(paris)
+        assert memory.store.stats("u")["sources"] == 1
 
 
 async def test_embedding_signature_and_lexical_reopen(tmp_path):

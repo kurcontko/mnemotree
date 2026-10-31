@@ -305,6 +305,7 @@ async def test_request_log_records_add_and_search_metadata_only(tmp_path):
     assert search["top_k"] == 500 and search["limit"] == 100
     assert search["items"] == 1 and search["sources"] == 2
     assert search["packed_tokens"] > 0 and search["candidate_limit"] == 100
+    assert search["evidence_tokens"] > 0
     assert search["chunk_density"] == 1.0  # the service gate measured 2 chunks / 2 messages
     assert set(search["channel_counts"]) == {"lexical"}
     assert set(search["timings_ms"]) == {"embedding", "retrieval", "reranking", "packing", "total"}

@@ -468,13 +468,20 @@ class SQLiteEvidenceStore:
             return cursor.rowcount > 0
 
     def conversation_context(
-        self, namespace: str, source: Source, *, neighbors: int, max_chars: int
+        self,
+        namespace: str,
+        source: Source,
+        *,
+        neighbors: int,
+        max_chars: int,
+        source_cache: dict[str, Source] | None = None,
     ) -> tuple[ContextSpan, ...]:
         """Adjacent messages of the same session, in acknowledged ingestion order.
 
         AML splits one session into Add requests of at most 20 messages and sends
         them in source order, so context continues across request boundaries.
         Concurrent Adds to one session are ordered by commit, not by payload.
+        A caller holding a read transaction can retain full sources in its snapshot cache.
         """
         scope(namespace)
         if source.namespace != namespace:
@@ -494,6 +501,8 @@ class SQLiteEvidenceStore:
         result = []
         for offset, row in rows:
             other = Source.model_validate({key: row[key] for key in Source.model_fields})
+            if source_cache is not None:
+                source_cache[other.id] = other
             start = max(0, len(other.content) - max_chars) if offset < 0 else 0
             end = min(len(other.content), start + max_chars)
             result.append(

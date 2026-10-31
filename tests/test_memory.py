@@ -89,8 +89,57 @@ async def test_remember_many_keeps_turn_order_and_session(tmp_path):
         options = SearchOptions(mode="lexical", neighbor_messages=1)
         recall = await memory.recall("orchid balcony", options=options)
         # The neighbouring question comes back as context of the answer it led to.
-        assert recall.items[0].id == "a"
+        assert [item.id for item in recall.items] == ["a", "q"]
         assert "Which plant should I buy?" in recall.context
+
+
+async def test_recall_sources_share_the_evidence_snapshot(tmp_path):
+    path = tmp_path / "m.db"
+    with Memory(path, namespace="alice") as memory, Memory(path, namespace="alice") as writer:
+        original = await memory.remember_many(
+            [
+                Message(id="plant", content="I grow orchids."),
+                Message(id="care", content="Water weekly."),
+            ],
+            session="chat",
+        )
+
+        class ReplaceDuringRerank:
+            async def score(self, query, texts):
+                await writer.forget("plant")
+                await writer.forget("care")
+                await writer.remember("I grow cacti.", id="plant")
+                return [1.0] * len(texts)
+
+        memory.engine.reranker = ReplaceDuringRerank()
+        recall = await memory.recall(
+            "orchids", options=SearchOptions(mode="lexical", neighbor_messages=1)
+        )
+        assert recall.items == tuple(original)
+        assert recall.context == "user: I grow orchids.\nuser: Water weekly."
+        assert (await writer.get("plant")).content == "I grow cacti."
+        assert await writer.get("care") is None
+
+
+@pytest.mark.parametrize(
+    ("timestamp", "yesterday"),
+    [
+        ("2026-10-30T00:30:00+02:00", "Thursday, 29 October 2026"),
+        ("2026-10-29T23:30:00-07:00", "Wednesday, 28 October 2026"),
+    ],
+)
+async def test_source_timezone_survives_reopening_and_dates_use_local_day(
+    tmp_path, timestamp, yesterday
+):
+    path = tmp_path / "m.db"
+    when = datetime.fromisoformat(timestamp)
+    with Memory(path, namespace="alice") as memory:
+        await memory.remember("I adopted a cat yesterday.", id="cat", timestamp=when)
+    with Memory(path, namespace="alice") as memory:
+        assert (await memory.get("cat")).timestamp.isoformat() == timestamp
+        recall = await memory.recall("cat")
+        assert f"yesterday = {yesterday}" in recall.context
+        assert f"UTC{timestamp[-6:]}" in recall.context
 
 
 async def test_separate_remembers_never_become_neighbours(tmp_path):

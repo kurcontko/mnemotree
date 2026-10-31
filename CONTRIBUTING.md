@@ -23,6 +23,7 @@ make lint        # ruff check
 make format      # ruff format
 make typecheck   # mypy
 make test        # pytest with coverage
+make build       # wheel and source distribution
 ```
 
 Tests exercise real FTS5 and sqlite-vec and make no paid model calls. Keep it that

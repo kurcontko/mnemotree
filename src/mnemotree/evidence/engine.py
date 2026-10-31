@@ -295,6 +295,7 @@ class Memory:
         neighbors: dict[str, tuple[ContextSpan, ...]] = {}
         atom_hits: list[AtomHit] = []
         atom_ranks: dict[str, dict[str, int]] = {}
+        source_cache: dict[str, Source] = {}
 
         def retrieve() -> tuple[float | None, int, float | None, list[Candidate], list[Candidate]]:
             # Every store read of one search; blocking, so it runs on a worker thread.
@@ -302,7 +303,6 @@ class Memory:
             # A single snapshot covers all channels and source materialization.
             # Concurrent writes cannot mix different versions in the returned evidence.
             with self.store.transaction(read=True):
-                source_cache: dict[str, Source] = {}
 
                 def window(chunk: Chunk) -> tuple[Source, int, int]:
                     source = source_cache.get(chunk.source_id)
@@ -392,6 +392,7 @@ class Memory:
                         source,
                         neighbors=options.neighbor_messages,
                         max_chars=options.neighbor_chars,
+                        source_cache=source_cache,
                     )
             return assistant_share, candidate_limit, chunk_density, candidates, overflow
 
@@ -483,10 +484,8 @@ class Memory:
             overflow=[to_evidence(c, ()) for c in overflow],
             # Anchors whose neighbor windows would touch share one item.
             merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
+            order_key=chronological if options.order == "time" else None,
         )
-        if options.order == "time":
-            selected = tuple(sorted(selected, key=chronological))
-            context = "\n\n".join(entry.render() for entry in selected)
         requested_context = {item.id: item for values in neighbors.values() for item in values}
         packed_anchors = [member.id for entry in selected for member in entry.members()]
         # Only a packed anchor's neighbors can be omitted by budget or duplicate
@@ -498,6 +497,10 @@ class Memory:
         return SearchResult(
             evidence=selected,
             context=context,
+            sources=tuple(
+                source_cache[id]
+                for id in dict.fromkeys(id for entry in selected for id in entry.source_ids())
+            ),
             trace=SearchTrace(
                 mode=options.mode,
                 candidates=tuple(candidates),
@@ -510,6 +513,7 @@ class Memory:
                 ),
                 channel_counts={channel: len(items) for channel, items in channels.items()},
                 packed_tokens=tokens,
+                evidence_tokens=sum(self.counter.count(entry.render()) for entry in selected),
                 tokenizer=self.counter.signature,
                 omitted_ids=omitted,
                 timings_ms={
