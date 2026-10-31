@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from mnemotree.evidence.lexical import index_text, match_expression, scoped_match
+from mnemotree.evidence.lexical import index_text, match_expression
 
 
 def terms(query: str, **kwargs: object) -> list[str]:
@@ -58,24 +58,16 @@ def test_short_queries_preserve_existing_order_and_fallback() -> None:
     assert terms("the", options=["and the"]) == ["the", "and"]
 
 
-def test_cjk_option_tail_is_searchable_and_namespace_stays_scoped() -> None:
+def test_cjk_option_tail_is_searchable() -> None:
     options = [" ".join(f"prefix{i}" for i in range(90)) + " 我搬到了华沙"]
-    expression = scoped_match("tenant", "where moved", options=options)
+    expression = match_expression("where moved", options=options)
     assert expression is not None
     assert '"华沙"' in expression
     connection = sqlite3.connect(":memory:")
     connection.execute(
-        'CREATE VIRTUAL TABLE evidence USING fts5(scope, text, tokenize="porter unicode61")'
+        'CREATE VIRTUAL TABLE evidence USING fts5(text, tokenize="porter unicode61")'
     )
-    from mnemotree.evidence.lexical import scope_token
-
-    connection.executemany(
-        "INSERT INTO evidence VALUES (?, ?)",
-        [
-            (scope_token("tenant"), index_text("华沙")),
-            (scope_token("other"), index_text("华沙")),
-        ],
-    )
+    connection.execute("INSERT INTO evidence VALUES (?)", (index_text("华沙"),))
     assert connection.execute(
         "SELECT count(*) FROM evidence WHERE evidence MATCH ?", (expression,)
     ).fetchone() == (1,)

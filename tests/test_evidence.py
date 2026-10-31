@@ -14,9 +14,10 @@ from mnemotree.evidence import (
     SearchOptions,
 )
 from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
+from mnemotree.evidence.lexical import fts_table
 from mnemotree.evidence.models import Chunk
 from mnemotree.evidence.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
-from mnemotree.evidence.store import vector_blob
+from mnemotree.evidence.store import CHUNK_FTS, vector_blob
 
 
 class ToyEmbedder:
@@ -483,7 +484,7 @@ async def test_forgotten_chunks_leave_no_lexical_rows_for_new_ingests(tmp_path):
         found = await memory.search("alice", "banana", options=lexical)
         assert [item.source_id for item in found.evidence] == ["new"]
         db = memory.store.db
-        fts = db.execute("SELECT count(*) FROM evidence_fts").fetchone()[0]
+        fts = db.execute(f"SELECT count(*) FROM {fts_table(CHUNK_FTS, 'alice')}").fetchone()[0]
         assert fts == db.execute("SELECT count(*) FROM evidence_chunks").fetchone()[0]
 
 
@@ -506,11 +507,7 @@ async def test_long_queries_are_clipped_for_the_embedder(tmp_path):
 
 
 async def test_lexical_search_reads_only_its_namespace(tmp_path):
-    from mnemotree.evidence.lexical import scope_token
-
-    # Digits only, so the Porter stemmer cannot merge two namespaces' tokens.
-    assert scope_token("alice")[0] == "n" and scope_token("alice")[1:].isdigit()
-    assert scope_token("alice") != scope_token("alicee")
+    assert fts_table(CHUNK_FTS, "alice") != fts_table(CHUNK_FTS, "alicee")
     with Memory(tmp_path / "m.db") as memory:
         await add(memory, "apple orchard", namespace="alice", id="a")
         await add(memory, "apple apple apple", namespace="alicee", id="b")

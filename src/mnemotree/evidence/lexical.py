@@ -6,9 +6,9 @@ other words pass through unchanged for FTS5 to normalize and Porter-stem.
 Queries drop English stopwords: OR-ing "the" and "did" into BM25 lets frequent
 function words outrank the content terms.
 
-Each row also carries its namespace as a digits-only token, so a query matches only
-its own namespace's postings instead of scoring the whole corpus and filtering after.
-Digits pass the Porter stemmer unchanged, so distinct namespaces cannot stem together.
+Each namespace has its own FTS5 table. FTS5 computes BM25 statistics (row count, average
+length, document frequency) over a whole table and sqlite3 offers no way to replace them,
+so one shared table would let one namespace's data change another's ranking.
 """
 
 from __future__ import annotations
@@ -175,17 +175,15 @@ def index_text(text: str) -> str:
     return " ".join(tokens(text))
 
 
-def scope_token(namespace: str) -> str:
-    """A namespace as one index token; queries still join on the exact namespace."""
-    return "n" + str(int.from_bytes(hashlib.sha256(namespace.encode()).digest()[:16], "big"))
+def fts_table(prefix: str, namespace: str) -> str:
+    """The FTS5 table of one namespace; a digest, so it is safe to place in SQL."""
+    return f"{prefix}_{hashlib.sha256(namespace.encode()).hexdigest()[:32]}"
 
 
-def scoped_match(namespace: str, query: str, *, options: Sequence[str] | None = None) -> str | None:
-    """``match_expression`` restricted to rows indexed under ``namespace``."""
-    match = match_expression(query, options=options)
-    if match is None:
-        return None
-    return f'scope : "{scope_token(namespace)}" AND text : ({match})'
+def create_fts(table: str) -> str:
+    return (
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS {table} USING fts5(text, tokenize='{FTS_TOKENIZER}')"
+    )
 
 
 def match_expression(
