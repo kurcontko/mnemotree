@@ -144,7 +144,7 @@ class Memory:
             request_id=request_id or uuid4().hex,
             session_id=session,
         )
-        sources = await asyncio.to_thread(self._sources, receipt.source_ids)
+        sources = await asyncio.to_thread(self.engine.sources, self.namespace, receipt.source_ids)
         missing = [id for id in receipt.source_ids if id not in sources]
         if missing:
             raise LookupError(f"memories were forgotten concurrently: {', '.join(missing)}")
@@ -181,11 +181,3 @@ class Memory:
     async def forget(self, id: str) -> bool:
         """Delete a memory with its chunks and index entries. True if it existed."""
         return await asyncio.to_thread(self.engine.forget, self.namespace, id)
-
-    def _sources(self, ids: Sequence[str]) -> dict[str, Source]:
-        found = {}
-        for id in ids:
-            source = self.engine.source(self.namespace, id)
-            if source is not None:
-                found[id] = source
-        return found

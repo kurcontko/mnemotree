@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import math
 import sqlite3
-import struct
 import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -12,62 +10,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-import sqlite_vec
-
 from ..errors import ConfigurationError, IngestConflict
 from .atom_store import AtomStore
 from .atoms import Atom
 from .lexical import create_fts, fts_table, index_text, match_expression
 from .models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS evidence_config(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS evidence_requests(
-    namespace TEXT NOT NULL, request_id TEXT NOT NULL, body_hash TEXT NOT NULL,
-    receipt TEXT NOT NULL, PRIMARY KEY(namespace, request_id)
-);
-CREATE TABLE IF NOT EXISTS evidence_sources(
-    rowid INTEGER PRIMARY KEY, namespace TEXT NOT NULL, id TEXT NOT NULL,
-    request_id TEXT NOT NULL, session_id TEXT NOT NULL, position INTEGER NOT NULL,
-    -- Order within the session across Add requests; rowids interleave sessions.
-    session_seq INTEGER NOT NULL,
-    content TEXT NOT NULL, role TEXT NOT NULL, timestamp TEXT,
-    ingested_at TEXT NOT NULL, UNIQUE(namespace, id),
-    UNIQUE(namespace, session_id, session_seq)
-);
-CREATE TABLE IF NOT EXISTS evidence_chunks(
-    rowid INTEGER PRIMARY KEY, namespace TEXT NOT NULL, id TEXT NOT NULL,
-    source_id TEXT NOT NULL, chunk_index INTEGER NOT NULL,
-    start INTEGER NOT NULL, end INTEGER NOT NULL, text TEXT NOT NULL,
-    FOREIGN KEY(namespace, source_id) REFERENCES evidence_sources(namespace, id) ON DELETE CASCADE,
-    UNIQUE(namespace, id), UNIQUE(namespace, source_id, chunk_index)
-);
-"""
-
-# One FTS5 table per namespace, created by its first chunk. It holds
-# lexical.index_text(chunk text), keyed by chunk rowid, so CJK bigrams are indexed
-# without changing the stored source spans.
-CHUNK_FTS = "evidence_fts"
-SCHEMA_VERSION = "5"
-
-
-def vector_blob(values: Sequence[float], dimensions: int) -> bytes:
-    if len(values) != dimensions:
-        raise ValueError(f"expected {dimensions} embedding dimensions, got {len(values)}")
-    vector = [float(value) for value in values]
-    if not all(math.isfinite(value) for value in vector):
-        raise ValueError("embedding values must be finite")
-    try:
-        blob = struct.pack(f"<{dimensions}f", *vector)
-    except (OverflowError, struct.error) as exc:
-        raise ValueError("embedding must fit float32") from exc
-    floats = struct.unpack(f"<{dimensions}f", blob)
-    if not all(math.isfinite(value) for value in floats) or not any(floats):
-        raise ValueError("cosine embeddings must be finite and nonzero in float32")
-    # sqlite-vec accumulates cosine products in float32. Unit-normalizing here
-    # prevents finite large values from overflowing those products.
-    norm = math.hypot(*floats)
-    return struct.pack(f"<{dimensions}f", *(value / norm for value in floats))
+# Re-exported: these lived here before schema.py and vectors.py.
+from .schema import CHUNK_FTS as CHUNK_FTS
+from .schema import SCHEMA_VERSION as SCHEMA_VERSION
+from .schema import configure, connect, create_tables, stored_embedding_spec
+from .vectors import vector_blob as vector_blob
 
 
 class Window(NamedTuple):
@@ -76,6 +29,13 @@ class Window(NamedTuple):
     source: Source
     start: int
     end: int
+
+
+class IngestBlobs(NamedTuple):
+    """Encoded vectors of one request: per chunk, and per atom."""
+
+    chunks: list[bytes]
+    atoms: list[bytes]
 
 
 class SQLiteEvidenceStore:
@@ -93,71 +53,11 @@ class SQLiteEvidenceStore:
         extractor_config: dict[str, Any] | None = None,
     ):
         self._lock = threading.RLock()
-        self.db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
-        self.db.row_factory = sqlite3.Row
+        self.db = connect(path)
         try:
-            self.db.execute("PRAGMA foreign_keys=ON")
-            self.db.execute("PRAGMA busy_timeout=10000")
-            self.db.execute("PRAGMA journal_mode=WAL")
-            self.db.execute("PRAGMA synchronous=FULL")
-            self.db.enable_load_extension(True)
-            try:
-                sqlite_vec.load(self.db)
-            finally:
-                self.db.enable_load_extension(False)
-            # Check before creating tables: an older lexical index must not be
-            # extended in place with a different tokenization.
-            if self.db.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='evidence_config'"
-            ).fetchone():
-                version = self.db.execute(
-                    "SELECT value FROM evidence_config WHERE key='schema_version'"
-                ).fetchone()
-                if version and version[0] != SCHEMA_VERSION:
-                    raise ConfigurationError(
-                        f"unsupported evidence schema version {version[0]!r} (this build reads "
-                        f"{SCHEMA_VERSION!r}); rebuild into a fresh database"
-                    )
-            # FTS5/extension failures are explicit startup failures, never silent fallbacks.
-            self.db.executescript(_SCHEMA)
+            create_tables(self.db)
             with self.transaction():
-                self.db.execute(
-                    "INSERT OR IGNORE INTO evidence_config VALUES('schema_version', ?)",
-                    (SCHEMA_VERSION,),
-                )
-                row = self.db.execute(
-                    "SELECT value FROM evidence_config WHERE key='embedding_spec'"
-                ).fetchone()
-                self.embedding_spec = EmbeddingSpec.model_validate_json(row[0]) if row else None
-                if embedding_spec and self.embedding_spec and embedding_spec != self.embedding_spec:
-                    raise ConfigurationError(
-                        "embedding signature mismatch; use a separately rebuilt database"
-                    )
-                if embedding_spec and not self.embedding_spec:
-                    if self.db.execute("SELECT 1 FROM evidence_chunks LIMIT 1").fetchone():
-                        raise ConfigurationError(
-                            "existing lexical corpus needs an explicit vector rebuild"
-                        )
-                    self.embedding_spec = embedding_spec
-                    self.db.execute(
-                        "INSERT INTO evidence_config VALUES('embedding_spec', ?)",
-                        (embedding_spec.model_dump_json(),),
-                    )
-                if self.embedding_spec:
-                    dimensions = self.embedding_spec.dimensions
-                    # Partitioned by namespace: a KNN query reads only that namespace's
-                    # vectors, contiguously. Joining chunks to vec0 row by row instead
-                    # took ~0.4 ms per chunk (1 s for a 500K-token conversation).
-                    self.db.execute(
-                        f"CREATE VIRTUAL TABLE IF NOT EXISTS evidence_vec USING vec0("
-                        f"chunk_rowid INTEGER PRIMARY KEY, namespace TEXT PARTITION KEY, "
-                        f"embedding float[{dimensions}] distance_metric=cosine)"
-                    )
-                    self.db.execute(
-                        "CREATE TRIGGER IF NOT EXISTS evidence_vectors_delete "
-                        "AFTER DELETE ON evidence_chunks BEGIN "
-                        "DELETE FROM evidence_vec WHERE chunk_rowid=old.rowid; END"
-                    )
+                self.embedding_spec = configure(self.db, embedding_spec)
             self.atoms = AtomStore(
                 self.db, self.embedding_spec.dimensions if self.embedding_spec else None
             )
@@ -217,6 +117,58 @@ class SQLiteEvidenceStore:
         atom_vectors: Sequence[Sequence[float]] | None = None,
     ) -> IngestReceipt:
         scope(namespace)
+        blobs = self._ingest_blobs(
+            namespace, request_id, session_id, sources, chunks, vectors, atoms, atom_vectors
+        )
+        with self.transaction():
+            # Another process may have configured the file since this instance opened it.
+            if stored_embedding_spec(self.db) != self.embedding_spec:
+                raise ConfigurationError(
+                    "database configuration changed; reopen this Memory instance"
+                )
+            if self.atoms.configure(self.extractor_config) != self.extractor_config:
+                raise ConfigurationError(
+                    "database configuration changed; reopen this Memory instance"
+                )
+            replay = self.receipt(namespace, request_id, body_hash)
+            if replay:
+                return replay
+            try:
+                self._insert(namespace, request_id, session_id, sources, chunks, blobs.chunks)
+                self.atoms.insert(namespace, atoms, blobs.atoms)
+            except sqlite3.IntegrityError as exc:
+                raise IngestConflict(
+                    "source IDs must identify distinct occurrences within a namespace"
+                ) from exc
+            receipt = IngestReceipt(
+                namespace=namespace,
+                request_id=request_id,
+                session_id=session_id,
+                source_ids=tuple(source.id for source in sources),
+                chunk_count=len(chunks),
+                atom_count=len(atoms),
+            )
+            self.db.execute(
+                "INSERT INTO evidence_requests VALUES(?,?,?,?)",
+                (namespace, request_id, body_hash, receipt.model_dump_json()),
+            )
+            return receipt
+
+    def _ingest_blobs(
+        self,
+        namespace: str,
+        request_id: str,
+        session_id: str,
+        sources: Sequence[Source],
+        chunks: Sequence[Chunk],
+        vectors: Sequence[Sequence[float]] | None,
+        atoms: Sequence[Atom],
+        atom_vectors: Sequence[Sequence[float]] | None,
+    ) -> IngestBlobs:
+        """Check a request is internally consistent; encode its vectors.
+
+        Runs before the write transaction, so a malformed request never holds the lock.
+        """
         if not sources or len({source.id for source in sources}) != len(sources):
             raise ValueError("a request needs sources with distinct IDs")
         if any(
@@ -262,94 +214,70 @@ class SQLiteEvidenceStore:
             ]
         elif atom_vectors:
             raise ValueError("unexpected atom vectors")
+        return IngestBlobs(blobs, atom_blobs)
 
-        with self.transaction():
-            current_embedding = self.db.execute(
-                "SELECT value FROM evidence_config WHERE key='embedding_spec'"
-            ).fetchone()
-            if (
-                EmbeddingSpec.model_validate_json(current_embedding[0])
-                if current_embedding
-                else None
-            ) != self.embedding_spec:
-                raise ConfigurationError(
-                    "database configuration changed; reopen this Memory instance"
+    def _insert(
+        self,
+        namespace: str,
+        request_id: str,
+        session_id: str,
+        sources: Sequence[Source],
+        chunks: Sequence[Chunk],
+        blobs: Sequence[bytes],
+    ) -> None:
+        """Write sources, chunks and their index rows; the caller holds the transaction."""
+        next_seq = self.db.execute(
+            "SELECT coalesce(max(session_seq) + 1, 0) FROM evidence_sources "
+            "WHERE namespace=? AND session_id=?",
+            (namespace, session_id),
+        ).fetchone()[0]
+        table = fts_table(CHUNK_FTS, namespace)
+        if chunks:
+            self.db.execute(create_fts(table))
+        self.db.executemany(
+            "INSERT INTO evidence_sources(namespace,id,request_id,session_id,position,"
+            "session_seq,content,role,timestamp,ingested_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            [
+                (
+                    namespace,
+                    source.id,
+                    request_id,
+                    session_id,
+                    source.position,
+                    next_seq + offset,
+                    source.content,
+                    source.role,
+                    source.timestamp.isoformat() if source.timestamp else None,
+                    source.ingested_at.isoformat(),
                 )
-            if self.atoms.configure(self.extractor_config) != self.extractor_config:
-                raise ConfigurationError(
-                    "database configuration changed; reopen this Memory instance"
-                )
-            replay = self.receipt(namespace, request_id, body_hash)
-            if replay:
-                return replay
-            next_seq = self.db.execute(
-                "SELECT coalesce(max(session_seq) + 1, 0) FROM evidence_sources "
-                "WHERE namespace=? AND session_id=?",
-                (namespace, session_id),
-            ).fetchone()[0]
-            table = fts_table(CHUNK_FTS, namespace)
-            try:
-                if chunks:
-                    self.db.execute(create_fts(table))
-                for offset, source in enumerate(sources):
-                    self.db.execute(
-                        "INSERT INTO evidence_sources(namespace,id,request_id,session_id,position,"
-                        "session_seq,content,role,timestamp,ingested_at) "
-                        "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                        (
-                            namespace,
-                            source.id,
-                            request_id,
-                            session_id,
-                            source.position,
-                            next_seq + offset,
-                            source.content,
-                            source.role,
-                            source.timestamp.isoformat() if source.timestamp else None,
-                            source.ingested_at.isoformat(),
-                        ),
-                    )
-                for index, chunk in enumerate(chunks):
-                    cursor = self.db.execute(
-                        "INSERT INTO evidence_chunks(namespace,id,source_id,chunk_index,start,end,text) "
-                        "VALUES(?,?,?,?,?,?,?)",
-                        (
-                            namespace,
-                            chunk.id,
-                            chunk.source_id,
-                            chunk.index,
-                            chunk.start,
-                            chunk.end,
-                            chunk.text,
-                        ),
-                    )
-                    self.db.execute(
-                        f"INSERT INTO {table}(rowid,text) VALUES(?,?)",
-                        (cursor.lastrowid, index_text(chunk.text)),
-                    )
-                    if blobs:
-                        self.db.execute(
-                            "INSERT INTO evidence_vec(chunk_rowid,namespace,embedding) VALUES(?,?,?)",
-                            (cursor.lastrowid, namespace, blobs[index]),
-                        )
-                self.atoms.insert(namespace, atoms, atom_blobs)
-            except sqlite3.IntegrityError as exc:
-                raise IngestConflict(
-                    "source IDs must identify distinct occurrences within a namespace"
-                ) from exc
-            receipt = IngestReceipt(
-                namespace=namespace,
-                request_id=request_id,
-                session_id=session_id,
-                source_ids=tuple(source.id for source in sources),
-                chunk_count=len(chunks),
-                atom_count=len(atoms),
+                for offset, source in enumerate(sources)
+            ],
+        )
+        # Row by row: the FTS and vector rows are keyed by each chunk's new rowid.
+        for index, chunk in enumerate(chunks):
+            cursor = self.db.execute(
+                "INSERT INTO evidence_chunks(namespace,id,source_id,chunk_index,start,end,text) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (
+                    namespace,
+                    chunk.id,
+                    chunk.source_id,
+                    chunk.index,
+                    chunk.start,
+                    chunk.end,
+                    chunk.text,
+                ),
             )
             self.db.execute(
-                "INSERT INTO evidence_requests VALUES(?,?,?,?)",
-                (namespace, request_id, body_hash, receipt.model_dump_json()),
+                f"INSERT INTO {table}(rowid,text) VALUES(?,?)",
+                (cursor.lastrowid, index_text(chunk.text)),
             )
-            return receipt
+            if blobs:
+                self.db.execute(
+                    "INSERT INTO evidence_vec(chunk_rowid,namespace,embedding) VALUES(?,?,?)",
+                    (cursor.lastrowid, namespace, blobs[index]),
+                )
 
     def assistant_share(self, namespace: str) -> float:
         """Share of the namespace's message characters carried by assistant turns."""
@@ -380,9 +308,29 @@ class SQLiteEvidenceStore:
             row = self.db.execute(
                 "SELECT * FROM evidence_sources WHERE namespace=? AND id=?", (namespace, source_id)
             ).fetchone()
-            if row is None:
-                return None
-            return Source.model_validate({key: row[key] for key in Source.model_fields})
+            return self._source(row) if row is not None else None
+
+    def get_sources(self, namespace: str, source_ids: Sequence[str]) -> dict[str, Source]:
+        """The stored sources among ``source_ids``, read in one snapshot; missing IDs are absent."""
+        scope(namespace)
+        ids = list(dict.fromkeys(source_ids))
+        found: dict[str, Source] = {}
+        with self.transaction(read=True):
+            for start in range(0, len(ids), 500):
+                batch = ids[start : start + 500]
+                rows = self.db.execute(
+                    "SELECT * FROM evidence_sources WHERE namespace=? AND id IN ("
+                    + ",".join("?" * len(batch))
+                    + ")",
+                    (namespace, *batch),
+                ).fetchall()
+                for row in rows:
+                    found[row["id"]] = self._source(row)
+        return found
+
+    @staticmethod
+    def _source(row: sqlite3.Row) -> Source:
+        return Source.model_validate({key: row[key] for key in Source.model_fields})
 
     @staticmethod
     def _chunk(row: sqlite3.Row) -> Chunk:
