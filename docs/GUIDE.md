@@ -260,13 +260,13 @@ notebook with top-level `await`, like the API example above.
 `mnemotree-evidence serve` (the `serve` extra) implements the
 [textual Agent Memory Leaderboard API](https://agentmemoryleaderboard.ai/api-guide):
 `POST /v1/memories/add`, `POST /v1/memories/search` and unauthenticated `GET /health`.
-Add and Search require `Authorization: Bearer <key>`, read from `MNEMOTREE_API_KEY`
-(or `--key-env`). It
+Add and Search require the key from `MNEMOTREE_API_KEY` (or `--key-env`), sent as
+`Authorization: Bearer <key>`, `Authorization: Token <key>` or `X-Api-Key: <key>`. It
 accepts ordered user/assistant messages with optional Unix-millisecond timestamps,
 echoes IDs exactly, acknowledges writes durably and synchronously, isolates by
 `user_id`, appends multiple-choice options to the retrieval query, and returns ranked
-`{id, content}` results capped by `top_k`. Multimodal payloads are rejected, and no
-answer is generated.
+`{id, content, score}` results capped by `top_k`, with `created_at` on dated evidence.
+Multimodal payloads are rejected, and no answer is generated.
 
 ```bash
 pip install 'mnemotree[serve]'
@@ -280,7 +280,27 @@ input-token ceiling is not an evidence allowance: leave headroom and count with 
 answer model's tokenizer. `--request-log` (`AML_REQUEST_LOG`) appends one
 metadata-only line per request; `--sample-payloads` (`AML_SAMPLE_PAYLOADS`) and
 `--sample-limit` (`AML_SAMPLE_LIMIT`, default 50) sample payloads for smoke
-inspection. `docker/aml/` holds a Caddy-fronted deployment and its smoke test.
+inspection.
+
+Without a `search` block, the service applies its defaults (`aml_options` in
+`evidence/server.py`): hybrid retrieval when an embedder is configured, one neighboring
+message merged into each hit, one chunk per source message and at most 100 items. Each
+channel returns 100 candidates, or 300 when a history averages more than 2 chunks per
+message. User turns rank first when assistant text is at least 65% of a history. A
+`search` block replaces these defaults rather than merging with them.
+
+`docker/aml/` holds a Caddy-fronted deployment and its smoke test. Its
+`config.example.json` uses `text-embedding-v4` at 1,024 dimensions through DashScope's
+OpenAI-compatible endpoint, with no LLM or reranker. On a host with ports 80 and 443
+open and a DNS A record:
+
+```bash
+cd docker/aml
+cp .env.example .env  # fill in the keys, AML_DOMAIN and a fresh AML_DB
+docker compose --profile caddy up -d --build
+set -a; . ./.env; set +a
+./smoke.sh "https://$AML_DOMAIN"
+```
 
 ## Evaluation
 
