@@ -1,0 +1,2587 @@
+[
+ {
+  "evidence": [
+   {
+    "id": "15ce9752be13",
+    "source_id": "garden-0",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "start": 0,
+    "end": 64,
+    "text": "I planted tomatoes and basil in the raised garden bed yesterday.",
+    "score": 0.0245901639,
+    "channels": {
+     "lexical": {
+      "rank": 1,
+      "score": 5.65674972
+     },
+     "atom_lexical": {
+      "rank": 1,
+      "score": 5.22025567
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 0,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "95a4779e5cf9",
+    "source_id": "travel-1",
+    "session_id": "travel",
+    "role": "assistant",
+    "timestamp": "2026-03-03T09:49:00Z",
+    "start": 0,
+    "end": 59,
+    "text": "Lisbon in May is warm; book the hotel near the venue early.",
+    "score": 0.0245901639,
+    "channels": {
+     "dense": {
+      "rank": 1,
+      "score": 0.661437839
+     },
+     "atom_dense": {
+      "rank": 1,
+      "score": 0.661437839
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "cf158c96d9ff",
+    "source_id": "garden-4",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "start": 0,
+    "end": 54,
+    "text": "Next week I will add marigolds along the garden fence.",
+    "score": 0.0241935484,
+    "channels": {
+     "lexical": {
+      "rank": 2,
+      "score": 2.5546165
+     },
+     "atom_lexical": {
+      "rank": 2,
+      "score": 2.31235346
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 4,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "de6379d620a0",
+    "source_id": "travel-3",
+    "session_id": "travel",
+    "role": "assistant",
+    "timestamp": "2026-03-03T10:03:00Z",
+    "start": 0,
+    "end": 57,
+    "text": "Leave for the airport by 5am for an international flight.",
+    "score": 0.023937532,
+    "channels": {
+     "dense": {
+      "rank": 3,
+      "score": 0.358568549
+     },
+     "atom_dense": {
+      "rank": 2,
+      "score": 0.358568549
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 3,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "f6117fc0e9e7",
+    "source_id": "garden-2",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "start": 0,
+    "end": 34,
+    "text": "The basil already has slugs on it.",
+    "score": 0.0235615079,
+    "channels": {
+     "dense": {
+      "rank": 4,
+      "score": 0.33806169
+     },
+     "atom_dense": {
+      "rank": 3,
+      "score": 0.33806169
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 2,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "66c65c8094db",
+    "source_id": "ops-1",
+    "session_id": "ops",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "start": 160,
+    "end": 360,
+    "text": "ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished ",
+    "score": 0.0233754091,
+    "channels": {
+     "dense": {
+      "rank": 2,
+      "score": 0.374240577
+     },
+     "atom_dense": {
+      "rank": 9,
+      "score": 0.206812978
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   }
+  ],
+  "context": "[2026-03-02 Mon 09:07 UTC] user: I planted tomatoes and basil in the raised garden bed yesterday. (yesterday = Sunday, 1 March 2026)\n\n[2026-03-03 Tue 09:49 UTC] assistant: Lisbon in May is warm; book the hotel near the venue early.\n\n[2026-03-02 Mon 09:35 UTC] user: Next week I will add marigolds along the garden fence. (next week = week of 9 March 2026)\n\n[2026-03-03 Tue 10:03 UTC] assistant: Leave for the airport by 5am for an international flight.\n\n[2026-03-02 Mon 09:21 UTC] user: The basil already has slugs on it.\n\n[2026-03-04 Wed 10:17 UTC] assistant: ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished ",
+  "trace": {
+   "mode": "hybrid",
+   "candidates": [
+    {
+     "chunk": {
+      "id": "15ce9752be13",
+      "source_id": "garden-0",
+      "index": 0,
+      "start": 0,
+      "end": 64,
+      "text": "sha256:68ffac2a6ce2 len=64"
+     },
+     "fusion_score": 0.0245901639,
+     "channels": {
+      "lexical": {
+       "rank": 1,
+       "score": 5.65674972
+      },
+      "atom_lexical": {
+       "rank": 1,
+       "score": 5.22025567
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "index": 0,
+      "start": 0,
+      "end": 59,
+      "text": "sha256:65c5fe290da2 len=59"
+     },
+     "fusion_score": 0.0245901639,
+     "channels": {
+      "dense": {
+       "rank": 1,
+       "score": 0.661437839
+      },
+      "atom_dense": {
+       "rank": 1,
+       "score": 0.661437839
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "cf158c96d9ff",
+      "source_id": "garden-4",
+      "index": 0,
+      "start": 0,
+      "end": 54,
+      "text": "sha256:46f4dab27afa len=54"
+     },
+     "fusion_score": 0.0241935484,
+     "channels": {
+      "lexical": {
+       "rank": 2,
+       "score": 2.5546165
+      },
+      "atom_lexical": {
+       "rank": 2,
+       "score": 2.31235346
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "de6379d620a0",
+      "source_id": "travel-3",
+      "index": 0,
+      "start": 0,
+      "end": 57,
+      "text": "sha256:b1e38359439f len=57"
+     },
+     "fusion_score": 0.023937532,
+     "channels": {
+      "dense": {
+       "rank": 3,
+       "score": 0.358568549
+      },
+      "atom_dense": {
+       "rank": 2,
+       "score": 0.358568549
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "f6117fc0e9e7",
+      "source_id": "garden-2",
+      "index": 0,
+      "start": 0,
+      "end": 34,
+      "text": "sha256:f60ba41f99f0 len=34"
+     },
+     "fusion_score": 0.0235615079,
+     "channels": {
+      "dense": {
+       "rank": 4,
+       "score": 0.33806169
+      },
+      "atom_dense": {
+       "rank": 3,
+       "score": 0.33806169
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "66c65c8094db",
+      "source_id": "ops-1",
+      "index": 1,
+      "start": 160,
+      "end": 360,
+      "text": "sha256:41c873c48427 len=200"
+     },
+     "fusion_score": 0.0233754091,
+     "channels": {
+      "dense": {
+       "rank": 2,
+       "score": 0.374240577
+      },
+      "atom_dense": {
+       "rank": 9,
+       "score": 0.206812978
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "6713a0766192",
+      "source_id": "travel-2",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:aee386e4e9da len=44"
+     },
+     "fusion_score": 0.0231971154,
+     "channels": {
+      "dense": {
+       "rank": 5,
+       "score": 0.31448549
+      },
+      "atom_dense": {
+       "rank": 4,
+       "score": 0.31448549
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:be1d4940e609 len=44"
+     },
+     "fusion_score": 0.0228438228,
+     "channels": {
+      "dense": {
+       "rank": 6,
+       "score": 0.260133028
+      },
+      "atom_dense": {
+       "rank": 5,
+       "score": 0.260133028
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "48f05df20d3d",
+      "source_id": "travel-0",
+      "index": 0,
+      "start": 0,
+      "end": 49,
+      "text": "sha256:af620e99e6a0 len=49"
+     },
+     "fusion_score": 0.0223880597,
+     "channels": {
+      "dense": {
+       "rank": 7,
+       "score": 0.251976311
+      },
+      "atom_dense": {
+       "rank": 7,
+       "score": 0.251976311
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "a2a4047faf99",
+      "source_id": "ops-0",
+      "index": 0,
+      "start": 0,
+      "end": 52,
+      "text": "sha256:4c1c9843bbf0 len=52"
+     },
+     "fusion_score": 0.0222816399,
+     "channels": {
+      "dense": {
+       "rank": 8,
+       "score": 0.251976311
+      },
+      "atom_dense": {
+       "rank": 6,
+       "score": 0.251976311
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "ec59b32ce1b7",
+      "source_id": "ops-2",
+      "index": 0,
+      "start": 0,
+      "end": 55,
+      "text": "sha256:9aa4fef11ef0 len=55"
+     },
+     "fusion_score": 0.0216386555,
+     "channels": {
+      "dense": {
+       "rank": 10,
+       "score": 0.227921128
+      },
+      "atom_dense": {
+       "rank": 8,
+       "score": 0.227921128
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "344cfe86b6d4",
+      "source_id": "ops-1",
+      "index": 7,
+      "start": 1120,
+      "end": 1277,
+      "text": "sha256:5720af0d03b9 len=157"
+     },
+     "fusion_score": 0.0216356108,
+     "channels": {
+      "dense": {
+       "rank": 9,
+       "score": 0.23622781
+      },
+      "atom_dense": {
+       "rank": 10,
+       "score": 0.169295609
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "1fd2e18d7406",
+      "source_id": "ops-1",
+      "index": 2,
+      "start": 320,
+      "end": 520,
+      "text": "sha256:1833b922341b len=200"
+     },
+     "fusion_score": 0.00724637681,
+     "channels": {
+      "atom_dense": {
+       "rank": 9,
+       "score": 0.206812978
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "db398e2eb16c",
+      "source_id": "ops-1",
+      "index": 0,
+      "start": 0,
+      "end": 200,
+      "text": "sha256:df9d5613c742 len=200"
+     },
+     "fusion_score": 0.00724637681,
+     "channels": {
+      "atom_dense": {
+       "rank": 9,
+       "score": 0.206812978
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "285772c04e1a",
+      "source_id": "ops-1",
+      "index": 6,
+      "start": 960,
+      "end": 1160,
+      "text": "sha256:c61a83b44300 len=200"
+     },
+     "fusion_score": 0.00714285714,
+     "channels": {
+      "atom_dense": {
+       "rank": 10,
+       "score": 0.169295609
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "61df357905af",
+      "source_id": "ops-1",
+      "index": 5,
+      "start": 800,
+      "end": 1000,
+      "text": "sha256:9440473ef7f8 len=200"
+     },
+     "fusion_score": 0.00714285714,
+     "channels": {
+      "atom_dense": {
+       "rank": 10,
+       "score": 0.169295609
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "d87b6b855482",
+      "source_id": "ops-1",
+      "index": 4,
+      "start": 640,
+      "end": 840,
+      "text": "sha256:98fc1db9adf2 len=200"
+     },
+     "fusion_score": 0.00714285714,
+     "channels": {
+      "atom_dense": {
+       "rank": 10,
+       "score": 0.169295609
+      }
+     },
+     "rerank_score": null
+    }
+   ],
+   "atom_hits": [
+    {
+     "atom": {
+      "id": "7801e8142f80",
+      "text": "sha256:68ffac2a6ce2 len=64",
+      "spans": [
+       {
+        "source_id": "garden-0",
+        "start": 0,
+        "end": 64
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 1,
+     "score": 5.22025567
+    },
+    {
+     "atom": {
+      "id": "2c5acb793bb6",
+      "text": "sha256:46f4dab27afa len=54",
+      "spans": [
+       {
+        "source_id": "garden-4",
+        "start": 0,
+        "end": 54
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 2,
+     "score": 2.31235346
+    },
+    {
+     "atom": {
+      "id": "382cd167e109",
+      "text": "sha256:65c5fe290da2 len=59",
+      "spans": [
+       {
+        "source_id": "travel-1",
+        "start": 0,
+        "end": 59
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 1,
+     "score": 0.661437839
+    },
+    {
+     "atom": {
+      "id": "0b1ab85f6800",
+      "text": "sha256:b1e38359439f len=57",
+      "spans": [
+       {
+        "source_id": "travel-3",
+        "start": 0,
+        "end": 57
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 2,
+     "score": 0.358568549
+    },
+    {
+     "atom": {
+      "id": "7dc7262a338a",
+      "text": "sha256:f60ba41f99f0 len=34",
+      "spans": [
+       {
+        "source_id": "garden-2",
+        "start": 0,
+        "end": 34
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 3,
+     "score": 0.33806169
+    },
+    {
+     "atom": {
+      "id": "681821754017",
+      "text": "sha256:aee386e4e9da len=44",
+      "spans": [
+       {
+        "source_id": "travel-2",
+        "start": 0,
+        "end": 44
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 4,
+     "score": 0.31448549
+    },
+    {
+     "atom": {
+      "id": "bf8f2787c1a0",
+      "text": "sha256:be1d4940e609 len=44",
+      "spans": [
+       {
+        "source_id": "ops-3",
+        "start": 0,
+        "end": 44
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 5,
+     "score": 0.260133028
+    },
+    {
+     "atom": {
+      "id": "7a7ef44fa562",
+      "text": "sha256:4c1c9843bbf0 len=52",
+      "spans": [
+       {
+        "source_id": "ops-0",
+        "start": 0,
+        "end": 52
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 6,
+     "score": 0.251976311
+    },
+    {
+     "atom": {
+      "id": "830fc21000d5",
+      "text": "sha256:af620e99e6a0 len=49",
+      "spans": [
+       {
+        "source_id": "travel-0",
+        "start": 0,
+        "end": 49
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 7,
+     "score": 0.251976311
+    },
+    {
+     "atom": {
+      "id": "a9303628d02a",
+      "text": "sha256:9aa4fef11ef0 len=55",
+      "spans": [
+       {
+        "source_id": "ops-2",
+        "start": 0,
+        "end": 55
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 8,
+     "score": 0.227921128
+    },
+    {
+     "atom": {
+      "id": "3d7446561132",
+      "text": "sha256:8537b66c4157 len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 0,
+        "end": 400
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 9,
+     "score": 0.206812978
+    },
+    {
+     "atom": {
+      "id": "7ba7316b3162",
+      "text": "sha256:66deac99be93 len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 800,
+        "end": 1200
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 10,
+     "score": 0.169295609
+    }
+   ],
+   "context_candidates": [],
+   "omitted_context_ids": [],
+   "channel_counts": {
+    "lexical": 2,
+    "dense": 10,
+    "atom_lexical": 2,
+    "atom_dense": 15
+   },
+   "packed_tokens": 199,
+   "evidence_tokens": 199,
+   "tokenizer": "golden-words",
+   "omitted_ids": [
+    "6713a0766192",
+    "90611027086a",
+    "48f05df20d3d",
+    "a2a4047faf99",
+    "ec59b32ce1b7",
+    "344cfe86b6d4",
+    "1fd2e18d7406",
+    "db398e2eb16c",
+    "285772c04e1a",
+    "61df357905af",
+    "d87b6b855482"
+   ],
+   "candidate_limit": 10,
+   "chunk_density": null,
+   "original_model_query_tokens": 7,
+   "model_query_tokens": 7,
+   "model_query_truncated": false,
+   "assistant_share": null,
+   "role_first_applied": false,
+   "role_boost_applied": false
+  },
+  "sources": [
+   {
+    "namespace": "golden",
+    "id": "garden-0",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 0,
+    "content": "sha256:68ffac2a6ce2 len=64",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-1",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 1,
+    "content": "sha256:65c5fe290da2 len=59",
+    "role": "assistant",
+    "timestamp": "2026-03-03T09:49:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-4",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 4,
+    "content": "sha256:46f4dab27afa len=54",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-3",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 3,
+    "content": "sha256:b1e38359439f len=57",
+    "role": "assistant",
+    "timestamp": "2026-03-03T10:03:00Z",
+    "session_seq": 3
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-2",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 2,
+    "content": "sha256:f60ba41f99f0 len=34",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-1",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 1,
+    "content": "sha256:9228386ea129 len=1277",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "session_seq": 1
+   }
+  ]
+ },
+ {
+  "evidence": [
+   {
+    "id": "48f05df20d3d",
+    "source_id": "travel-0",
+    "session_id": "travel",
+    "role": "user",
+    "timestamp": "2026-03-03T09:42:00Z",
+    "start": 0,
+    "end": 49,
+    "text": "The conference is in Lisbon this year, not Porto.",
+    "score": 0.0491803279,
+    "channels": {
+     "lexical": {
+      "rank": 1,
+      "score": 8.80841868
+     },
+     "dense": {
+      "rank": 1,
+      "score": 0.680413812
+     },
+     "atom_lexical": {
+      "rank": 1,
+      "score": 8.08232909
+     },
+     "atom_dense": {
+      "rank": 1,
+      "score": 0.680413812
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 0,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "95a4779e5cf9",
+    "source_id": "travel-1",
+    "session_id": "travel",
+    "role": "assistant",
+    "timestamp": "2026-03-03T09:49:00Z",
+    "start": 0,
+    "end": 59,
+    "text": "Lisbon in May is warm; book the hotel near the venue early.",
+    "score": 0.0480030722,
+    "channels": {
+     "lexical": {
+      "rank": 3,
+      "score": 1.96642585
+     },
+     "dense": {
+      "rank": 2,
+      "score": 0.612372518
+     },
+     "atom_lexical": {
+      "rank": 3,
+      "score": 1.71525867
+     },
+     "atom_dense": {
+      "rank": 2,
+      "score": 0.612372518
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "6713a0766192",
+    "source_id": "travel-2",
+    "session_id": "travel",
+    "role": "user",
+    "timestamp": "2026-03-03T09:56:00Z",
+    "start": 0,
+    "end": 44,
+    "text": "My flight to Lisbon leaves on Friday at 7am.",
+    "score": 0.0458322038,
+    "channels": {
+     "lexical": {
+      "rank": 2,
+      "score": 2.12708341
+     },
+     "dense": {
+      "rank": 10,
+      "score": 0.339683115
+     },
+     "atom_lexical": {
+      "rank": 2,
+      "score": 1.84780139
+     },
+     "atom_dense": {
+      "rank": 8,
+      "score": 0.339683115
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 2,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "f6117fc0e9e7",
+    "source_id": "garden-2",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "start": 0,
+    "end": 34,
+    "text": "The basil already has slugs on it.",
+    "score": 0.0238095238,
+    "channels": {
+     "dense": {
+      "rank": 3,
+      "score": 0.547722608
+     },
+     "atom_dense": {
+      "rank": 3,
+      "score": 0.547722608
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 2,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "cf158c96d9ff",
+    "source_id": "garden-4",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "start": 0,
+    "end": 54,
+    "text": "Next week I will add marigolds along the garden fence.",
+    "score": 0.0234375,
+    "channels": {
+     "dense": {
+      "rank": 4,
+      "score": 0.5
+     },
+     "atom_dense": {
+      "rank": 4,
+      "score": 0.5
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 4,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "15ce9752be13",
+    "source_id": "garden-0",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "start": 0,
+    "end": 64,
+    "text": "I planted tomatoes and basil in the raised garden bed yesterday.",
+    "score": 0.022960373,
+    "channels": {
+     "dense": {
+      "rank": 5,
+      "score": 0.452910841
+     },
+     "atom_dense": {
+      "rank": 6,
+      "score": 0.452910841
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 0,
+    "neighbors": [],
+    "merged": []
+   }
+  ],
+  "context": "[2026-03-03 Tue 09:42 UTC] user: The conference is in Lisbon this year, not Porto. (this year = 2026)\n\n[2026-03-03 Tue 09:49 UTC] assistant: Lisbon in May is warm; book the hotel near the venue early.\n\n[2026-03-03 Tue 09:56 UTC] user: My flight to Lisbon leaves on Friday at 7am. (on friday = Friday, 27 February 2026)\n\n[2026-03-02 Mon 09:21 UTC] user: The basil already has slugs on it.\n\n[2026-03-02 Mon 09:35 UTC] user: Next week I will add marigolds along the garden fence. (next week = week of 9 March 2026)\n\n[2026-03-02 Mon 09:07 UTC] user: I planted tomatoes and basil in the raised garden bed yesterday. (yesterday = Sunday, 1 March 2026)",
+  "trace": {
+   "mode": "hybrid",
+   "candidates": [
+    {
+     "chunk": {
+      "id": "48f05df20d3d",
+      "source_id": "travel-0",
+      "index": 0,
+      "start": 0,
+      "end": 49,
+      "text": "sha256:af620e99e6a0 len=49"
+     },
+     "fusion_score": 0.0491803279,
+     "channels": {
+      "lexical": {
+       "rank": 1,
+       "score": 8.80841868
+      },
+      "dense": {
+       "rank": 1,
+       "score": 0.680413812
+      },
+      "atom_lexical": {
+       "rank": 1,
+       "score": 8.08232909
+      },
+      "atom_dense": {
+       "rank": 1,
+       "score": 0.680413812
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "index": 0,
+      "start": 0,
+      "end": 59,
+      "text": "sha256:65c5fe290da2 len=59"
+     },
+     "fusion_score": 0.0480030722,
+     "channels": {
+      "lexical": {
+       "rank": 3,
+       "score": 1.96642585
+      },
+      "dense": {
+       "rank": 2,
+       "score": 0.612372518
+      },
+      "atom_lexical": {
+       "rank": 3,
+       "score": 1.71525867
+      },
+      "atom_dense": {
+       "rank": 2,
+       "score": 0.612372518
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "6713a0766192",
+      "source_id": "travel-2",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:aee386e4e9da len=44"
+     },
+     "fusion_score": 0.0458322038,
+     "channels": {
+      "lexical": {
+       "rank": 2,
+       "score": 2.12708341
+      },
+      "dense": {
+       "rank": 10,
+       "score": 0.339683115
+      },
+      "atom_lexical": {
+       "rank": 2,
+       "score": 1.84780139
+      },
+      "atom_dense": {
+       "rank": 8,
+       "score": 0.339683115
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "f6117fc0e9e7",
+      "source_id": "garden-2",
+      "index": 0,
+      "start": 0,
+      "end": 34,
+      "text": "sha256:f60ba41f99f0 len=34"
+     },
+     "fusion_score": 0.0238095238,
+     "channels": {
+      "dense": {
+       "rank": 3,
+       "score": 0.547722608
+      },
+      "atom_dense": {
+       "rank": 3,
+       "score": 0.547722608
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "cf158c96d9ff",
+      "source_id": "garden-4",
+      "index": 0,
+      "start": 0,
+      "end": 54,
+      "text": "sha256:46f4dab27afa len=54"
+     },
+     "fusion_score": 0.0234375,
+     "channels": {
+      "dense": {
+       "rank": 4,
+       "score": 0.5
+      },
+      "atom_dense": {
+       "rank": 4,
+       "score": 0.5
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "15ce9752be13",
+      "source_id": "garden-0",
+      "index": 0,
+      "start": 0,
+      "end": 64,
+      "text": "sha256:68ffac2a6ce2 len=64"
+     },
+     "fusion_score": 0.022960373,
+     "channels": {
+      "dense": {
+       "rank": 5,
+       "score": 0.452910841
+      },
+      "atom_dense": {
+       "rank": 6,
+       "score": 0.452910841
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "51637415eba5",
+      "source_id": "garden-1",
+      "index": 0,
+      "start": 0,
+      "end": 65,
+      "text": "sha256:e2bbe97ef91b len=65"
+     },
+     "fusion_score": 0.0228438228,
+     "channels": {
+      "dense": {
+       "rank": 6,
+       "score": 0.452910841
+      },
+      "atom_dense": {
+       "rank": 5,
+       "score": 0.452910841
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "66c65c8094db",
+      "source_id": "ops-1",
+      "index": 1,
+      "start": 160,
+      "end": 360,
+      "text": "sha256:41c873c48427 len=200"
+     },
+     "fusion_score": 0.0221717499,
+     "channels": {
+      "dense": {
+       "rank": 7,
+       "score": 0.404226065
+      },
+      "atom_dense": {
+       "rank": 9,
+       "score": 0.335075259
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "d87b6b855482",
+      "source_id": "ops-1",
+      "index": 4,
+      "start": 640,
+      "end": 840,
+      "text": "sha256:98fc1db9adf2 len=200"
+     },
+     "fusion_score": 0.0221685689,
+     "channels": {
+      "dense": {
+       "rank": 8,
+       "score": 0.374634326
+      },
+      "atom_dense": {
+       "rank": 7,
+       "score": 0.341792941
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "344cfe86b6d4",
+      "source_id": "ops-1",
+      "index": 7,
+      "start": 1120,
+      "end": 1277,
+      "text": "sha256:5720af0d03b9 len=157"
+     },
+     "fusion_score": 0.0216356108,
+     "channels": {
+      "dense": {
+       "rank": 9,
+       "score": 0.357217252
+      },
+      "atom_dense": {
+       "rank": 10,
+       "score": 0.288675129
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "1fd2e18d7406",
+      "source_id": "ops-1",
+      "index": 2,
+      "start": 320,
+      "end": 520,
+      "text": "sha256:1833b922341b len=200"
+     },
+     "fusion_score": 0.00746268657,
+     "channels": {
+      "atom_dense": {
+       "rank": 7,
+       "score": 0.341792941
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "fee632b96fe4",
+      "source_id": "ops-1",
+      "index": 3,
+      "start": 480,
+      "end": 680,
+      "text": "sha256:a4c9f82eee68 len=200"
+     },
+     "fusion_score": 0.00746268657,
+     "channels": {
+      "atom_dense": {
+       "rank": 7,
+       "score": 0.341792941
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "db398e2eb16c",
+      "source_id": "ops-1",
+      "index": 0,
+      "start": 0,
+      "end": 200,
+      "text": "sha256:df9d5613c742 len=200"
+     },
+     "fusion_score": 0.00724637681,
+     "channels": {
+      "atom_dense": {
+       "rank": 9,
+       "score": 0.335075259
+      }
+     },
+     "rerank_score": null
+    }
+   ],
+   "atom_hits": [
+    {
+     "atom": {
+      "id": "830fc21000d5",
+      "text": "sha256:af620e99e6a0 len=49",
+      "spans": [
+       {
+        "source_id": "travel-0",
+        "start": 0,
+        "end": 49
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 1,
+     "score": 8.08232909
+    },
+    {
+     "atom": {
+      "id": "681821754017",
+      "text": "sha256:aee386e4e9da len=44",
+      "spans": [
+       {
+        "source_id": "travel-2",
+        "start": 0,
+        "end": 44
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 2,
+     "score": 1.84780139
+    },
+    {
+     "atom": {
+      "id": "382cd167e109",
+      "text": "sha256:65c5fe290da2 len=59",
+      "spans": [
+       {
+        "source_id": "travel-1",
+        "start": 0,
+        "end": 59
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 3,
+     "score": 1.71525867
+    },
+    {
+     "atom": {
+      "id": "830fc21000d5",
+      "text": "sha256:af620e99e6a0 len=49",
+      "spans": [
+       {
+        "source_id": "travel-0",
+        "start": 0,
+        "end": 49
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 1,
+     "score": 0.680413812
+    },
+    {
+     "atom": {
+      "id": "382cd167e109",
+      "text": "sha256:65c5fe290da2 len=59",
+      "spans": [
+       {
+        "source_id": "travel-1",
+        "start": 0,
+        "end": 59
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 2,
+     "score": 0.612372518
+    },
+    {
+     "atom": {
+      "id": "7dc7262a338a",
+      "text": "sha256:f60ba41f99f0 len=34",
+      "spans": [
+       {
+        "source_id": "garden-2",
+        "start": 0,
+        "end": 34
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 3,
+     "score": 0.547722608
+    },
+    {
+     "atom": {
+      "id": "2c5acb793bb6",
+      "text": "sha256:46f4dab27afa len=54",
+      "spans": [
+       {
+        "source_id": "garden-4",
+        "start": 0,
+        "end": 54
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 4,
+     "score": 0.5
+    },
+    {
+     "atom": {
+      "id": "6be717183bdb",
+      "text": "sha256:e2bbe97ef91b len=65",
+      "spans": [
+       {
+        "source_id": "garden-1",
+        "start": 0,
+        "end": 65
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 5,
+     "score": 0.452910841
+    },
+    {
+     "atom": {
+      "id": "7801e8142f80",
+      "text": "sha256:68ffac2a6ce2 len=64",
+      "spans": [
+       {
+        "source_id": "garden-0",
+        "start": 0,
+        "end": 64
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 6,
+     "score": 0.452910841
+    },
+    {
+     "atom": {
+      "id": "1ad0a521344c",
+      "text": "sha256:e3c135d2448c len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 400,
+        "end": 800
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 7,
+     "score": 0.341792941
+    },
+    {
+     "atom": {
+      "id": "681821754017",
+      "text": "sha256:aee386e4e9da len=44",
+      "spans": [
+       {
+        "source_id": "travel-2",
+        "start": 0,
+        "end": 44
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 8,
+     "score": 0.339683115
+    },
+    {
+     "atom": {
+      "id": "3d7446561132",
+      "text": "sha256:8537b66c4157 len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 0,
+        "end": 400
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 9,
+     "score": 0.335075259
+    },
+    {
+     "atom": {
+      "id": "1078c357d514",
+      "text": "sha256:b4cf85597b70 len=77",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 1200,
+        "end": 1277
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 10,
+     "score": 0.288675129
+    }
+   ],
+   "context_candidates": [],
+   "omitted_context_ids": [],
+   "channel_counts": {
+    "lexical": 3,
+    "dense": 10,
+    "atom_lexical": 3,
+    "atom_dense": 13
+   },
+   "packed_tokens": 185,
+   "evidence_tokens": 185,
+   "tokenizer": "golden-words",
+   "omitted_ids": [
+    "51637415eba5",
+    "66c65c8094db",
+    "d87b6b855482",
+    "344cfe86b6d4",
+    "1fd2e18d7406",
+    "fee632b96fe4",
+    "db398e2eb16c"
+   ],
+   "candidate_limit": 10,
+   "chunk_density": null,
+   "original_model_query_tokens": 13,
+   "model_query_tokens": 13,
+   "model_query_truncated": false,
+   "assistant_share": null,
+   "role_first_applied": false,
+   "role_boost_applied": false
+  },
+  "sources": [
+   {
+    "namespace": "golden",
+    "id": "travel-0",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 0,
+    "content": "sha256:af620e99e6a0 len=49",
+    "role": "user",
+    "timestamp": "2026-03-03T09:42:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-1",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 1,
+    "content": "sha256:65c5fe290da2 len=59",
+    "role": "assistant",
+    "timestamp": "2026-03-03T09:49:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-2",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 2,
+    "content": "sha256:aee386e4e9da len=44",
+    "role": "user",
+    "timestamp": "2026-03-03T09:56:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-2",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 2,
+    "content": "sha256:f60ba41f99f0 len=34",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-4",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 4,
+    "content": "sha256:46f4dab27afa len=54",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-0",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 0,
+    "content": "sha256:68ffac2a6ce2 len=64",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "session_seq": 0
+   }
+  ]
+ },
+ {
+  "evidence": [
+   {
+    "id": "90611027086a",
+    "source_id": "ops-3",
+    "session_id": "ops",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:31:00Z",
+    "start": 0,
+    "end": 44,
+    "text": "Shards 3, 7 and 11 each reported 3 warnings.",
+    "score": 0.0481310804,
+    "channels": {
+     "lexical": {
+      "rank": 3,
+      "score": 2.2433031
+     },
+     "dense": {
+      "rank": 2,
+      "score": 0.374634326
+     },
+     "atom_lexical": {
+      "rank": 2,
+      "score": 3.8766027
+     },
+     "atom_dense": {
+      "rank": 2,
+      "score": 0.374634326
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 3,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "d87b6b855482",
+    "source_id": "ops-1",
+    "session_id": "ops",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "start": 640,
+    "end": 840,
+    "text": " 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us ",
+    "score": 0.0480276639,
+    "channels": {
+     "lexical": {
+      "rank": 1,
+      "score": 2.34035169
+     },
+     "dense": {
+      "rank": 4,
+      "score": 0.187317133
+     },
+     "atom_lexical": {
+      "rank": 1,
+      "score": 4.62726821
+     },
+     "atom_dense": {
+      "rank": 4,
+      "score": 0.1595034
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "fee632b96fe4",
+    "source_id": "ops-1",
+    "session_id": "ops",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "start": 480,
+    "end": 680,
+    "text": "s and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished wi",
+    "score": 0.0468441359,
+    "channels": {
+     "lexical": {
+      "rank": 2,
+      "score": 2.31315132
+     },
+     "dense": {
+      "rank": 8,
+      "score": 0.0982946157
+     },
+     "atom_lexical": {
+      "rank": 1,
+      "score": 4.62726821
+     },
+     "atom_dense": {
+      "rank": 4,
+      "score": 0.1595034
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "61df357905af",
+    "source_id": "ops-1",
+    "session_id": "ops",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "start": 800,
+    "end": 1000,
+    "text": "and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished wi",
+    "score": 0.0459243881,
+    "channels": {
+     "lexical": {
+      "rank": 6,
+      "score": 0.50348716
+     },
+     "dense": {
+      "rank": 5,
+      "score": 0.180333972
+     },
+     "atom_lexical": {
+      "rank": 4,
+      "score": 3.14853687
+     },
+     "atom_dense": {
+      "rank": 6,
+      "score": 0.0685725212
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "66c65c8094db",
+    "source_id": "ops-1",
+    "session_id": "ops",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "start": 160,
+    "end": 360,
+    "text": "ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished ",
+    "score": 0.0457057039,
+    "channels": {
+     "lexical": {
+      "rank": 7,
+      "score": 0.50348716
+     },
+     "dense": {
+      "rank": 6,
+      "score": 0.121267796
+     },
+     "atom_lexical": {
+      "rank": 3,
+      "score": 3.31181954
+     },
+     "atom_dense": {
+      "rank": 5,
+      "score": 0.111691773
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   },
+   {
+    "id": "1fd2e18d7406",
+    "source_id": "ops-1",
+    "session_id": "ops",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "start": 320,
+    "end": 520,
+    "text": "ep 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region e",
+    "score": 0.0456404768,
+    "channels": {
+     "lexical": {
+      "rank": 8,
+      "score": 0.497635901
+     },
+     "dense": {
+      "rank": 7,
+      "score": 0.118400574
+     },
+     "atom_lexical": {
+      "rank": 1,
+      "score": 4.62726821
+     },
+     "atom_dense": {
+      "rank": 4,
+      "score": 0.1595034
+     }
+    },
+    "rerank_score": null,
+    "request_id": null,
+    "position": null,
+    "seq": 1,
+    "neighbors": [],
+    "merged": []
+   }
+  ],
+  "context": "[2026-03-04 Wed 10:31 UTC] assistant: Shards 3, 7 and 11 each reported 3 warnings.\n\n[2026-03-04 Wed 10:17 UTC] assistant:  7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us \n\n[2026-03-04 Wed 10:17 UTC] assistant: s and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished wi\n\n[2026-03-04 Wed 10:17 UTC] assistant: and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished wi\n\n[2026-03-04 Wed 10:17 UTC] assistant: ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished \n\n[2026-03-04 Wed 10:17 UTC] assistant: ep 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region e",
+  "trace": {
+   "mode": "hybrid",
+   "candidates": [
+    {
+     "chunk": {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:be1d4940e609 len=44"
+     },
+     "fusion_score": 0.0481310804,
+     "channels": {
+      "lexical": {
+       "rank": 3,
+       "score": 2.2433031
+      },
+      "dense": {
+       "rank": 2,
+       "score": 0.374634326
+      },
+      "atom_lexical": {
+       "rank": 2,
+       "score": 3.8766027
+      },
+      "atom_dense": {
+       "rank": 2,
+       "score": 0.374634326
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "d87b6b855482",
+      "source_id": "ops-1",
+      "index": 4,
+      "start": 640,
+      "end": 840,
+      "text": "sha256:98fc1db9adf2 len=200"
+     },
+     "fusion_score": 0.0480276639,
+     "channels": {
+      "lexical": {
+       "rank": 1,
+       "score": 2.34035169
+      },
+      "dense": {
+       "rank": 4,
+       "score": 0.187317133
+      },
+      "atom_lexical": {
+       "rank": 1,
+       "score": 4.62726821
+      },
+      "atom_dense": {
+       "rank": 4,
+       "score": 0.1595034
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "fee632b96fe4",
+      "source_id": "ops-1",
+      "index": 3,
+      "start": 480,
+      "end": 680,
+      "text": "sha256:a4c9f82eee68 len=200"
+     },
+     "fusion_score": 0.0468441359,
+     "channels": {
+      "lexical": {
+       "rank": 2,
+       "score": 2.31315132
+      },
+      "dense": {
+       "rank": 8,
+       "score": 0.0982946157
+      },
+      "atom_lexical": {
+       "rank": 1,
+       "score": 4.62726821
+      },
+      "atom_dense": {
+       "rank": 4,
+       "score": 0.1595034
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "61df357905af",
+      "source_id": "ops-1",
+      "index": 5,
+      "start": 800,
+      "end": 1000,
+      "text": "sha256:9440473ef7f8 len=200"
+     },
+     "fusion_score": 0.0459243881,
+     "channels": {
+      "lexical": {
+       "rank": 6,
+       "score": 0.50348716
+      },
+      "dense": {
+       "rank": 5,
+       "score": 0.180333972
+      },
+      "atom_lexical": {
+       "rank": 4,
+       "score": 3.14853687
+      },
+      "atom_dense": {
+       "rank": 6,
+       "score": 0.0685725212
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "66c65c8094db",
+      "source_id": "ops-1",
+      "index": 1,
+      "start": 160,
+      "end": 360,
+      "text": "sha256:41c873c48427 len=200"
+     },
+     "fusion_score": 0.0457057039,
+     "channels": {
+      "lexical": {
+       "rank": 7,
+       "score": 0.50348716
+      },
+      "dense": {
+       "rank": 6,
+       "score": 0.121267796
+      },
+      "atom_lexical": {
+       "rank": 3,
+       "score": 3.31181954
+      },
+      "atom_dense": {
+       "rank": 5,
+       "score": 0.111691773
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "1fd2e18d7406",
+      "source_id": "ops-1",
+      "index": 2,
+      "start": 320,
+      "end": 520,
+      "text": "sha256:1833b922341b len=200"
+     },
+     "fusion_score": 0.0456404768,
+     "channels": {
+      "lexical": {
+       "rank": 8,
+       "score": 0.497635901
+      },
+      "dense": {
+       "rank": 7,
+       "score": 0.118400574
+      },
+      "atom_lexical": {
+       "rank": 1,
+       "score": 4.62726821
+      },
+      "atom_dense": {
+       "rank": 4,
+       "score": 0.1595034
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "285772c04e1a",
+      "source_id": "ops-1",
+      "index": 6,
+      "start": 960,
+      "end": 1160,
+      "text": "sha256:c61a83b44300 len=200"
+     },
+     "fusion_score": 0.0455060112,
+     "channels": {
+      "lexical": {
+       "rank": 4,
+       "score": 0.503487527
+      },
+      "dense": {
+       "rank": 9,
+       "score": 0.0851256847
+      },
+      "atom_lexical": {
+       "rank": 4,
+       "score": 3.14853687
+      },
+      "atom_dense": {
+       "rank": 6,
+       "score": 0.0685725212
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "db398e2eb16c",
+      "source_id": "ops-1",
+      "index": 0,
+      "start": 0,
+      "end": 200,
+      "text": "sha256:df9d5613c742 len=200"
+     },
+     "fusion_score": 0.0452991453,
+     "channels": {
+      "lexical": {
+       "rank": 5,
+       "score": 0.503487527
+      },
+      "dense": {
+       "rank": 10,
+       "score": 0.0833333135
+      },
+      "atom_lexical": {
+       "rank": 3,
+       "score": 3.31181954
+      },
+      "atom_dense": {
+       "rank": 5,
+       "score": 0.111691773
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "ec59b32ce1b7",
+      "source_id": "ops-2",
+      "index": 0,
+      "start": 0,
+      "end": 55,
+      "text": "sha256:9aa4fef11ef0 len=55"
+     },
+     "fusion_score": 0.0313852814,
+     "channels": {
+      "dense": {
+       "rank": 3,
+       "score": 0.246182978
+      },
+      "atom_lexical": {
+       "rank": 6,
+       "score": 2.57196334
+      },
+      "atom_dense": {
+       "rank": 3,
+       "score": 0.246182978
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "344cfe86b6d4",
+      "source_id": "ops-1",
+      "index": 7,
+      "start": 1120,
+      "end": 1277,
+      "text": "sha256:5720af0d03b9 len=157"
+     },
+     "fusion_score": 0.0296739719,
+     "channels": {
+      "lexical": {
+       "rank": 10,
+       "score": 0.487380197
+      },
+      "atom_lexical": {
+       "rank": 4,
+       "score": 3.14853687
+      },
+      "atom_dense": {
+       "rank": 6,
+       "score": 0.0685725212
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "a2a4047faf99",
+      "source_id": "ops-0",
+      "index": 0,
+      "start": 0,
+      "end": 52,
+      "text": "sha256:4c1c9843bbf0 len=52"
+     },
+     "fusion_score": 0.0296477479,
+     "channels": {
+      "lexical": {
+       "rank": 9,
+       "score": 0.493709498
+      },
+      "atom_lexical": {
+       "rank": 5,
+       "score": 2.71165464
+      },
+      "atom_dense": {
+       "rank": 7,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "de6379d620a0",
+      "source_id": "travel-3",
+      "index": 0,
+      "start": 0,
+      "end": 57,
+      "text": "sha256:b1e38359439f len=57"
+     },
+     "fusion_score": 0.0245901639,
+     "channels": {
+      "dense": {
+       "rank": 1,
+       "score": 0.387298346
+      },
+      "atom_dense": {
+       "rank": 1,
+       "score": 0.387298346
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "48f05df20d3d",
+      "source_id": "travel-0",
+      "index": 0,
+      "start": 0,
+      "end": 49,
+      "text": "sha256:af620e99e6a0 len=49"
+     },
+     "fusion_score": 0.00735294118,
+     "channels": {
+      "atom_dense": {
+       "rank": 8,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "7fd76b7c0bd2",
+      "source_id": "ops-4",
+      "index": 0,
+      "start": 0,
+      "end": 11,
+      "text": "sha256:d08af89df704 len=11"
+     },
+     "fusion_score": 0.00724637681,
+     "channels": {
+      "atom_dense": {
+       "rank": 9,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    }
+   ],
+   "atom_hits": [
+    {
+     "atom": {
+      "id": "1ad0a521344c",
+      "text": "sha256:e3c135d2448c len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 400,
+        "end": 800
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 1,
+     "score": 4.62726821
+    },
+    {
+     "atom": {
+      "id": "bf8f2787c1a0",
+      "text": "sha256:be1d4940e609 len=44",
+      "spans": [
+       {
+        "source_id": "ops-3",
+        "start": 0,
+        "end": 44
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 2,
+     "score": 3.8766027
+    },
+    {
+     "atom": {
+      "id": "3d7446561132",
+      "text": "sha256:8537b66c4157 len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 0,
+        "end": 400
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 3,
+     "score": 3.31181954
+    },
+    {
+     "atom": {
+      "id": "7ba7316b3162",
+      "text": "sha256:66deac99be93 len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 800,
+        "end": 1200
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 4,
+     "score": 3.14853687
+    },
+    {
+     "atom": {
+      "id": "7a7ef44fa562",
+      "text": "sha256:4c1c9843bbf0 len=52",
+      "spans": [
+       {
+        "source_id": "ops-0",
+        "start": 0,
+        "end": 52
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 5,
+     "score": 2.71165464
+    },
+    {
+     "atom": {
+      "id": "a9303628d02a",
+      "text": "sha256:9aa4fef11ef0 len=55",
+      "spans": [
+       {
+        "source_id": "ops-2",
+        "start": 0,
+        "end": 55
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 6,
+     "score": 2.57196334
+    },
+    {
+     "atom": {
+      "id": "1078c357d514",
+      "text": "sha256:b4cf85597b70 len=77",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 1200,
+        "end": 1277
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_lexical",
+     "rank": 7,
+     "score": 1.33301274
+    },
+    {
+     "atom": {
+      "id": "0b1ab85f6800",
+      "text": "sha256:b1e38359439f len=57",
+      "spans": [
+       {
+        "source_id": "travel-3",
+        "start": 0,
+        "end": 57
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 1,
+     "score": 0.387298346
+    },
+    {
+     "atom": {
+      "id": "bf8f2787c1a0",
+      "text": "sha256:be1d4940e609 len=44",
+      "spans": [
+       {
+        "source_id": "ops-3",
+        "start": 0,
+        "end": 44
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 2,
+     "score": 0.374634326
+    },
+    {
+     "atom": {
+      "id": "a9303628d02a",
+      "text": "sha256:9aa4fef11ef0 len=55",
+      "spans": [
+       {
+        "source_id": "ops-2",
+        "start": 0,
+        "end": 55
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 3,
+     "score": 0.246182978
+    },
+    {
+     "atom": {
+      "id": "1ad0a521344c",
+      "text": "sha256:e3c135d2448c len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 400,
+        "end": 800
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 4,
+     "score": 0.1595034
+    },
+    {
+     "atom": {
+      "id": "3d7446561132",
+      "text": "sha256:8537b66c4157 len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 0,
+        "end": 400
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 5,
+     "score": 0.111691773
+    },
+    {
+     "atom": {
+      "id": "7ba7316b3162",
+      "text": "sha256:66deac99be93 len=400",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 800,
+        "end": 1200
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 6,
+     "score": 0.0685725212
+    },
+    {
+     "atom": {
+      "id": "7a7ef44fa562",
+      "text": "sha256:4c1c9843bbf0 len=52",
+      "spans": [
+       {
+        "source_id": "ops-0",
+        "start": 0,
+        "end": 52
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 7,
+     "score": 0.0
+    },
+    {
+     "atom": {
+      "id": "830fc21000d5",
+      "text": "sha256:af620e99e6a0 len=49",
+      "spans": [
+       {
+        "source_id": "travel-0",
+        "start": 0,
+        "end": 49
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 8,
+     "score": 0.0
+    },
+    {
+     "atom": {
+      "id": "d1697c13ec81",
+      "text": "sha256:d08af89df704 len=11",
+      "spans": [
+       {
+        "source_id": "ops-4",
+        "start": 0,
+        "end": 11
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 9,
+     "score": 0.0
+    },
+    {
+     "atom": {
+      "id": "1078c357d514",
+      "text": "sha256:b4cf85597b70 len=77",
+      "spans": [
+       {
+        "source_id": "ops-1",
+        "start": 1200,
+        "end": 1277
+       }
+      ],
+      "extractor_signature": "5f5775aa1ea4"
+     },
+     "channel": "atom_dense",
+     "rank": 10,
+     "score": -0.0962250233
+    }
+   ],
+   "context_candidates": [],
+   "omitted_context_ids": [],
+   "channel_counts": {
+    "lexical": 10,
+    "dense": 10,
+    "atom_lexical": 11,
+    "atom_dense": 14
+   },
+   "packed_tokens": 295,
+   "evidence_tokens": 295,
+   "tokenizer": "golden-words",
+   "omitted_ids": [
+    "285772c04e1a",
+    "db398e2eb16c",
+    "ec59b32ce1b7",
+    "344cfe86b6d4",
+    "a2a4047faf99",
+    "de6379d620a0",
+    "48f05df20d3d",
+    "7fd76b7c0bd2"
+   ],
+   "candidate_limit": 10,
+   "chunk_density": null,
+   "original_model_query_tokens": 6,
+   "model_query_tokens": 6,
+   "model_query_truncated": false,
+   "assistant_share": null,
+   "role_first_applied": false,
+   "role_boost_applied": false
+  },
+  "sources": [
+   {
+    "namespace": "golden",
+    "id": "ops-3",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 3,
+    "content": "sha256:be1d4940e609 len=44",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:31:00Z",
+    "session_seq": 3
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-1",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 1,
+    "content": "sha256:9228386ea129 len=1277",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "session_seq": 1
+   }
+  ]
+ }
+]
