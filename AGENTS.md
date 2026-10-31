@@ -11,6 +11,8 @@ Key locations:
 - Providers (embedders, rerankers): `src/mnemotree/evidence/providers.py`
 - Add/Search HTTP service: `src/mnemotree/evidence/server.py`
 - Public API: `src/mnemotree/memory.py` (`Memory`, `MemoryItem`, `Recall`)
+- CLI/MCP JSON config and the factory that opens an engine from it: `src/mnemotree/config.py`
+- Exceptions (`MnemotreeError`, `InvalidInput`, `ConfigurationError`, `IngestConflict`): `src/mnemotree/errors.py`
 - MCP stdio server: `src/mnemotree/mcp/` (standard library only), run as `mnemotree mcp`; the zero-config `mnemotree-mcp` package in `packages/mnemotree-mcp/` (a uv workspace member, released at the same version) adds fastembed and defaults to a local model (`FastEmbedEmbedder`, `DEFAULT_LOCAL_EMBEDDING` in `providers.py`)
 - CLI: `mnemotree-evidence` (`src/mnemotree/evidence/cli.py`), `mnemotree` with `mnemotree mcp` (`src/mnemotree/cli.py`), `mnemotree-mcp` (`packages/mnemotree-mcp/`)
 - Guide: `docs/GUIDE.md` (API, MCP, configuration, retrieval, atomic projections, AML service, evaluation, limits)

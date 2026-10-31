@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 # The serve extra's dependencies. A bare install that pulls them in has lost
 # the lean default.
@@ -144,7 +145,9 @@ def check_serve(*, bare: bool) -> None:
         )
 
 
-async def asgi_call(app, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
+async def asgi_call(
+    app: Any, method: str, path: str, body: dict[str, Any] | None = None
+) -> tuple[int, dict[str, Any]]:
     """One request through the app with no HTTP client: the serve extra has none."""
     import json
 
@@ -171,14 +174,14 @@ async def asgi_call(app, method: str, path: str, body: dict | None = None) -> tu
     status = 0
     chunks: list[bytes] = []
 
-    async def receive() -> dict:
+    async def receive() -> dict[str, Any]:
         nonlocal sent
         if sent:
             return {"type": "http.disconnect"}
         sent = True
         return {"type": "http.request", "body": payload, "more_body": False}
 
-    async def send(message: dict) -> None:
+    async def send(message: dict[str, Any]) -> None:
         nonlocal status
         if message["type"] == "http.response.start":
             status = message["status"]

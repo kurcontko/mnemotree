@@ -247,7 +247,8 @@ class SentenceTransformerEmbedder:
         result = await asyncio.to_thread(
             self.model.encode, list(texts), prompt=prompt, normalize_embeddings=True
         )
-        return result.tolist()
+        vectors: list[list[float]] = result.tolist()
+        return vectors
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         return await self._encode(texts, self.document_prompt)
@@ -397,13 +398,13 @@ class FastEmbedEmbedder:
         try:
             path = snapshot_download(**options, local_files_only=True)
             if all((Path(path) / name).is_file() for name in files):
-                return path
+                return str(path)
         except OSError:
             pass
         logger.info(
             "downloading embedding model %s@%s to %s", self.source, self.revision, self.cache_dir
         )
-        return snapshot_download(**options)
+        return str(snapshot_download(**options))
 
     def _encode(self, texts: Sequence[str], prompt: str) -> list[list[float]]:
         model = self._load()
