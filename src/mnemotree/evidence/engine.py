@@ -528,5 +528,9 @@ class Memory:
     def source(self, namespace: str, source_id: str) -> Source | None:
         return self.store.get_source(namespace, source_id)
 
+    def sources(self, namespace: str, source_ids: Sequence[str]) -> dict[str, Source]:
+        """The stored sources among ``source_ids``, from one snapshot."""
+        return self.store.get_sources(namespace, source_ids)
+
     def forget(self, namespace: str, source_id: str) -> bool:
         return self.store.forget(namespace, source_id)
