@@ -6,11 +6,14 @@ import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from mnemotree.errors import InvalidInput
 from mnemotree.evidence.temporal import annotate
+
+MAX_IDENTIFIER_CHARS = 256
 
 
 class Record(BaseModel):
@@ -139,6 +142,10 @@ class Evidence(Record):
     def members(self) -> tuple[Evidence, ...]:
         return (self.model_copy(update={"merged": ()}), *self.merged)
 
+    def spans(self) -> tuple[Evidence | ContextSpan, ...]:
+        """This anchor followed by its neighboring context spans."""
+        return (self, *self.neighbors)
+
     def source_ids(self) -> list[str]:
         return list(
             dict.fromkeys(
@@ -157,7 +164,7 @@ class Evidence(Record):
         """
         by_source: dict[str, list[Evidence | ContextSpan]] = {}
         for member in (self, *self.merged):
-            for span in (member, *member.neighbors):
+            for span in member.spans():
                 by_source.setdefault(span.source_id, []).append(span)
         lines: list[tuple[tuple[int, int], int | None, str]] = []
         for spans in by_source.values():
@@ -257,7 +264,7 @@ class SearchOptions(Record):
 class SearchTrace(Record):
     mode: str
     candidates: tuple[Candidate, ...]
-    atom_hits: tuple[dict, ...] = ()
+    atom_hits: tuple[dict[str, Any], ...] = ()
     context_candidates: tuple[ContextSpan, ...] = ()
     omitted_context_ids: tuple[str, ...] = ()
     channel_counts: dict[str, int]
@@ -289,7 +296,14 @@ def digest(value: object) -> str:
     return hashlib.sha256(serialized.encode()).hexdigest()
 
 
-def scope(value: str) -> str:
-    if not isinstance(value, str) or not value.strip() or len(value) > 256:
-        raise ValueError("namespace must be a nonblank string of at most 256 characters")
+def identifier(value: object, name: str) -> str:
+    """Return ``value`` if it is a usable namespace, request, session or user ID."""
+    if not isinstance(value, str) or not value.strip() or len(value) > MAX_IDENTIFIER_CHARS:
+        raise InvalidInput(
+            f"{name} must be a nonblank string of at most {MAX_IDENTIFIER_CHARS} characters"
+        )
     return value
+
+
+def scope(value: object) -> str:
+    return identifier(value, "namespace")

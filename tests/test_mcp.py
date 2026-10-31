@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 import mnemotree
-from mnemotree.evidence import cli as evidence_cli
+from mnemotree.config import Config
 from mnemotree.mcp import TOOLS, Server, serve_stdio, tools
 from mnemotree.mcp import server as mcp_server
 from mnemotree.mcp.server import PROTOCOL_VERSIONS, main, open_engine
@@ -284,7 +284,9 @@ def test_cli_requires_scope_and_an_explicit_retrieval_choice(tmp_path, capsys, m
         main(["--db", str(tmp_path / "m.db"), "--namespace", "t"])
     assert "--lexical" in capsys.readouterr().err
     config = tmp_path / "c.json"
-    config.write_text(json.dumps({"embedding": {"kind": "sentence-transformers", "model": "x"}}))
+    config.write_text(
+        json.dumps({"embedding": {"kind": "sentence-transformers", "model": "x", "revision": "r"}})
+    )
     with pytest.raises(SystemExit):
         main(
             ["--db", str(tmp_path / "m.db"), "--namespace", "t", "--config", str(config)]
@@ -333,13 +335,13 @@ def flaky_open(monkeypatch, errors):
             raise errors[len(calls) - 1]
         return "engine"
 
-    monkeypatch.setattr(evidence_cli, "open_memory", fake)
+    monkeypatch.setattr(mcp_server, "open_memory", fake)
     monkeypatch.setattr(mcp_server.time, "sleep", lambda seconds: None)
     return calls
 
 
 def test_open_engine_retries_only_a_locked_database(tmp_path, monkeypatch):
-    path, config = tmp_path / "m.db", evidence_cli.Config()
+    path, config = tmp_path / "m.db", Config()
     locked = sqlite3.OperationalError("database is locked")
     calls = flaky_open(monkeypatch, [locked, locked])
     assert open_engine(path, config) == "engine"
@@ -352,7 +354,7 @@ def test_open_engine_retries_only_a_locked_database(tmp_path, monkeypatch):
 
 
 def test_open_engine_gives_up_after_its_attempts(tmp_path, monkeypatch):
-    path, config = tmp_path / "m.db", evidence_cli.Config()
+    path, config = tmp_path / "m.db", Config()
     calls = flaky_open(monkeypatch, [sqlite3.OperationalError("database is locked")] * 6)
     with pytest.raises(sqlite3.OperationalError, match="locked"):
         open_engine(path, config)

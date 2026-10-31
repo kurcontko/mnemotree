@@ -9,7 +9,7 @@ import json
 import logging
 import secrets
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -25,9 +25,9 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from ..errors import ConfigurationError, IngestConflict
 from .engine import Memory
 from .models import Evidence, Message, SearchOptions, scope
-from .store import IngestConflict
 
 # The platform never retries a 4xx, so an additive contract field must not fail a
 # whole run: request models ignore unknown keys (internal Records stay strict), and
@@ -103,7 +103,7 @@ def returned_role_chars(evidence: Sequence[Evidence]) -> dict[str, int]:
     spans: dict[tuple[str, str], list[tuple[int, int]]] = {}
     for item in evidence:
         for member in item.members():
-            for span in (member, *member.neighbors):
+            for span in member.spans():
                 spans.setdefault((span.source_id, span.role), []).append((span.start, span.end))
     counts: Counter[str] = Counter()
     for (_, role), ranges in spans.items():
@@ -253,13 +253,15 @@ def create_app(
         # Every Add would fail, and the client would be told to retry forever.
         raise ValueError("a dense database requires its configured embedder")
     if options.representation != "raw" and memory.store.extractor_config is None:
-        raise ValueError("atom retrieval service requires an extracted corpus")
+        raise ConfigurationError("atom retrieval service requires an extracted corpus")
     app = FastAPI(
         title="Mnemotree evidence memory", docs_url=None, redoc_url=None, openapi_url=None
     )
 
     @app.middleware("http")
-    async def log_requests(http: HTTPRequest, call_next):
+    async def log_requests(
+        http: HTTPRequest, call_next: Callable[[HTTPRequest], Awaitable[Response]]
+    ) -> Response:
         started = perf_counter()
         http.state.ts = utc_now()
         http.state.seq = next(_SEQ)
@@ -291,7 +293,7 @@ def create_app(
             emit(record, request_log)
 
     @app.exception_handler(RequestValidationError)
-    async def validation_failed(http: HTTPRequest, exc: RequestValidationError):
+    async def validation_failed(http: HTTPRequest, exc: RequestValidationError) -> Response:
         # Locations and messages only: an error's input may be message content.
         errors = exc.errors()
         detail = [
@@ -302,7 +304,7 @@ def create_app(
         return await request_validation_exception_handler(http, exc)
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_failed(http: HTTPRequest, exc: StarletteHTTPException):
+    async def http_failed(http: HTTPRequest, exc: StarletteHTTPException) -> Response:
         note(http, detail=exc.detail)
         return await http_exception_handler(http, exc)
 
@@ -319,7 +321,7 @@ def create_app(
             raise HTTPException(status_code=401, detail="invalid credentials")
 
     @app.get("/health")
-    def health():
+    def health() -> dict[str, str]:
         return {"status": "ok"}
 
     # The platform probes both routes with HEAD (and the key) before a run; a 405
@@ -330,7 +332,7 @@ def create_app(
         return Response(status_code=200)
 
     @app.post("/v1/memories/add", dependencies=[Depends(authorize)])
-    async def add(request: AddRequest, http: HTTPRequest):
+    async def add(request: AddRequest, http: HTTPRequest) -> dict[str, Any]:
         sample("add", request, http)
         received = request.messages
         note(
@@ -380,7 +382,7 @@ def create_app(
         }
 
     @app.post("/v1/memories/search", dependencies=[Depends(authorize)])
-    async def search(request: SearchRequest, http: HTTPRequest):
+    async def search(request: SearchRequest, http: HTTPRequest) -> dict[str, Any]:
         sample("search", request, http)
         limit = min(request.top_k, MAX_TOP_K)
         note(
@@ -441,7 +443,7 @@ def create_app(
     return app
 
 
-def response_item(item: Evidence) -> dict:
+def response_item(item: Evidence) -> dict[str, Any]:
     value: dict[str, object] = {
         "id": item.id,
         "content": item.render(),
@@ -452,7 +454,7 @@ def response_item(item: Evidence) -> dict:
     timestamps = [
         span.timestamp
         for member in item.members()
-        for span in (member, *member.neighbors)
+        for span in member.spans()
         if span.timestamp is not None
     ]
     if timestamps:

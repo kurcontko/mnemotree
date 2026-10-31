@@ -69,15 +69,22 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "PIE"]
+select = [
+    "E", "W", "F", "I", "B", "UP", "SIM", "C4", "PIE",
+    "RUF", "PERF", "FURB", "RET", "PGH", "LOG", "G", "FLY", "ISC", "DTZ", "ASYNC", "BLE",
+]
 # UP042: StrEnum changes str()/format() output of enum members, which would alter serialized values
-ignore = ["E501", "B008", "UP042"]
+# RUF005, FURB167: unpacking over list concatenation and re.IGNORECASE over re.I are
+# taste; the rewrites reflow tables of patterns and argv lists for no gain.
+ignore = ["E501", "B008", "UP042", "RUF005", "FURB167"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["mnemotree"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+# CJK and full-width punctuation in fixtures are deliberate test data.
+"tests/**" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -88,19 +95,19 @@ indent-style = "space"
 python_version = "3.11"
 files = ["src/mnemotree"]
 mypy_path = "src"
-follow_imports = "skip"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# Optional extras without type information; each is imported only where it is used.
+[[tool.mypy.overrides]]
+module = ["sqlite_vec", "sentence_transformers", "sentence_transformers.*", "uvicorn"]
 ignore_missing_imports = true
-warn_return_any = false
-warn_unused_configs = true
-disallow_untyped_defs = false
-check_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_decorators = false
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = false
 
 [project.scripts]
 mnemotree-evidence = "mnemotree.evidence.cli:main"

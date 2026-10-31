@@ -10,9 +10,11 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import sqlite_vec
 
+from ..errors import ConfigurationError, IngestConflict
 from .atom_store import AtomStore
 from .atoms import Atom
 from .lexical import FTS_TOKENIZER, index_text, scope_token, scoped_match
@@ -52,10 +54,6 @@ END;
 SCHEMA_VERSION = "4"
 
 
-class IngestConflict(ValueError):
-    """A request or source ID was reused for a different occurrence."""
-
-
 def vector_blob(values: Sequence[float], dimensions: int) -> bytes:
     if len(values) != dimensions:
         raise ValueError(f"expected {dimensions} embedding dimensions, got {len(values)}")
@@ -87,7 +85,7 @@ class SQLiteEvidenceStore:
         path: str | Path,
         *,
         embedding_spec: EmbeddingSpec | None = None,
-        extractor_config: dict | None = None,
+        extractor_config: dict[str, Any] | None = None,
     ):
         self._lock = threading.RLock()
         self.db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
@@ -111,7 +109,7 @@ class SQLiteEvidenceStore:
                     "SELECT value FROM evidence_config WHERE key='schema_version'"
                 ).fetchone()
                 if version and version[0] != SCHEMA_VERSION:
-                    raise ValueError(
+                    raise ConfigurationError(
                         f"unsupported evidence schema version {version[0]!r} (this build reads "
                         f"{SCHEMA_VERSION!r}); rebuild into a fresh database"
                     )
@@ -127,12 +125,14 @@ class SQLiteEvidenceStore:
                 ).fetchone()
                 self.embedding_spec = EmbeddingSpec.model_validate_json(row[0]) if row else None
                 if embedding_spec and self.embedding_spec and embedding_spec != self.embedding_spec:
-                    raise ValueError(
+                    raise ConfigurationError(
                         "embedding signature mismatch; use a separately rebuilt database"
                     )
                 if embedding_spec and not self.embedding_spec:
                     if self.db.execute("SELECT 1 FROM evidence_chunks LIMIT 1").fetchone():
-                        raise ValueError("existing lexical corpus needs an explicit vector rebuild")
+                        raise ConfigurationError(
+                            "existing lexical corpus needs an explicit vector rebuild"
+                        )
                     self.embedding_spec = embedding_spec
                     self.db.execute(
                         "INSERT INTO evidence_config VALUES('embedding_spec', ?)",
@@ -267,9 +267,13 @@ class SQLiteEvidenceStore:
                 if current_embedding
                 else None
             ) != self.embedding_spec:
-                raise ValueError("database configuration changed; reopen this Memory instance")
+                raise ConfigurationError(
+                    "database configuration changed; reopen this Memory instance"
+                )
             if self.atoms.configure(self.extractor_config) != self.extractor_config:
-                raise ValueError("database configuration changed; reopen this Memory instance")
+                raise ConfigurationError(
+                    "database configuration changed; reopen this Memory instance"
+                )
             replay = self.receipt(namespace, request_id, body_hash)
             if replay:
                 return replay
@@ -422,7 +426,7 @@ class SQLiteEvidenceStore:
     ) -> list[tuple[Chunk, float]]:
         scope(namespace)
         if self.embedding_spec is None:
-            raise ValueError("dense retrieval needs an indexed embedding model")
+            raise ConfigurationError("dense retrieval needs an indexed embedding model")
         blob = vector_blob(vector, self.embedding_spec.dimensions)
         with self._lock:
             rows = self.db.execute(
