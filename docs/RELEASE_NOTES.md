@@ -30,5 +30,8 @@ service are optional extras. See the [guide](GUIDE.md) for their configuration.
   source's local calendar day. Earlier snapshots normalized timestamps to UTC;
   their original offsets cannot be recovered from existing records. Reingest
   original messages into a fresh database if those offsets are needed.
+- A timestamp's offset is part of a request's payload identity. Replaying a
+  `request_id` with the same instant at a different offset raises `IngestConflict`,
+  so a retry should resend the original timestamp unchanged.
 - HTTP embeddings require Tenacity 9.2.1 or later, matching the retry API in use.
 - Distributions include `py.typed`, and the development extra includes `build`.

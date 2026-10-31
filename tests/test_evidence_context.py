@@ -359,6 +359,43 @@ def test_render_appends_resolved_dates():
     assert render_line(None, "Caroline", "I went yesterday.") == "Caroline: I went yesterday."
 
 
+def test_render_keeps_the_offset_of_each_equal_instant():
+    from datetime import datetime, timedelta, timezone
+
+    from mnemotree.evidence.models import render_line
+
+    utc = datetime(2023, 5, 8, 23, 30, tzinfo=UTC)
+    tokyo = utc.astimezone(timezone(timedelta(hours=9)))
+    assert utc == tokyo
+    # Equal instants hash alike, so a cache keyed on the instant alone would mix these up.
+    assert render_line(utc, "user", "I went yesterday.") == (
+        "[2023-05-08 Mon 23:30 UTC] user: I went yesterday. (yesterday = Sunday, 7 May 2023)"
+    )
+    assert render_line(tokyo, "user", "I went yesterday.") == (
+        "[2023-05-09 Tue 08:30 UTC+09:00] user: I went yesterday. (yesterday = Monday, 8 May 2023)"
+    )
+
+
+async def test_time_order_compares_instants_across_offsets(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    # Earlier as an instant, later on the wall clock.
+    tokyo = datetime(2023, 5, 9, 8, 30, tzinfo=timezone(timedelta(hours=9)))
+    utc = datetime(2023, 5, 8, 23, 45, tzinfo=UTC)
+    with Memory(tmp_path / "m.db") as memory:
+        for id, when in (("second", utc), ("first", tokyo)):
+            await memory.add(
+                "u",
+                [Message(id=id, content="Kayak club notes.", timestamp=when)],
+                request_id=id,
+                session_id=id,
+            )
+        result = await memory.search(
+            "u", "kayak", options=SearchOptions(mode="lexical", order="time")
+        )
+        assert [item.source_id for item in result.evidence] == ["first", "second"]
+
+
 async def test_time_order_returns_selected_items_chronologically(tmp_path):
     from datetime import datetime
 
