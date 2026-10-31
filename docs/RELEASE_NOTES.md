@@ -1,4 +1,4 @@
-# 0.5.0 (unreleased)
+# 1.0.0 (2026-10-31)
 
 Mnemotree now stores original messages in SQLite and retrieves source evidence.
 The public `Memory` API binds one namespace and provides `remember`,
