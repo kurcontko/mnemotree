@@ -10,7 +10,7 @@ from pathlib import Path
 from time import perf_counter
 
 from ..errors import ConfigurationError, InvalidInput
-from .atoms import AtomHit, Extractor, extract_atoms
+from .atoms import Atom, AtomHit, Extractor, extract_atoms
 from .chunking import chunk_source
 from .models import (
     Candidate,
@@ -218,21 +218,7 @@ class Memory:
         ]
         # Network/provider work is outside the write transaction. A failure leaves
         # no half-ingested sources or acknowledged-but-unindexed memories.
-        vectors = (
-            await self.embedder.embed_documents([chunk.text for chunk in chunks])
-            if self.embedder
-            else None
-        )
-        atoms = (
-            await extract_atoms(
-                self.extractor,
-                sources,
-                max_chars=self.extraction_batch_chars,
-                signature=digest(self.store.extractor_config),
-            )
-            if self.extractor
-            else []
-        )
+        vectors, atoms = await self._embed_and_extract(sources, chunks)
         atom_vectors = (
             await self.embedder.embed_documents([atom.text for atom in atoms])
             if self.embedder and atoms
@@ -249,6 +235,41 @@ class Memory:
             vectors,
             atoms,
             atom_vectors,
+        )
+
+    async def _embed_and_extract(
+        self, sources: Sequence[Source], chunks: Sequence[Chunk]
+    ) -> tuple[Sequence[Sequence[float]] | None, list[Atom]]:
+        """Embed the chunks and extract atoms; with both providers, concurrently."""
+        embedder, extractor = self.embedder, self.extractor
+        texts = [chunk.text for chunk in chunks]
+        if embedder is None or extractor is None:
+            vectors = await embedder.embed_documents(texts) if embedder else None
+            atoms = await self._extract(extractor, sources) if extractor else []
+            return vectors, atoms
+        try:
+            async with asyncio.TaskGroup() as group:
+                embedding = group.create_task(embedder.embed_documents(texts))
+                extraction = group.create_task(self._extract(extractor, sources))
+        except ExceptionGroup:
+            # Raise the provider's own exception, as the sequential path does; a
+            # group would hide it from callers that catch its type.
+            errors = [
+                error
+                for task in (embedding, extraction)
+                if task.done() and not task.cancelled() and (error := task.exception()) is not None
+            ]
+        else:
+            return embedding.result(), extraction.result()
+        # Raised outside the handler so the error keeps its own cause and context.
+        raise errors[0]
+
+    async def _extract(self, extractor: Extractor, sources: Sequence[Source]) -> list[Atom]:
+        return await extract_atoms(
+            extractor,
+            sources,
+            max_chars=self.extraction_batch_chars,
+            signature=digest(self.store.extractor_config),
         )
 
     async def search(
