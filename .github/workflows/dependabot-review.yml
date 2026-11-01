@@ -216,7 +216,7 @@ jobs:
             exit 1
           fi
 
-      - uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+      - uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         id: claude
         if: steps.pr.outputs.skip != 'true'
         with:
