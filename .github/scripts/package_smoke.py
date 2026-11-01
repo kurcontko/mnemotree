@@ -194,6 +194,23 @@ async def evidence_roundtrip(workdir: Path) -> None:
         ], result.evidence
 
 
+def check_legacy_paths(*, bare: bool) -> None:
+    """The 1.0 mnemotree.evidence.<module> paths resolve to the moved modules."""
+    moved = {
+        "engine": "mnemotree.engine",
+        "models": "mnemotree.core.models",
+        "store": "mnemotree.storage.store",
+        "atoms": "mnemotree.ingest.atoms",
+        "providers": "mnemotree.providers.embeddings",
+        "cli": "mnemotree.cli.evidence",
+    }
+    if not bare:
+        moved["server"] = "mnemotree.service.app"
+    for old, new in moved.items():
+        module = importlib.import_module(f"mnemotree.evidence.{old}")
+        assert module is importlib.import_module(new), (old, new)
+
+
 def main() -> None:
     bare = "--bare" in sys.argv
     version = importlib.metadata.version("mnemotree")
@@ -203,6 +220,7 @@ def main() -> None:
     check_cli(version)
     check_evidence_cli()
     check_serve(bare=bare)
+    check_legacy_paths(bare=bare)
     with tempfile.TemporaryDirectory() as tmp:
         asyncio.run(memory_roundtrip(Path(tmp)))
         check_mcp(Path(tmp))
