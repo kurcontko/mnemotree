@@ -1,6 +1,6 @@
 """Deterministic overlapping source spans; never rewrite the original text."""
 
-from .models import Chunk, digest
+from ..core.models import Chunk, digest
 
 
 def chunk_source(source_id: str, text: str, *, size: int, overlap: int) -> list[Chunk]:

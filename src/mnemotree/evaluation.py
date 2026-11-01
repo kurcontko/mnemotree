@@ -14,8 +14,8 @@ from typing import Any
 
 from pydantic import Field, field_validator, model_validator
 
+from .core.models import Message, Record, SearchOptions, digest, scope
 from .engine import Memory
-from .models import Message, Record, SearchOptions, digest, scope
 
 
 class CorpusRecord(Record):

@@ -23,9 +23,9 @@ from typing import IO, TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from ..config import Config, open_memory
-from ..evidence.models import scope
-from ..evidence.providers import EmbedderUnavailable
+from ..core.models import scope
 from ..memory import Memory
+from ..providers.embeddings import EmbedderUnavailable
 from .tools import TOOLS
 
 if TYPE_CHECKING:

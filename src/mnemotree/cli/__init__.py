@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     # Dispatched before parsing so every server flag, --help included, reaches the
     # server's own parser.
     if argv[:1] == ["mcp"]:
-        from .mcp.server import main as mcp
+        from ..mcp.server import main as mcp
 
         # No default embedder: the library does not install a local model, so
         # keyword-only retrieval and an embedding config stay explicit choices.

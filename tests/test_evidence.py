@@ -5,6 +5,8 @@ from importlib import import_module
 
 import pytest
 
+from mnemotree.core.models import Chunk
+from mnemotree.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
 from mnemotree.evidence import (
     EmbeddingSpec,
     IngestConflict,
@@ -13,11 +15,9 @@ from mnemotree.evidence import (
     Message,
     SearchOptions,
 )
-from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
-from mnemotree.evidence.lexical import fts_table
-from mnemotree.evidence.models import Chunk
-from mnemotree.evidence.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
-from mnemotree.evidence.store import CHUNK_FTS, vector_blob
+from mnemotree.retrieval.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
+from mnemotree.storage.lexical import fts_table
+from mnemotree.storage.store import CHUNK_FTS, vector_blob
 
 
 class ToyEmbedder:
@@ -652,7 +652,7 @@ def test_counter_by_piece_matches_whole_text(encoding):
 
 
 def test_model_query_is_token_aware():
-    from mnemotree.evidence.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, model_query
+    from mnemotree.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, model_query
 
     counter = TiktokenCounter("o200k_base")
     latin = (

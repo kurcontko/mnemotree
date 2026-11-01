@@ -12,12 +12,14 @@ from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .models import EmbeddingSpec
+from ..core.models import EmbeddingSpec
 
 if TYPE_CHECKING:
     from tenacity import AsyncRetrying
 
-logger = logging.getLogger(__name__)
+# The 1.0 logger name: logging configuration addresses it, and the CLI
+# attaches its handler to "mnemotree.evidence".
+logger = logging.getLogger("mnemotree.evidence.providers")
 
 
 class OpenAIEmbedder:

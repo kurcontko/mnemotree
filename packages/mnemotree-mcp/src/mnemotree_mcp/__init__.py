@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from mnemotree.evidence.providers import DEFAULT_LOCAL_EMBEDDING
 from mnemotree.mcp.server import main as serve
+from mnemotree.providers.embeddings import DEFAULT_LOCAL_EMBEDDING
 
 
 def main(argv: list[str] | None = None) -> int:

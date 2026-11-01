@@ -10,8 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from mnemotree.core.temporal import annotate
 from mnemotree.errors import InvalidInput
-from mnemotree.evidence.temporal import annotate
 
 MAX_IDENTIFIER_CHARS = 256
 

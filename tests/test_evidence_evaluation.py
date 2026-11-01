@@ -3,8 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.evidence.evaluation import (
+from mnemotree.evaluation import (
     AnswerSpan,
     QueryRecord,
     _answer_span_coverage,
@@ -13,6 +12,7 @@ from mnemotree.evidence.evaluation import (
     retrieval_variants,
     score_queries,
 )
+from mnemotree.evidence import Memory, Message, SearchOptions
 
 
 def write_rows(path, rows):
