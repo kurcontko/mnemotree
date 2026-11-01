@@ -9,10 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
 
-from ..errors import ConfigurationError, InvalidInput
-from .atoms import Atom, AtomHit, Extractor, extract_atoms
-from .chunking import chunk_source
-from .models import (
+from .core.models import (
     Candidate,
     Chunk,
     ContextSpan,
@@ -27,13 +24,16 @@ from .models import (
     identifier,
     scope,
 )
-from .packing import Packed, TiktokenCounter, pack
-from .protocols import Embedder, Reranker, TokenCounter
+from .core.protocols import Embedder, Reranker, TokenCounter
+from .errors import ConfigurationError, InvalidInput
+from .ingest.atoms import Atom, AtomHit, Extractor, extract_atoms
+from .ingest.chunking import chunk_source
+from .retrieval.packing import Packed, TiktokenCounter, pack
 
 # Re-exported: these lived here before ranking.py held the pure ranking steps.
-from .ranking import QUERY_EMBED_CHARS as QUERY_EMBED_CHARS
-from .ranking import QUERY_EMBED_TOKENS as QUERY_EMBED_TOKENS
-from .ranking import (
+from .retrieval.ranking import QUERY_EMBED_CHARS as QUERY_EMBED_CHARS
+from .retrieval.ranking import QUERY_EMBED_TOKENS as QUERY_EMBED_TOKENS
+from .retrieval.ranking import (
     RolePolicy,
     boost_role,
     by_rerank,
@@ -45,7 +45,7 @@ from .ranking import (
     role_first,
     role_policy,
 )
-from .store import SQLiteEvidenceStore, Window, now, vector_blob
+from .storage.store import SQLiteEvidenceStore, Window, now, vector_blob
 
 __all__ = [
     "QUERY_EMBED_CHARS",

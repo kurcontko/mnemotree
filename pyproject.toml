@@ -122,6 +122,6 @@ module = [
 ignore_missing_imports = true
 
 [project.scripts]
-mnemotree-evidence = "mnemotree.evidence.cli:main"
+mnemotree-evidence = "mnemotree.cli.evidence:main"
 # mnemotree-mcp comes from the mnemotree-mcp distribution; here it is `mnemotree mcp`.
 mnemotree = "mnemotree.cli:main"

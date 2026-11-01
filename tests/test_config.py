@@ -5,15 +5,15 @@ import pytest
 from pydantic import ValidationError
 
 from mnemotree import ConfigurationError, IngestConflict, InvalidInput, MnemotreeError
+from mnemotree.cli import evidence as evidence_cli
 from mnemotree.config import (
     Config,
     OpenAIEmbeddingConfig,
     OpenAIExtractionConfig,
     SentenceTransformerEmbeddingConfig,
 )
+from mnemotree.core.models import EmbeddingSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.evidence import cli as evidence_cli
-from mnemotree.evidence.models import EmbeddingSpec
 
 ROOT = Path(__file__).resolve().parents[1]
 

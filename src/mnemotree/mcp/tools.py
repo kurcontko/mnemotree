@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..evidence.models import Message
+from ..core.models import Message
 from ..memory import Memory, MemoryItem
 
 

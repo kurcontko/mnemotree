@@ -8,8 +8,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import NamedTuple
 
-from .models import Candidate, ChannelScore, Chunk, Evidence, SearchOptions
-from .protocols import TokenCounter
+from ..core.models import Candidate, ChannelScore, Chunk, Evidence, SearchOptions
+from ..core.protocols import TokenCounter
 
 # Cap the final model input with the configured tokenizer. The service tokenizer
 # is a proxy for the provider's tokenizer, so keep margin below its 8,192 limit.

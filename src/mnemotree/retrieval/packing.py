@@ -8,8 +8,8 @@ from typing import NamedTuple
 
 import tiktoken
 
-from .models import ContextSpan, Evidence
-from .protocols import TokenCounter
+from ..core.models import ContextSpan, Evidence
+from ..core.protocols import TokenCounter
 
 # In these encodings no pre-token runs past a line break followed by anything but
 # whitespace or "/", so the pieces between such breaks count exactly as the whole.

@@ -25,7 +25,7 @@ from typing import Any
 SERVE_MODULES = ("fastapi", "uvicorn")
 # The embeddings and lite extras' dependencies, which neither variant installs.
 # If one starts arriving transitively, the lazy-import paths in
-# mnemotree.evidence stop being exercised anywhere, so fail loudly instead.
+# mnemotree stop being exercised anywhere, so fail loudly instead.
 # fastembed comes only with mnemotree-mcp.
 OPTIONAL_MODULES = (
     "httpx",
@@ -124,7 +124,7 @@ def check_mcp_package(version: str) -> None:
 
 def check_default_model() -> None:
     """The installed fastembed knows the pinned model, so its files resolve offline."""
-    from mnemotree.evidence.providers import DEFAULT_LOCAL_EMBEDDING, FastEmbedEmbedder
+    from mnemotree.providers.embeddings import DEFAULT_LOCAL_EMBEDDING, FastEmbedEmbedder
 
     settings = dict(DEFAULT_LOCAL_EMBEDDING)
     settings.pop("kind")
@@ -196,7 +196,7 @@ async def asgi_call(
 async def service_roundtrip(workdir: Path) -> None:
     """Build the AML app and send Add and Search through its routes and middleware."""
     from mnemotree.evidence import Memory
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     with Memory(workdir / "service.sqlite") as memory:
         app = create_app(memory, api_key="smoke-key")

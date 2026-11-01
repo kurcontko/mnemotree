@@ -10,11 +10,11 @@ import re
 
 import pytest
 
+from mnemotree.core.models import EmbeddingSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.evidence.atom_store import ATOM_FTS
-from mnemotree.evidence.atoms import AtomDraft, Citation, ExtractorSpec
-from mnemotree.evidence.lexical import fts_table
-from mnemotree.evidence.models import EmbeddingSpec
+from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec
+from mnemotree.storage.atom_store import ATOM_FTS
+from mnemotree.storage.lexical import fts_table
 
 ALICE = [
     ("user", "I keep an apple in my bag for the commute."),
@@ -67,7 +67,7 @@ class OneAtomPerPassage:
 
 def aml_preset(memory: Memory) -> SearchOptions:
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import aml_options
+    from mnemotree.service.app import aml_options
 
     return aml_options(memory)
 
