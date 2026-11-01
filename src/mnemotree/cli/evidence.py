@@ -17,7 +17,7 @@ from pathlib import Path
 # here keeps working.
 from ..config import Config, open_memory, secret
 from ..core.models import SearchOptions
-from ..engine import Memory
+from ..engine import EvidenceEngine
 from ..evaluation import (
     CorpusRecord,
     ablate,
@@ -202,7 +202,7 @@ def main() -> None:
             asyncio.run(run(args, memory, options))
 
 
-async def run(args: argparse.Namespace, memory: Memory, options: SearchOptions) -> None:
+async def run(args: argparse.Namespace, memory: EvidenceEngine, options: SearchOptions) -> None:
     if args.command == "add":
         for value in read_jsonl(args.corpus):
             record = CorpusRecord.model_validate(value)

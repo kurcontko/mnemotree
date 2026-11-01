@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import Field, field_validator, model_validator
 
 from .core.models import Message, Record, SearchOptions, digest, scope
-from .engine import Memory
+from .engine import EvidenceEngine
 
 
 class CorpusRecord(Record):
@@ -102,14 +102,19 @@ def file_hash(path: Path) -> str:
 
 
 async def evaluate(
-    memory: Memory, corpus: Path, queries: Path, options: SearchOptions, *, candidate_k: int = 100
+    memory: EvidenceEngine,
+    corpus: Path,
+    queries: Path,
+    options: SearchOptions,
+    *,
+    candidate_k: int = 100,
 ) -> dict[str, Any]:
     ingestion = await ingest_corpus(memory, corpus)
     return await score_queries(memory, corpus, queries, options, ingestion, candidate_k=candidate_k)
 
 
 async def ablate(
-    memory: Memory, corpus: Path, queries: Path, options: SearchOptions
+    memory: EvidenceEngine, corpus: Path, queries: Path, options: SearchOptions
 ) -> dict[str, Any]:
     if memory.extractor is None:
         raise ValueError("atomic ablation requires an extractor")
@@ -128,7 +133,7 @@ async def ablate(
 
 
 async def ablate_context(
-    memory: Memory, corpus: Path, queries: Path, options: SearchOptions
+    memory: EvidenceEngine, corpus: Path, queries: Path, options: SearchOptions
 ) -> dict[str, Any]:
     ingestion = await ingest_corpus(memory, corpus)
     reports = {}
@@ -144,7 +149,7 @@ async def ablate_context(
     }
 
 
-def retrieval_variants(memory: Memory, options: SearchOptions) -> dict[str, SearchOptions]:
+def retrieval_variants(memory: EvidenceEngine, options: SearchOptions) -> dict[str, SearchOptions]:
     """One policy dimension at a time; every arm is validated, never model_copy."""
     variants: dict[str, dict[str, Any]] = {
         "baseline": {},
@@ -172,7 +177,12 @@ def retrieval_variants(memory: Memory, options: SearchOptions) -> dict[str, Sear
 
 
 async def ablate_retrieval(
-    memory: Memory, corpus: Path, queries: Path, options: SearchOptions, *, candidate_k: int = 100
+    memory: EvidenceEngine,
+    corpus: Path,
+    queries: Path,
+    options: SearchOptions,
+    *,
+    candidate_k: int = 100,
 ) -> dict[str, Any]:
     variants = retrieval_variants(memory, options)
     ingestion = await ingest_corpus(memory, corpus)
@@ -188,7 +198,7 @@ async def ablate_retrieval(
     }
 
 
-async def ingest_corpus(memory: Memory, corpus: Path) -> dict[str, Any]:
+async def ingest_corpus(memory: EvidenceEngine, corpus: Path) -> dict[str, Any]:
     # Reject contaminated runs, including forgotten-source receipts.
     if memory.store.db.execute("SELECT 1 FROM evidence_requests LIMIT 1").fetchone():
         raise ValueError("evaluation requires a fresh empty database")
@@ -258,7 +268,7 @@ def _answer_span_coverage(
 
 
 async def score_queries(
-    memory: Memory,
+    memory: EvidenceEngine,
     corpus: Path,
     queries: Path,
     options: SearchOptions,

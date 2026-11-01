@@ -62,6 +62,17 @@ def test_names_used_from_the_old_paths_still_import():
     assert CHUNK_FTS and vector_blob
 
 
+def test_the_engine_keeps_its_1_0_name():
+    from mnemotree.engine import Memory as EngineMemory
+    from mnemotree.evidence.engine import Memory as OldEngineMemory
+
+    assert mnemotree.EvidenceEngine is mnemotree.evidence.EvidenceEngine
+    assert mnemotree.evidence.Memory is mnemotree.EvidenceEngine
+    assert EngineMemory is OldEngineMemory is mnemotree.EvidenceEngine
+    # The namespace-bound API is a different class and keeps its own name.
+    assert mnemotree.Memory is not mnemotree.EvidenceEngine
+
+
 def test_patching_through_an_old_path_reaches_the_moved_module(monkeypatch):
     from mnemotree.evidence import store as old
     from mnemotree.storage import store as new

@@ -15,7 +15,7 @@ from pydantic import Field, model_validator
 
 from .core.models import Record, SearchOptions
 from .core.protocols import Embedder
-from .engine import Memory
+from .engine import EvidenceEngine
 from .ingest.atoms import Extractor
 from .retrieval.packing import TiktokenCounter
 
@@ -106,11 +106,11 @@ class Config(Record):
     search: SearchOptions | None = None
 
 
-def open_memory(path: Path, config: Config) -> Memory:
+def open_memory(path: Path, config: Config) -> EvidenceEngine:
     """Open the engine at ``path`` with the providers ``config`` selects."""
     extractor = config.extraction.build() if config.extraction is not None else None
     embedder = config.embedding.build() if config.embedding is not None else None
-    return Memory(
+    return EvidenceEngine(
         path,
         embedder=embedder,
         chunk_size=config.chunk_size,

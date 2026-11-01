@@ -1,4 +1,4 @@
-"""Textual AML Add/Search contract; the caller owns the Memory lifecycle."""
+"""Textual AML Add/Search contract; the caller owns the engine's lifecycle."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..core.models import Evidence, Message, SearchOptions, scope
-from ..engine import Memory
+from ..engine import EvidenceEngine
 from ..errors import ConfigurationError, IngestConflict
 
 # The platform never retries a 4xx, so an additive contract field must not fail a
@@ -168,7 +168,7 @@ class SearchRequest(Request):
 AML_TOKEN_BUDGET = 8_000
 
 
-def aml_options(memory: Memory) -> SearchOptions:
+def aml_options(memory: EvidenceEngine) -> SearchOptions:
     """Service defaults: adjacent turns merged into passages, within 8K tokens."""
     return SearchOptions(
         mode="hybrid" if memory.embedder else "lexical",
@@ -191,7 +191,7 @@ def aml_options(memory: Memory) -> SearchOptions:
 
 
 def create_app(
-    memory: Memory,
+    memory: EvidenceEngine,
     *,
     api_key: str,
     options: SearchOptions | None = None,
@@ -390,7 +390,7 @@ def create_app(
         if not request.query.strip():
             raise HTTPException(status_code=422, detail="query must not be blank")
         # Keep explicit option boundaries for the bounded lexical term allocation.
-        # Memory still combines the stem and options in order for model inputs.
+        # The engine still combines the stem and options in order for model inputs.
         # Returning fewer than top_k is valid; returning more is a contract error.
         search_options = options.model_copy(
             update={"limit": limit, "candidate_limit": max(options.candidate_limit, limit)}
