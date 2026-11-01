@@ -119,8 +119,7 @@ class OneAtomPerPassage:
 
 
 def aml_preset() -> dict[str, Any]:
-    pytest.importorskip("fastapi")
-    from mnemotree.service.app import aml_options
+    from mnemotree.service.presets import aml_options
 
     class Embedded:
         embedder = True

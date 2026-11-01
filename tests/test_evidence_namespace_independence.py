@@ -66,8 +66,7 @@ class OneAtomPerPassage:
 
 
 def aml_preset(memory: Memory) -> SearchOptions:
-    pytest.importorskip("fastapi")
-    from mnemotree.service.app import aml_options
+    from mnemotree.service.presets import aml_options
 
     return aml_options(memory)
 
