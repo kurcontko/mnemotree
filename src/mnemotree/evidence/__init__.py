@@ -14,13 +14,14 @@ from ..core.models import (
     SearchOptions,
     SearchResult,
 )
-from ..engine import Memory
+from ..engine import EvidenceEngine, Memory
 from ..errors import ConfigurationError, IngestConflict, InvalidInput, MnemotreeError
 
 __all__ = [
     "ConfigurationError",
     "EmbeddingSpec",
     "Evidence",
+    "EvidenceEngine",
     "IngestConflict",
     "IngestReceipt",
     "InvalidInput",

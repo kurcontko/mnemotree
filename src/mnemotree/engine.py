@@ -50,6 +50,7 @@ from .storage.store import SQLiteEvidenceStore, Window, now, vector_blob
 __all__ = [
     "QUERY_EMBED_CHARS",
     "QUERY_EMBED_TOKENS",
+    "EvidenceEngine",
     "Memory",
     "cap_per_source",
     "chronological",
@@ -122,10 +123,10 @@ def to_evidence(
     )
 
 
-class Memory:
-    """Local evidence memory, independent of legacy cognitive enrichment.
+class EvidenceEngine:
+    """Source-first memory over one SQLite file, with every namespace passed per call.
 
-    Configure an embedder for dense/hybrid retrieval; otherwise the default is
+    ``mnemotree.Memory`` binds one namespace over an engine. Configure an embedder for dense/hybrid retrieval; otherwise the default is
     lexical-only. Explicit dense/hybrid requests never silently fall back.
     """
 
@@ -166,7 +167,7 @@ class Memory:
     def close(self) -> None:
         self.store.close()
 
-    def __enter__(self) -> Memory:
+    def __enter__(self) -> EvidenceEngine:
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -555,3 +556,7 @@ class Memory:
 
     def forget(self, namespace: str, source_id: str) -> bool:
         return self.store.forget(namespace, source_id)
+
+
+# The 1.0 name, kept for ``mnemotree.evidence.Memory`` and existing callers.
+Memory = EvidenceEngine

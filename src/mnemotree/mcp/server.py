@@ -29,7 +29,7 @@ from ..providers.embeddings import EmbedderUnavailable
 from .tools import TOOLS
 
 if TYPE_CHECKING:
-    from ..evidence import Memory as Engine
+    from ..engine import EvidenceEngine
 
 # Newest first. Tools behave the same in each; only structured results are newer.
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -227,7 +227,7 @@ def build_parser(prog: str = "mnemotree-mcp") -> argparse.ArgumentParser:
     return parser
 
 
-def open_engine(path: Path, config: Config, attempts: int = 6) -> Engine:
+def open_engine(path: Path, config: Config, attempts: int = 6) -> EvidenceEngine:
     """Sessions started together may all create the same new file. SQLite reports
     the one-time switch to WAL as busy without waiting, so retry the open briefly."""
     for attempt in range(attempts - 1):
