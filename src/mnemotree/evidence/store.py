@@ -22,6 +22,17 @@ from .schema import SCHEMA_VERSION as SCHEMA_VERSION
 from .schema import configure, connect, create_tables, stored_embedding_spec
 from .vectors import vector_blob as vector_blob
 
+__all__ = [
+    "CHUNK_FTS",
+    "SCHEMA_VERSION",
+    "IngestBlobs",
+    "IngestConflict",
+    "SQLiteEvidenceStore",
+    "Window",
+    "now",
+    "vector_blob",
+]
+
 
 class Window(NamedTuple):
     """The span of a source a retrieved chunk is served as (widened by neighbor chunks)."""
