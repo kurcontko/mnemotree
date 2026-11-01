@@ -1,4 +1,4 @@
-# AML Add/Search service (mnemotree.evidence). Build from the repository root:
+# AML Add/Search service (mnemotree.service). Build from the repository root:
 #   docker build -f docker/aml/Dockerfile -t mnemotree-aml .
 FROM python:3.12-slim-bookworm AS build
 
