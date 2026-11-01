@@ -2,8 +2,8 @@
 
 import pytest
 
-from mnemotree.evidence.engine import QUERY_EMBED_TOKENS, model_query
-from mnemotree.evidence.packing import TiktokenCounter
+from mnemotree.engine import QUERY_EMBED_TOKENS, model_query
+from mnemotree.retrieval.packing import TiktokenCounter
 
 
 @pytest.mark.parametrize(

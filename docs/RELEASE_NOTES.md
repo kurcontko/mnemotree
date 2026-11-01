@@ -1,3 +1,23 @@
+# Unreleased
+
+No breaking changes: every 1.0 import path, class name and CLI keeps working.
+
+- The engine is `mnemotree.EvidenceEngine`. `mnemotree.evidence.Memory` is the same
+  class under its 1.0 name.
+- The engine's modules moved out of `mnemotree.evidence` into `mnemotree.engine`,
+  `mnemotree.core`, `.ingest`, `.retrieval`, `.storage`, `.providers`, `.service`,
+  `.cli.evidence` and `.evaluation`. Each `mnemotree.evidence.<module>` path still
+  imports the moved module itself.
+- Deliberate failures derive from `mnemotree.MnemotreeError`: `InvalidInput`,
+  `ConfigurationError` and `IngestConflict`. All of them are still `ValueError`s.
+- CLI and MCP configs are validated when they load: an unknown provider `kind`, a
+  missing `model` or `revision`, or an unrecognized key is reported before any
+  database is opened. A sentence-transformers embedding now needs `revision` there.
+- With both an embedder and an extractor, ingestion embeds chunks and extracts atoms
+  concurrently. `remember_many` reads its stored messages in one snapshot.
+- `code_identity` in evaluation reports and service startup logs now hashes every
+  module of the package, so its `source_digest` differs from 1.0's for the same code.
+
 # 1.0.0 (2026-10-31)
 
 Mnemotree now stores original messages in SQLite and retrieves source evidence.

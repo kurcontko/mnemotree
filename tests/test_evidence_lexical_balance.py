@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from mnemotree.evidence.lexical import index_text, match_expression
+from mnemotree.storage.lexical import index_text, match_expression
 
 
 def terms(query: str, **kwargs: object) -> list[str]:

@@ -8,8 +8,14 @@ AML Add/Search service, evaluation and current limits.
 
 ## Memory API
 
-`mnemotree.Memory` binds one namespace over the engine (`mnemotree.evidence.Memory`,
+`mnemotree.Memory` binds one namespace over the engine (`mnemotree.EvidenceEngine`,
 which takes a namespace on every call and exposes every retrieval option).
+
+The engine's modules live in `mnemotree.engine`, `mnemotree.core` (models, protocols),
+`.ingest` (chunking, atoms), `.retrieval` (ranking, packing), `.storage`, `.providers`
+and `.service`. The 1.0 paths under `mnemotree.evidence` (for example
+`mnemotree.evidence.Memory` or `mnemotree.evidence.atoms`) still import the same
+objects.
 
 ```python
 from mnemotree import Memory, Message
@@ -243,11 +249,10 @@ The extractor is an **engine** option. Configure `examples/evidence/atomic.json`
 
 ```python
 import os
-from mnemotree import Memory, SearchOptions
-from mnemotree.evidence import Memory as EvidenceMemory
-from mnemotree.evidence.atoms import OpenAIExtractor
+from mnemotree import EvidenceEngine, Memory, SearchOptions
+from mnemotree.ingest.atoms import OpenAIExtractor
 
-engine = EvidenceMemory(
+engine = EvidenceEngine(
     "atoms.sqlite",
     extractor=OpenAIExtractor(
         model="your-extraction-model",
@@ -294,7 +299,7 @@ metadata-only line per request; `--sample-payloads` (`AML_SAMPLE_PAYLOADS`) and
 inspection.
 
 Without a `search` block, the service applies its defaults (`aml_options` in
-`evidence/server.py`): hybrid retrieval when an embedder is configured, one neighboring
+`mnemotree/service/presets.py`): hybrid retrieval when an embedder is configured, one neighboring
 message merged into each hit, one chunk per source message and at most 100 items. Each
 channel returns 100 candidates, or 300 when a history averages more than 2 chunks per
 message. User turns rank first when assistant text is at least 65% of a history. A

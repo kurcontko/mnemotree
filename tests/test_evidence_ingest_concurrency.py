@@ -2,9 +2,9 @@ import asyncio
 
 import pytest
 
+from mnemotree.core.models import EmbeddingSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.evidence.atoms import AtomDraft, Citation, ExtractorSpec
-from mnemotree.evidence.models import EmbeddingSpec
+from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec
 
 
 class CharCounter:

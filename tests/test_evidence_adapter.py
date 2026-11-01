@@ -6,14 +6,14 @@ import threading
 import httpx
 import pytest
 
+from mnemotree.evaluation import evaluate
 from mnemotree.evidence import Memory, SearchOptions
-from mnemotree.evidence.evaluation import evaluate
-from mnemotree.evidence.providers import OpenAIEmbedder
+from mnemotree.providers.embeddings import OpenAIEmbedder
 
 
 async def test_http_contract_and_immediate_visibility(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     with Memory(tmp_path / "m.db") as memory:
         app = create_app(memory, api_key="test-key")
@@ -123,7 +123,7 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
 
 def test_service_defaults_use_merged_context_in_a_bounded_window(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import AML_TOKEN_BUDGET, aml_options
+    from mnemotree.service.app import AML_TOKEN_BUDGET, aml_options
 
     with Memory(tmp_path / "m.db") as memory:
         options = aml_options(memory)
@@ -232,7 +232,7 @@ async def test_reproducible_source_recall_report(tmp_path):
 
 async def test_payload_sampling_is_bounded(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     samples = tmp_path / "samples.jsonl"
     with Memory(tmp_path / "m.db") as memory:
@@ -263,7 +263,7 @@ def read_log(path):
 
 async def test_request_log_records_add_and_search_metadata_only(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     log = tmp_path / "logs" / "r.jsonl"  # the parent directory does not exist yet
     with Memory(tmp_path / "m.db") as memory:
@@ -321,7 +321,7 @@ async def test_request_log_explains_validation_and_auth_failures(tmp_path):
     from fastapi import FastAPI
     from pydantic import BaseModel
 
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     log = tmp_path / "r.jsonl"
     with Memory(tmp_path / "m.db") as memory:
@@ -370,7 +370,7 @@ async def test_request_log_explains_validation_and_auth_failures(tmp_path):
 
 async def test_unlimited_payload_sampling_joins_the_request_log(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     log, samples = tmp_path / "r.jsonl", tmp_path / "samples" / "p.jsonl"
     with Memory(tmp_path / "m.db") as memory:
@@ -402,7 +402,7 @@ async def test_unlimited_payload_sampling_joins_the_request_log(tmp_path):
 
 async def test_provider_failure_logs_status_without_provider_body(tmp_path, monkeypatch):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     log = tmp_path / "r.jsonl"
     secret = "rate limited for key sk-provider-SECRET"
@@ -435,7 +435,7 @@ async def test_provider_failure_logs_status_without_provider_body(tmp_path, monk
 
 
 def test_cli_names_a_missing_credential_variable(monkeypatch):
-    from mnemotree.evidence.cli import secret
+    from mnemotree.cli.evidence import secret
 
     monkeypatch.delenv("NO_SUCH_KEY", raising=False)
     with pytest.raises(SystemExit, match="set the NO_SUCH_KEY environment variable"):
@@ -444,7 +444,7 @@ def test_cli_names_a_missing_credential_variable(monkeypatch):
 
 async def test_request_log_bounds_unmatched_paths(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import MAX_LOGGED_PATH, create_app
+    from mnemotree.service.app import MAX_LOGGED_PATH, create_app
 
     log = tmp_path / "r.jsonl"
     with Memory(tmp_path / "m.db") as memory:
@@ -460,7 +460,7 @@ async def test_request_log_bounds_unmatched_paths(tmp_path):
 
 async def test_search_clamps_top_k_in_the_options_the_engine_receives(tmp_path, monkeypatch):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import MAX_TOP_K, create_app
+    from mnemotree.service.app import MAX_TOP_K, create_app
 
     with Memory(tmp_path / "m.db") as memory:
         limits = []
@@ -486,7 +486,7 @@ async def test_search_clamps_top_k_in_the_options_the_engine_receives(tmp_path, 
 def test_service_refuses_a_dense_database_without_its_embedder(tmp_path):
     pytest.importorskip("fastapi")
     from mnemotree.evidence import EmbeddingSpec
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     class Embedder:
         spec = EmbeddingSpec(provider="test", model="toy", revision="1", dimensions=2)
@@ -499,7 +499,7 @@ def test_service_refuses_a_dense_database_without_its_embedder(tmp_path):
 
 async def test_health_answers_while_a_search_waits_in_the_store(tmp_path, monkeypatch):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     with Memory(tmp_path / "m.db") as memory:
         entered, release, returned = threading.Event(), threading.Event(), threading.Event()

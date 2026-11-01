@@ -111,6 +111,6 @@ module = ["sqlite_vec", "sentence_transformers", "sentence_transformers.*", "uvi
 ignore_missing_imports = true
 
 [project.scripts]
-mnemotree-evidence = "mnemotree.evidence.cli:main"
+mnemotree-evidence = "mnemotree.cli.evidence:main"
 mnemotree = "mnemotree.cli:main"
 mnemotree-mcp = "mnemotree.mcp.server:main"

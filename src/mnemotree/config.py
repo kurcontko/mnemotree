@@ -13,11 +13,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, model_validator
 
-from .evidence.atoms import Extractor
-from .evidence.engine import Memory
-from .evidence.models import Record, SearchOptions
-from .evidence.packing import TiktokenCounter
-from .evidence.protocols import Embedder
+from .core.models import Record, SearchOptions
+from .core.protocols import Embedder
+from .engine import EvidenceEngine
+from .ingest.atoms import Extractor
+from .retrieval.packing import TiktokenCounter
 
 
 def secret(name: str) -> str:
@@ -59,7 +59,7 @@ class OpenAIEmbeddingConfig(ProviderConfig):
     max_total_wait: float | None = None
 
     def build(self) -> Embedder:
-        from .evidence.providers import OpenAIEmbedder
+        from .providers.embeddings import OpenAIEmbedder
 
         return OpenAIEmbedder(api_key=secret(self.api_key_env), **self.provider_kwargs())
 
@@ -72,7 +72,7 @@ class SentenceTransformerEmbeddingConfig(ProviderConfig):
     document_prompt: str | None = None
 
     def build(self) -> Embedder:
-        from .evidence.providers import SentenceTransformerEmbedder
+        from .providers.embeddings import SentenceTransformerEmbedder
 
         return SentenceTransformerEmbedder(**self.provider_kwargs())
 
@@ -91,7 +91,7 @@ class OpenAIExtractionConfig(ProviderConfig):
     timeout: float | None = None
 
     def build(self) -> Extractor:
-        from .evidence.atoms import OpenAIExtractor
+        from .ingest.atoms import OpenAIExtractor
 
         return OpenAIExtractor(api_key=secret(self.api_key_env), **self.provider_kwargs())
 
@@ -106,11 +106,11 @@ class Config(Record):
     search: SearchOptions | None = None
 
 
-def open_memory(path: Path, config: Config) -> Memory:
+def open_memory(path: Path, config: Config) -> EvidenceEngine:
     """Open the engine at ``path`` with the providers ``config`` selects."""
     extractor = config.extraction.build() if config.extraction is not None else None
     embedder = config.embedding.build() if config.embedding is not None else None
-    return Memory(
+    return EvidenceEngine(
         path,
         embedder=embedder,
         chunk_size=config.chunk_size,

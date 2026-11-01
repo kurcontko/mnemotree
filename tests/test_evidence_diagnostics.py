@@ -6,9 +6,10 @@ import subprocess
 import httpx
 import pytest
 
-from mnemotree.evidence import Memory, Message, SearchOptions, cli
-from mnemotree.evidence.models import ContextSpan, EmbeddingSpec, Evidence
-from mnemotree.evidence.server import create_app, returned_role_chars
+from mnemotree.cli import evidence as cli
+from mnemotree.core.models import ContextSpan, EmbeddingSpec, Evidence
+from mnemotree.evidence import Memory, Message, SearchOptions
+from mnemotree.service.app import create_app, returned_role_chars
 
 
 def test_role_char_counts_include_merged_neighbors_and_union_overlaps():
@@ -134,9 +135,9 @@ async def test_role_gate_diagnostics_use_retrieval_snapshot(tmp_path):
 
 
 def test_code_identity_supports_installed_package_and_changed_sources(tmp_path, monkeypatch):
-    package = tmp_path / "src" / "mnemotree" / "evidence"
+    package = tmp_path / "src" / "mnemotree" / "cli"
     package.mkdir(parents=True)
-    source = package / "cli.py"
+    source = package / "evidence.py"
     source.write_text("first\n")
     monkeypatch.setattr(cli, "__file__", str(source))
     monkeypatch.delenv("MNEMOTREE_BUILD_REVISION", raising=False)
@@ -144,7 +145,11 @@ def test_code_identity_supports_installed_package_and_changed_sources(tmp_path, 
     assert first["code_revision"] is None
     assert len(first["source_digest"]) == 64
     source.write_text("second\n")
-    assert cli.code_identity()["source_digest"] != first["source_digest"]
+    second = cli.code_identity()["source_digest"]
+    assert second != first["source_digest"]
+    # Any module of the package counts, not only the CLI's own directory.
+    (package.parent / "engine.py").write_text("engine\n")
+    assert cli.code_identity()["source_digest"] != second
     monkeypatch.setenv("MNEMOTREE_BUILD_REVISION", "a" * 40)
     assert cli.code_identity()["code_revision"] == "a" * 40
 
@@ -153,9 +158,9 @@ def test_code_identity_supports_installed_package_and_changed_sources(tmp_path, 
 def test_code_identity_git_fallback_never_echoes_invalid_revision(
     tmp_path, monkeypatch, git_missing
 ):
-    package = tmp_path / "src" / "mnemotree" / "evidence"
+    package = tmp_path / "src" / "mnemotree" / "cli"
     package.mkdir(parents=True)
-    source = package / "cli.py"
+    source = package / "evidence.py"
     source.write_text("source\n")
     (tmp_path / ".git").write_text("gitdir: /some/worktree\n")
     monkeypatch.setattr(cli, "__file__", str(source))

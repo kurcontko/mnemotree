@@ -154,7 +154,7 @@ def test_role_boost_has_finite_configuration_bounds(boost):
 
 
 def test_policies_preserve_measured_service_defaults(tmp_path):
-    from mnemotree.evidence.server import aml_options
+    from mnemotree.service.app import aml_options
 
     plain = SearchOptions()
     assert plain.role_boost is None and plain.model_query_policy == "combined"
