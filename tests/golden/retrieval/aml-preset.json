@@ -1,0 +1,2998 @@
+[
+ {
+  "evidence": [
+   {
+    "id": "cf158c96d9ff",
+    "source_id": "garden-4",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "start": 0,
+    "end": 54,
+    "text": "Next week I will add marigolds along the garden fence.",
+    "score": 0.0294623656,
+    "channels": {
+     "lexical": {
+      "rank": 2,
+      "score": 2.5546165
+     },
+     "dense": {
+      "rank": 15,
+      "score": 0.154303372
+     }
+    },
+    "rerank_score": null,
+    "request_id": "garden",
+    "position": 4,
+    "seq": 4,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "f6117fc0e9e7",
+      "source_id": "garden-2",
+      "session_id": "garden",
+      "role": "user",
+      "timestamp": "2026-03-02T09:21:00Z",
+      "start": 0,
+      "end": 34,
+      "text": "The basil already has slugs on it.",
+      "score": 0.015625,
+      "channels": {
+       "dense": {
+        "rank": 4,
+        "score": 0.33806169
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 2,
+      "seq": 2,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "15ce9752be13",
+      "source_id": "garden-0",
+      "session_id": "garden",
+      "role": "user",
+      "timestamp": "2026-03-02T09:07:00Z",
+      "start": 0,
+      "end": 64,
+      "text": "I planted tomatoes and basil in the raised garden bed yesterday.",
+      "score": 0.0292139554,
+      "channels": {
+       "lexical": {
+        "rank": 1,
+        "score": 5.65674972
+       },
+       "dense": {
+        "rank": 18,
+        "score": 0.104828477
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 0,
+      "seq": 0,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "36af586608fa",
+      "source_id": "garden-3",
+      "session_id": "garden",
+      "role": "assistant",
+      "timestamp": "2026-03-02T09:28:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "Copper tape around the bed keeps slugs away.",
+      "score": 0.012987013,
+      "channels": {
+       "dense": {
+        "rank": 17,
+        "score": 0.11952287
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   },
+   {
+    "id": "6713a0766192",
+    "source_id": "travel-2",
+    "session_id": "travel",
+    "role": "user",
+    "timestamp": "2026-03-03T09:56:00Z",
+    "start": 0,
+    "end": 44,
+    "text": "My flight to Lisbon leaves on Friday at 7am.",
+    "score": 0.0153846154,
+    "channels": {
+     "dense": {
+      "rank": 5,
+      "score": 0.31448549
+     }
+    },
+    "rerank_score": null,
+    "request_id": "travel",
+    "position": 2,
+    "seq": 2,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "48f05df20d3d",
+      "source_id": "travel-0",
+      "session_id": "travel",
+      "role": "user",
+      "timestamp": "2026-03-03T09:42:00Z",
+      "start": 0,
+      "end": 49,
+      "text": "The conference is in Lisbon this year, not Porto.",
+      "score": 0.0149253731,
+      "channels": {
+       "dense": {
+        "rank": 7,
+        "score": 0.251976311
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 0,
+      "seq": 0,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "session_id": "travel",
+      "role": "assistant",
+      "timestamp": "2026-03-03T09:49:00Z",
+      "start": 0,
+      "end": 59,
+      "text": "Lisbon in May is warm; book the hotel near the venue early.",
+      "score": 0.0163934426,
+      "channels": {
+       "dense": {
+        "rank": 1,
+        "score": 0.661437839
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "de6379d620a0",
+      "source_id": "travel-3",
+      "session_id": "travel",
+      "role": "assistant",
+      "timestamp": "2026-03-03T10:03:00Z",
+      "start": 0,
+      "end": 57,
+      "text": "Leave for the airport by 5am for an international flight.",
+      "score": 0.0158730159,
+      "channels": {
+       "dense": {
+        "rank": 3,
+        "score": 0.358568549
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   },
+   {
+    "id": "a2a4047faf99",
+    "source_id": "ops-0",
+    "session_id": "ops",
+    "role": "user",
+    "timestamp": "2026-03-04T10:10:00Z",
+    "start": 0,
+    "end": 52,
+    "text": "Can you summarise the deployment migration warnings?",
+    "score": 0.0147058824,
+    "channels": {
+     "dense": {
+      "rank": 8,
+      "score": 0.251976311
+     }
+    },
+    "rerank_score": null,
+    "request_id": "ops",
+    "position": 0,
+    "seq": 0,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "ec59b32ce1b7",
+      "source_id": "ops-2",
+      "session_id": "ops",
+      "role": "user",
+      "timestamp": "2026-03-04T10:24:00Z",
+      "start": 0,
+      "end": 55,
+      "text": "Which shard had the most warnings during the migration?",
+      "score": 0.0142857143,
+      "channels": {
+       "dense": {
+        "rank": 10,
+        "score": 0.227921128
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 2,
+      "seq": 2,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "7fd76b7c0bd2",
+      "source_id": "ops-4",
+      "session_id": "ops",
+      "role": "user",
+      "timestamp": "2026-03-04T10:38:00Z",
+      "start": 0,
+      "end": 11,
+      "text": "数据库迁移在周二完成。",
+      "score": 0.0125,
+      "channels": {
+       "dense": {
+        "rank": 20,
+        "score": 0.0
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 4,
+      "seq": 4,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "66c65c8094db",
+      "source_id": "ops-1",
+      "session_id": "ops",
+      "role": "assistant",
+      "timestamp": "2026-03-04T10:17:00Z",
+      "start": 160,
+      "end": 360,
+      "text": "ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished ",
+      "score": 0.0161290323,
+      "channels": {
+       "dense": {
+        "rank": 2,
+        "score": 0.374240577
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "session_id": "ops",
+      "role": "assistant",
+      "timestamp": "2026-03-04T10:31:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "Shards 3, 7 and 11 each reported 3 warnings.",
+      "score": 0.0151515152,
+      "channels": {
+       "dense": {
+        "rank": 6,
+        "score": 0.260133028
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   }
+  ],
+  "context": "[2026-03-02 Mon 09:07 UTC] user: I planted tomatoes and basil in the raised garden bed yesterday. (yesterday = Sunday, 1 March 2026)\n...\n[2026-03-02 Mon 09:21 UTC] user: The basil already has slugs on it.\n[2026-03-02 Mon 09:28 UTC] assistant: Copper tape around the bed keeps slugs away.\n[2026-03-02 Mon 09:35 UTC] user: Next week I will add marigolds along the garden fence. (next week = week of 9 March 2026)\n\n[2026-03-03 Tue 09:42 UTC] user: The conference is in Lisbon this year, not Porto. (this year = 2026)\n[2026-03-03 Tue 09:49 UTC] assistant: Lisbon in May is warm; book the hotel near the venue early.\n[2026-03-03 Tue 09:56 UTC] user: My flight to Lisbon leaves on Friday at 7am. (on friday = Friday, 27 February 2026)\n[2026-03-03 Tue 10:03 UTC] assistant: Leave for the airport by 5am for an international flight.\n\n[2026-03-04 Wed 10:10 UTC] user: Can you summarise the deployment migration warnings?\n[2026-03-04 Wed 10:17 UTC] assistant: ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished \n[2026-03-04 Wed 10:24 UTC] user: Which shard had the most warnings during the migration?\n[2026-03-04 Wed 10:31 UTC] assistant: Shards 3, 7 and 11 each reported 3 warnings.\n[2026-03-04 Wed 10:38 UTC] user: 数据库迁移在周二完成。",
+  "trace": {
+   "mode": "hybrid",
+   "candidates": [
+    {
+     "chunk": {
+      "id": "cf158c96d9ff",
+      "source_id": "garden-4",
+      "index": 0,
+      "start": 0,
+      "end": 54,
+      "text": "sha256:46f4dab27afa len=54"
+     },
+     "fusion_score": 0.0294623656,
+     "channels": {
+      "lexical": {
+       "rank": 2,
+       "score": 2.5546165
+      },
+      "dense": {
+       "rank": 15,
+       "score": 0.154303372
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "15ce9752be13",
+      "source_id": "garden-0",
+      "index": 0,
+      "start": 0,
+      "end": 64,
+      "text": "sha256:68ffac2a6ce2 len=64"
+     },
+     "fusion_score": 0.0292139554,
+     "channels": {
+      "lexical": {
+       "rank": 1,
+       "score": 5.65674972
+      },
+      "dense": {
+       "rank": 18,
+       "score": 0.104828477
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "f6117fc0e9e7",
+      "source_id": "garden-2",
+      "index": 0,
+      "start": 0,
+      "end": 34,
+      "text": "sha256:f60ba41f99f0 len=34"
+     },
+     "fusion_score": 0.015625,
+     "channels": {
+      "dense": {
+       "rank": 4,
+       "score": 0.33806169
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "6713a0766192",
+      "source_id": "travel-2",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:aee386e4e9da len=44"
+     },
+     "fusion_score": 0.0153846154,
+     "channels": {
+      "dense": {
+       "rank": 5,
+       "score": 0.31448549
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "48f05df20d3d",
+      "source_id": "travel-0",
+      "index": 0,
+      "start": 0,
+      "end": 49,
+      "text": "sha256:af620e99e6a0 len=49"
+     },
+     "fusion_score": 0.0149253731,
+     "channels": {
+      "dense": {
+       "rank": 7,
+       "score": 0.251976311
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "a2a4047faf99",
+      "source_id": "ops-0",
+      "index": 0,
+      "start": 0,
+      "end": 52,
+      "text": "sha256:4c1c9843bbf0 len=52"
+     },
+     "fusion_score": 0.0147058824,
+     "channels": {
+      "dense": {
+       "rank": 8,
+       "score": 0.251976311
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "ec59b32ce1b7",
+      "source_id": "ops-2",
+      "index": 0,
+      "start": 0,
+      "end": 55,
+      "text": "sha256:9aa4fef11ef0 len=55"
+     },
+     "fusion_score": 0.0142857143,
+     "channels": {
+      "dense": {
+       "rank": 10,
+       "score": 0.227921128
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "7fd76b7c0bd2",
+      "source_id": "ops-4",
+      "index": 0,
+      "start": 0,
+      "end": 11,
+      "text": "sha256:d08af89df704 len=11"
+     },
+     "fusion_score": 0.0125,
+     "channels": {
+      "dense": {
+       "rank": 20,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "index": 0,
+      "start": 0,
+      "end": 59,
+      "text": "sha256:65c5fe290da2 len=59"
+     },
+     "fusion_score": 0.0163934426,
+     "channels": {
+      "dense": {
+       "rank": 1,
+       "score": 0.661437839
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "66c65c8094db",
+      "source_id": "ops-1",
+      "index": 1,
+      "start": 160,
+      "end": 360,
+      "text": "sha256:41c873c48427 len=200"
+     },
+     "fusion_score": 0.0161290323,
+     "channels": {
+      "dense": {
+       "rank": 2,
+       "score": 0.374240577
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "de6379d620a0",
+      "source_id": "travel-3",
+      "index": 0,
+      "start": 0,
+      "end": 57,
+      "text": "sha256:b1e38359439f len=57"
+     },
+     "fusion_score": 0.0158730159,
+     "channels": {
+      "dense": {
+       "rank": 3,
+       "score": 0.358568549
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:be1d4940e609 len=44"
+     },
+     "fusion_score": 0.0151515152,
+     "channels": {
+      "dense": {
+       "rank": 6,
+       "score": 0.260133028
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "36af586608fa",
+      "source_id": "garden-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:9f2bb3a2cd14 len=44"
+     },
+     "fusion_score": 0.012987013,
+     "channels": {
+      "dense": {
+       "rank": 17,
+       "score": 0.11952287
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "51637415eba5",
+      "source_id": "garden-1",
+      "index": 0,
+      "start": 0,
+      "end": 65,
+      "text": "sha256:e2bbe97ef91b len=65"
+     },
+     "fusion_score": 0.0126582278,
+     "channels": {
+      "dense": {
+       "rank": 19,
+       "score": 0.104828477
+      }
+     },
+     "rerank_score": null
+    }
+   ],
+   "atom_hits": [],
+   "context_candidates": [
+    {
+     "id": "08af82dbd619",
+     "source_id": "garden-3",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 3,
+     "seq": 3,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-02T09:28:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "Copper tape around the bed keeps slugs away."
+    },
+    {
+     "id": "9c9f3ff3d385",
+     "source_id": "garden-1",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 1,
+     "seq": 1,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-02T09:14:00Z",
+     "start": 0,
+     "end": 65,
+     "text": "Tomatoes and basil grow well together; water them in the morning."
+    },
+    {
+     "id": "d325ad69de01",
+     "source_id": "travel-0",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-03T09:42:00Z",
+     "start": 0,
+     "end": 49,
+     "text": "The conference is in Lisbon this year, not Porto."
+    },
+    {
+     "id": "05bbe57f5f36",
+     "source_id": "travel-2",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 2,
+     "seq": 2,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-03T09:56:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "My flight to Lisbon leaves on Friday at 7am."
+    },
+    {
+     "id": "b87abe405e41",
+     "source_id": "ops-0",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:10:00Z",
+     "start": 0,
+     "end": 52,
+     "text": "Can you summarise the deployment migration warnings?"
+    },
+    {
+     "id": "52fd92aebdc8",
+     "source_id": "ops-2",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 2,
+     "seq": 2,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:24:00Z",
+     "start": 0,
+     "end": 55,
+     "text": "Which shard had the most warnings during the migration?"
+    },
+    {
+     "id": "ec13867a8fa8",
+     "source_id": "travel-1",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 1,
+     "seq": 1,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-03T09:49:00Z",
+     "start": 0,
+     "end": 59,
+     "text": "Lisbon in May is warm; book the hotel near the venue early."
+    },
+    {
+     "id": "7fc27decf9e2",
+     "source_id": "travel-3",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 3,
+     "seq": 3,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-03T10:03:00Z",
+     "start": 0,
+     "end": 57,
+     "text": "Leave for the airport by 5am for an international flight."
+    },
+    {
+     "id": "cae53cb34808",
+     "source_id": "ops-4",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 4,
+     "seq": 4,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:38:00Z",
+     "start": 0,
+     "end": 11,
+     "text": "数据库迁移在周二完成。"
+    },
+    {
+     "id": "5c60bfb4488b",
+     "source_id": "ops-1",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 1,
+     "seq": 1,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:17:00Z",
+     "start": 0,
+     "end": 1200,
+     "text": "Step 1: the migration of shard 1 finished with 1 warnings and the deployment checks for region eu passed. Step 2: the migration of shard 2 finished with 2 warnings and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished with 2 warnings and the deployment checks for region us passed. Step 11: the migration of shard 11 finished with 3 warnings and the deployment checks for region eu passed. Step 12: the migration of shar"
+    },
+    {
+     "id": "79364f5032d6",
+     "source_id": "ops-1",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 1,
+     "seq": 1,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:17:00Z",
+     "start": 77,
+     "end": 1277,
+     "text": "checks for region eu passed. Step 2: the migration of shard 2 finished with 2 warnings and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished with 2 warnings and the deployment checks for region us passed. Step 11: the migration of shard 11 finished with 3 warnings and the deployment checks for region eu passed. Step 12: the migration of shard 12 finished with 0 warnings and the deployment checks for region us passed."
+    },
+    {
+     "id": "e36cf1ac289b",
+     "source_id": "ops-3",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 3,
+     "seq": 3,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:31:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "Shards 3, 7 and 11 each reported 3 warnings."
+    },
+    {
+     "id": "b34d2d6b07b6",
+     "source_id": "garden-2",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 2,
+     "seq": 2,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:21:00Z",
+     "start": 0,
+     "end": 34,
+     "text": "The basil already has slugs on it."
+    },
+    {
+     "id": "8d6f34f10285",
+     "source_id": "garden-4",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 4,
+     "seq": 4,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:35:00Z",
+     "start": 0,
+     "end": 54,
+     "text": "Next week I will add marigolds along the garden fence."
+    },
+    {
+     "id": "c8e6394633dd",
+     "source_id": "garden-0",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:07:00Z",
+     "start": 0,
+     "end": 64,
+     "text": "I planted tomatoes and basil in the raised garden bed yesterday."
+    }
+   ],
+   "omitted_context_ids": [
+    "08af82dbd619",
+    "9c9f3ff3d385",
+    "d325ad69de01",
+    "05bbe57f5f36",
+    "b87abe405e41",
+    "52fd92aebdc8",
+    "ec13867a8fa8",
+    "7fc27decf9e2",
+    "cae53cb34808",
+    "5c60bfb4488b",
+    "79364f5032d6",
+    "e36cf1ac289b",
+    "b34d2d6b07b6",
+    "8d6f34f10285"
+   ],
+   "channel_counts": {
+    "lexical": 2,
+    "dense": 21
+   },
+   "packed_tokens": 377,
+   "evidence_tokens": 377,
+   "tokenizer": "golden-words",
+   "omitted_ids": [
+    "51637415eba5",
+    "344cfe86b6d4",
+    "285772c04e1a",
+    "fee632b96fe4",
+    "d87b6b855482",
+    "61df357905af",
+    "1fd2e18d7406",
+    "db398e2eb16c"
+   ],
+   "candidate_limit": 100,
+   "chunk_density": 1.5,
+   "original_model_query_tokens": 7,
+   "model_query_tokens": 7,
+   "model_query_truncated": false,
+   "assistant_share": 0.809848088,
+   "role_first_applied": true,
+   "role_boost_applied": false
+  },
+  "sources": [
+   {
+    "namespace": "golden",
+    "id": "garden-4",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 4,
+    "content": "sha256:46f4dab27afa len=54",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-2",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 2,
+    "content": "sha256:f60ba41f99f0 len=34",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-0",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 0,
+    "content": "sha256:68ffac2a6ce2 len=64",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-3",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 3,
+    "content": "sha256:9f2bb3a2cd14 len=44",
+    "role": "assistant",
+    "timestamp": "2026-03-02T09:28:00Z",
+    "session_seq": 3
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-2",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 2,
+    "content": "sha256:aee386e4e9da len=44",
+    "role": "user",
+    "timestamp": "2026-03-03T09:56:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-0",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 0,
+    "content": "sha256:af620e99e6a0 len=49",
+    "role": "user",
+    "timestamp": "2026-03-03T09:42:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-1",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 1,
+    "content": "sha256:65c5fe290da2 len=59",
+    "role": "assistant",
+    "timestamp": "2026-03-03T09:49:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-3",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 3,
+    "content": "sha256:b1e38359439f len=57",
+    "role": "assistant",
+    "timestamp": "2026-03-03T10:03:00Z",
+    "session_seq": 3
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-0",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 0,
+    "content": "sha256:4c1c9843bbf0 len=52",
+    "role": "user",
+    "timestamp": "2026-03-04T10:10:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-2",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 2,
+    "content": "sha256:9aa4fef11ef0 len=55",
+    "role": "user",
+    "timestamp": "2026-03-04T10:24:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-4",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 4,
+    "content": "sha256:d08af89df704 len=11",
+    "role": "user",
+    "timestamp": "2026-03-04T10:38:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-1",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 1,
+    "content": "sha256:9228386ea129 len=1277",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-3",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 3,
+    "content": "sha256:be1d4940e609 len=44",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:31:00Z",
+    "session_seq": 3
+   }
+  ]
+ },
+ {
+  "evidence": [
+   {
+    "id": "48f05df20d3d",
+    "source_id": "travel-0",
+    "session_id": "travel",
+    "role": "user",
+    "timestamp": "2026-03-03T09:42:00Z",
+    "start": 0,
+    "end": 49,
+    "text": "The conference is in Lisbon this year, not Porto.",
+    "score": 0.0327868852,
+    "channels": {
+     "lexical": {
+      "rank": 1,
+      "score": 8.80841868
+     },
+     "dense": {
+      "rank": 1,
+      "score": 0.680413812
+     }
+    },
+    "rerank_score": null,
+    "request_id": "travel",
+    "position": 0,
+    "seq": 0,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "6713a0766192",
+      "source_id": "travel-2",
+      "session_id": "travel",
+      "role": "user",
+      "timestamp": "2026-03-03T09:56:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "My flight to Lisbon leaves on Friday at 7am.",
+      "score": 0.0304147465,
+      "channels": {
+       "lexical": {
+        "rank": 2,
+        "score": 2.12708341
+       },
+       "dense": {
+        "rank": 10,
+        "score": 0.339683115
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 2,
+      "seq": 2,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "session_id": "travel",
+      "role": "assistant",
+      "timestamp": "2026-03-03T09:49:00Z",
+      "start": 0,
+      "end": 59,
+      "text": "Lisbon in May is warm; book the hotel near the venue early.",
+      "score": 0.0320020481,
+      "channels": {
+       "lexical": {
+        "rank": 3,
+        "score": 1.96642585
+       },
+       "dense": {
+        "rank": 2,
+        "score": 0.612372518
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   },
+   {
+    "id": "f6117fc0e9e7",
+    "source_id": "garden-2",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "start": 0,
+    "end": 34,
+    "text": "The basil already has slugs on it.",
+    "score": 0.0158730159,
+    "channels": {
+     "dense": {
+      "rank": 3,
+      "score": 0.547722608
+     }
+    },
+    "rerank_score": null,
+    "request_id": "garden",
+    "position": 2,
+    "seq": 2,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "cf158c96d9ff",
+      "source_id": "garden-4",
+      "session_id": "garden",
+      "role": "user",
+      "timestamp": "2026-03-02T09:35:00Z",
+      "start": 0,
+      "end": 54,
+      "text": "Next week I will add marigolds along the garden fence.",
+      "score": 0.015625,
+      "channels": {
+       "dense": {
+        "rank": 4,
+        "score": 0.5
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 4,
+      "seq": 4,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "15ce9752be13",
+      "source_id": "garden-0",
+      "session_id": "garden",
+      "role": "user",
+      "timestamp": "2026-03-02T09:07:00Z",
+      "start": 0,
+      "end": 64,
+      "text": "I planted tomatoes and basil in the raised garden bed yesterday.",
+      "score": 0.0153846154,
+      "channels": {
+       "dense": {
+        "rank": 5,
+        "score": 0.452910841
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 0,
+      "seq": 0,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "51637415eba5",
+      "source_id": "garden-1",
+      "session_id": "garden",
+      "role": "assistant",
+      "timestamp": "2026-03-02T09:14:00Z",
+      "start": 0,
+      "end": 65,
+      "text": "Tomatoes and basil grow well together; water them in the morning.",
+      "score": 0.0151515152,
+      "channels": {
+       "dense": {
+        "rank": 6,
+        "score": 0.452910841
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "36af586608fa",
+      "source_id": "garden-3",
+      "session_id": "garden",
+      "role": "assistant",
+      "timestamp": "2026-03-02T09:28:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "Copper tape around the bed keeps slugs away.",
+      "score": 0.0136986301,
+      "channels": {
+       "dense": {
+        "rank": 13,
+        "score": 0.258198857
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   },
+   {
+    "id": "ec59b32ce1b7",
+    "source_id": "ops-2",
+    "session_id": "ops",
+    "role": "user",
+    "timestamp": "2026-03-04T10:24:00Z",
+    "start": 0,
+    "end": 55,
+    "text": "Which shard had the most warnings during the migration?",
+    "score": 0.0135135135,
+    "channels": {
+     "dense": {
+      "rank": 14,
+      "score": 0.246182978
+     }
+    },
+    "rerank_score": null,
+    "request_id": "ops",
+    "position": 2,
+    "seq": 2,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "a2a4047faf99",
+      "source_id": "ops-0",
+      "session_id": "ops",
+      "role": "user",
+      "timestamp": "2026-03-04T10:10:00Z",
+      "start": 0,
+      "end": 52,
+      "text": "Can you summarise the deployment migration warnings?",
+      "score": 0.0128205128,
+      "channels": {
+       "dense": {
+        "rank": 18,
+        "score": 0.136082768
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 0,
+      "seq": 0,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "7fd76b7c0bd2",
+      "source_id": "ops-4",
+      "session_id": "ops",
+      "role": "user",
+      "timestamp": "2026-03-04T10:38:00Z",
+      "start": 0,
+      "end": 11,
+      "text": "数据库迁移在周二完成。",
+      "score": 0.012345679,
+      "channels": {
+       "dense": {
+        "rank": 21,
+        "score": 0.0
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 4,
+      "seq": 4,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "66c65c8094db",
+      "source_id": "ops-1",
+      "session_id": "ops",
+      "role": "assistant",
+      "timestamp": "2026-03-04T10:17:00Z",
+      "start": 160,
+      "end": 360,
+      "text": "ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished ",
+      "score": 0.0149253731,
+      "channels": {
+       "dense": {
+        "rank": 7,
+        "score": 0.404226065
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "session_id": "ops",
+      "role": "assistant",
+      "timestamp": "2026-03-04T10:31:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "Shards 3, 7 and 11 each reported 3 warnings.",
+      "score": 0.012987013,
+      "channels": {
+       "dense": {
+        "rank": 17,
+        "score": 0.187317193
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   }
+  ],
+  "context": "[2026-03-03 Tue 09:42 UTC] user: The conference is in Lisbon this year, not Porto. (this year = 2026)\n[2026-03-03 Tue 09:49 UTC] assistant: Lisbon in May is warm; book the hotel near the venue early.\n[2026-03-03 Tue 09:56 UTC] user: My flight to Lisbon leaves on Friday at 7am. (on friday = Friday, 27 February 2026)\n\n[2026-03-02 Mon 09:07 UTC] user: I planted tomatoes and basil in the raised garden bed yesterday. (yesterday = Sunday, 1 March 2026)\n[2026-03-02 Mon 09:14 UTC] assistant: Tomatoes and basil grow well together; water them in the morning.\n[2026-03-02 Mon 09:21 UTC] user: The basil already has slugs on it.\n[2026-03-02 Mon 09:28 UTC] assistant: Copper tape around the bed keeps slugs away.\n[2026-03-02 Mon 09:35 UTC] user: Next week I will add marigolds along the garden fence. (next week = week of 9 March 2026)\n\n[2026-03-04 Wed 10:10 UTC] user: Can you summarise the deployment migration warnings?\n[2026-03-04 Wed 10:17 UTC] assistant: ngs and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished \n[2026-03-04 Wed 10:24 UTC] user: Which shard had the most warnings during the migration?\n[2026-03-04 Wed 10:31 UTC] assistant: Shards 3, 7 and 11 each reported 3 warnings.\n[2026-03-04 Wed 10:38 UTC] user: 数据库迁移在周二完成。",
+  "trace": {
+   "mode": "hybrid",
+   "candidates": [
+    {
+     "chunk": {
+      "id": "48f05df20d3d",
+      "source_id": "travel-0",
+      "index": 0,
+      "start": 0,
+      "end": 49,
+      "text": "sha256:af620e99e6a0 len=49"
+     },
+     "fusion_score": 0.0327868852,
+     "channels": {
+      "lexical": {
+       "rank": 1,
+       "score": 8.80841868
+      },
+      "dense": {
+       "rank": 1,
+       "score": 0.680413812
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "6713a0766192",
+      "source_id": "travel-2",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:aee386e4e9da len=44"
+     },
+     "fusion_score": 0.0304147465,
+     "channels": {
+      "lexical": {
+       "rank": 2,
+       "score": 2.12708341
+      },
+      "dense": {
+       "rank": 10,
+       "score": 0.339683115
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "f6117fc0e9e7",
+      "source_id": "garden-2",
+      "index": 0,
+      "start": 0,
+      "end": 34,
+      "text": "sha256:f60ba41f99f0 len=34"
+     },
+     "fusion_score": 0.0158730159,
+     "channels": {
+      "dense": {
+       "rank": 3,
+       "score": 0.547722608
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "cf158c96d9ff",
+      "source_id": "garden-4",
+      "index": 0,
+      "start": 0,
+      "end": 54,
+      "text": "sha256:46f4dab27afa len=54"
+     },
+     "fusion_score": 0.015625,
+     "channels": {
+      "dense": {
+       "rank": 4,
+       "score": 0.5
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "15ce9752be13",
+      "source_id": "garden-0",
+      "index": 0,
+      "start": 0,
+      "end": 64,
+      "text": "sha256:68ffac2a6ce2 len=64"
+     },
+     "fusion_score": 0.0153846154,
+     "channels": {
+      "dense": {
+       "rank": 5,
+       "score": 0.452910841
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "ec59b32ce1b7",
+      "source_id": "ops-2",
+      "index": 0,
+      "start": 0,
+      "end": 55,
+      "text": "sha256:9aa4fef11ef0 len=55"
+     },
+     "fusion_score": 0.0135135135,
+     "channels": {
+      "dense": {
+       "rank": 14,
+       "score": 0.246182978
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "a2a4047faf99",
+      "source_id": "ops-0",
+      "index": 0,
+      "start": 0,
+      "end": 52,
+      "text": "sha256:4c1c9843bbf0 len=52"
+     },
+     "fusion_score": 0.0128205128,
+     "channels": {
+      "dense": {
+       "rank": 18,
+       "score": 0.136082768
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "7fd76b7c0bd2",
+      "source_id": "ops-4",
+      "index": 0,
+      "start": 0,
+      "end": 11,
+      "text": "sha256:d08af89df704 len=11"
+     },
+     "fusion_score": 0.012345679,
+     "channels": {
+      "dense": {
+       "rank": 21,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "index": 0,
+      "start": 0,
+      "end": 59,
+      "text": "sha256:65c5fe290da2 len=59"
+     },
+     "fusion_score": 0.0320020481,
+     "channels": {
+      "lexical": {
+       "rank": 3,
+       "score": 1.96642585
+      },
+      "dense": {
+       "rank": 2,
+       "score": 0.612372518
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "51637415eba5",
+      "source_id": "garden-1",
+      "index": 0,
+      "start": 0,
+      "end": 65,
+      "text": "sha256:e2bbe97ef91b len=65"
+     },
+     "fusion_score": 0.0151515152,
+     "channels": {
+      "dense": {
+       "rank": 6,
+       "score": 0.452910841
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "66c65c8094db",
+      "source_id": "ops-1",
+      "index": 1,
+      "start": 160,
+      "end": 360,
+      "text": "sha256:41c873c48427 len=200"
+     },
+     "fusion_score": 0.0149253731,
+     "channels": {
+      "dense": {
+       "rank": 7,
+       "score": 0.404226065
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "36af586608fa",
+      "source_id": "garden-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:9f2bb3a2cd14 len=44"
+     },
+     "fusion_score": 0.0136986301,
+     "channels": {
+      "dense": {
+       "rank": 13,
+       "score": 0.258198857
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:be1d4940e609 len=44"
+     },
+     "fusion_score": 0.012987013,
+     "channels": {
+      "dense": {
+       "rank": 17,
+       "score": 0.187317193
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "de6379d620a0",
+      "source_id": "travel-3",
+      "index": 0,
+      "start": 0,
+      "end": 57,
+      "text": "sha256:b1e38359439f len=57"
+     },
+     "fusion_score": 0.0126582278,
+     "channels": {
+      "dense": {
+       "rank": 19,
+       "score": 0.129099429
+      }
+     },
+     "rerank_score": null
+    }
+   ],
+   "atom_hits": [],
+   "context_candidates": [
+    {
+     "id": "ec13867a8fa8",
+     "source_id": "travel-1",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 1,
+     "seq": 1,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-03T09:49:00Z",
+     "start": 0,
+     "end": 59,
+     "text": "Lisbon in May is warm; book the hotel near the venue early."
+    },
+    {
+     "id": "d325ad69de01",
+     "source_id": "travel-0",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-03T09:42:00Z",
+     "start": 0,
+     "end": 49,
+     "text": "The conference is in Lisbon this year, not Porto."
+    },
+    {
+     "id": "05bbe57f5f36",
+     "source_id": "travel-2",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 2,
+     "seq": 2,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-03T09:56:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "My flight to Lisbon leaves on Friday at 7am."
+    },
+    {
+     "id": "7fc27decf9e2",
+     "source_id": "travel-3",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 3,
+     "seq": 3,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-03T10:03:00Z",
+     "start": 0,
+     "end": 57,
+     "text": "Leave for the airport by 5am for an international flight."
+    },
+    {
+     "id": "9c9f3ff3d385",
+     "source_id": "garden-1",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 1,
+     "seq": 1,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-02T09:14:00Z",
+     "start": 0,
+     "end": 65,
+     "text": "Tomatoes and basil grow well together; water them in the morning."
+    },
+    {
+     "id": "08af82dbd619",
+     "source_id": "garden-3",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 3,
+     "seq": 3,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-02T09:28:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "Copper tape around the bed keeps slugs away."
+    },
+    {
+     "id": "c8e6394633dd",
+     "source_id": "garden-0",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:07:00Z",
+     "start": 0,
+     "end": 64,
+     "text": "I planted tomatoes and basil in the raised garden bed yesterday."
+    },
+    {
+     "id": "b34d2d6b07b6",
+     "source_id": "garden-2",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 2,
+     "seq": 2,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:21:00Z",
+     "start": 0,
+     "end": 34,
+     "text": "The basil already has slugs on it."
+    },
+    {
+     "id": "b87abe405e41",
+     "source_id": "ops-0",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:10:00Z",
+     "start": 0,
+     "end": 52,
+     "text": "Can you summarise the deployment migration warnings?"
+    },
+    {
+     "id": "52fd92aebdc8",
+     "source_id": "ops-2",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 2,
+     "seq": 2,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:24:00Z",
+     "start": 0,
+     "end": 55,
+     "text": "Which shard had the most warnings during the migration?"
+    },
+    {
+     "id": "8d6f34f10285",
+     "source_id": "garden-4",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 4,
+     "seq": 4,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:35:00Z",
+     "start": 0,
+     "end": 54,
+     "text": "Next week I will add marigolds along the garden fence."
+    },
+    {
+     "id": "79364f5032d6",
+     "source_id": "ops-1",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 1,
+     "seq": 1,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:17:00Z",
+     "start": 77,
+     "end": 1277,
+     "text": "checks for region eu passed. Step 2: the migration of shard 2 finished with 2 warnings and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished with 2 warnings and the deployment checks for region us passed. Step 11: the migration of shard 11 finished with 3 warnings and the deployment checks for region eu passed. Step 12: the migration of shard 12 finished with 0 warnings and the deployment checks for region us passed."
+    },
+    {
+     "id": "e36cf1ac289b",
+     "source_id": "ops-3",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 3,
+     "seq": 3,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:31:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "Shards 3, 7 and 11 each reported 3 warnings."
+    },
+    {
+     "id": "cae53cb34808",
+     "source_id": "ops-4",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 4,
+     "seq": 4,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:38:00Z",
+     "start": 0,
+     "end": 11,
+     "text": "数据库迁移在周二完成。"
+    },
+    {
+     "id": "5c60bfb4488b",
+     "source_id": "ops-1",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 1,
+     "seq": 1,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:17:00Z",
+     "start": 0,
+     "end": 1200,
+     "text": "Step 1: the migration of shard 1 finished with 1 warnings and the deployment checks for region eu passed. Step 2: the migration of shard 2 finished with 2 warnings and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished with 2 warnings and the deployment checks for region us passed. Step 11: the migration of shard 11 finished with 3 warnings and the deployment checks for region eu passed. Step 12: the migration of shar"
+    }
+   ],
+   "omitted_context_ids": [
+    "ec13867a8fa8",
+    "d325ad69de01",
+    "05bbe57f5f36",
+    "7fc27decf9e2",
+    "9c9f3ff3d385",
+    "08af82dbd619",
+    "c8e6394633dd",
+    "b34d2d6b07b6",
+    "b87abe405e41",
+    "52fd92aebdc8",
+    "8d6f34f10285",
+    "79364f5032d6",
+    "e36cf1ac289b",
+    "cae53cb34808",
+    "5c60bfb4488b"
+   ],
+   "channel_counts": {
+    "lexical": 3,
+    "dense": 21
+   },
+   "packed_tokens": 376,
+   "evidence_tokens": 376,
+   "tokenizer": "golden-words",
+   "omitted_ids": [
+    "de6379d620a0",
+    "d87b6b855482",
+    "344cfe86b6d4",
+    "285772c04e1a",
+    "fee632b96fe4",
+    "1fd2e18d7406",
+    "db398e2eb16c",
+    "61df357905af"
+   ],
+   "candidate_limit": 100,
+   "chunk_density": 1.5,
+   "original_model_query_tokens": 13,
+   "model_query_tokens": 13,
+   "model_query_truncated": false,
+   "assistant_share": 0.809848088,
+   "role_first_applied": true,
+   "role_boost_applied": false
+  },
+  "sources": [
+   {
+    "namespace": "golden",
+    "id": "travel-0",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 0,
+    "content": "sha256:af620e99e6a0 len=49",
+    "role": "user",
+    "timestamp": "2026-03-03T09:42:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-2",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 2,
+    "content": "sha256:aee386e4e9da len=44",
+    "role": "user",
+    "timestamp": "2026-03-03T09:56:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-1",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 1,
+    "content": "sha256:65c5fe290da2 len=59",
+    "role": "assistant",
+    "timestamp": "2026-03-03T09:49:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-2",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 2,
+    "content": "sha256:f60ba41f99f0 len=34",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-4",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 4,
+    "content": "sha256:46f4dab27afa len=54",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-0",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 0,
+    "content": "sha256:68ffac2a6ce2 len=64",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-1",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 1,
+    "content": "sha256:e2bbe97ef91b len=65",
+    "role": "assistant",
+    "timestamp": "2026-03-02T09:14:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-3",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 3,
+    "content": "sha256:9f2bb3a2cd14 len=44",
+    "role": "assistant",
+    "timestamp": "2026-03-02T09:28:00Z",
+    "session_seq": 3
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-2",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 2,
+    "content": "sha256:9aa4fef11ef0 len=55",
+    "role": "user",
+    "timestamp": "2026-03-04T10:24:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-0",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 0,
+    "content": "sha256:4c1c9843bbf0 len=52",
+    "role": "user",
+    "timestamp": "2026-03-04T10:10:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-4",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 4,
+    "content": "sha256:d08af89df704 len=11",
+    "role": "user",
+    "timestamp": "2026-03-04T10:38:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-1",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 1,
+    "content": "sha256:9228386ea129 len=1277",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-3",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 3,
+    "content": "sha256:be1d4940e609 len=44",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:31:00Z",
+    "session_seq": 3
+   }
+  ]
+ },
+ {
+  "evidence": [
+   {
+    "id": "ec59b32ce1b7",
+    "source_id": "ops-2",
+    "session_id": "ops",
+    "role": "user",
+    "timestamp": "2026-03-04T10:24:00Z",
+    "start": 0,
+    "end": 55,
+    "text": "Which shard had the most warnings during the migration?",
+    "score": 0.0299575229,
+    "channels": {
+     "lexical": {
+      "rank": 11,
+      "score": 0.232438103
+     },
+     "dense": {
+      "rank": 3,
+      "score": 0.246182978
+     }
+    },
+    "rerank_score": null,
+    "request_id": "ops",
+    "position": 2,
+    "seq": 2,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "a2a4047faf99",
+      "source_id": "ops-0",
+      "session_id": "ops",
+      "role": "user",
+      "timestamp": "2026-03-04T10:10:00Z",
+      "start": 0,
+      "end": 52,
+      "text": "Can you summarise the deployment migration warnings?",
+      "score": 0.0281913838,
+      "channels": {
+       "lexical": {
+        "rank": 9,
+        "score": 0.493709498
+       },
+       "dense": {
+        "rank": 13,
+        "score": 0.0
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 0,
+      "seq": 0,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "7fd76b7c0bd2",
+      "source_id": "ops-4",
+      "session_id": "ops",
+      "role": "user",
+      "timestamp": "2026-03-04T10:38:00Z",
+      "start": 0,
+      "end": 11,
+      "text": "数据库迁移在周二完成。",
+      "score": 0.0138888889,
+      "channels": {
+       "dense": {
+        "rank": 12,
+        "score": 0.0
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 4,
+      "seq": 4,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "d87b6b855482",
+      "source_id": "ops-1",
+      "session_id": "ops",
+      "role": "assistant",
+      "timestamp": "2026-03-04T10:17:00Z",
+      "start": 640,
+      "end": 840,
+      "text": " 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us ",
+      "score": 0.0320184426,
+      "channels": {
+       "lexical": {
+        "rank": 1,
+        "score": 2.34035169
+       },
+       "dense": {
+        "rank": 4,
+        "score": 0.187317133
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "session_id": "ops",
+      "role": "assistant",
+      "timestamp": "2026-03-04T10:31:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "Shards 3, 7 and 11 each reported 3 warnings.",
+      "score": 0.0320020481,
+      "channels": {
+       "lexical": {
+        "rank": 3,
+        "score": 2.2433031
+       },
+       "dense": {
+        "rank": 2,
+        "score": 0.374634326
+       }
+      },
+      "rerank_score": null,
+      "request_id": "ops",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   },
+   {
+    "id": "48f05df20d3d",
+    "source_id": "travel-0",
+    "session_id": "travel",
+    "role": "user",
+    "timestamp": "2026-03-03T09:42:00Z",
+    "start": 0,
+    "end": 49,
+    "text": "The conference is in Lisbon this year, not Porto.",
+    "score": 0.014084507,
+    "channels": {
+     "dense": {
+      "rank": 11,
+      "score": 0.0
+     }
+    },
+    "rerank_score": null,
+    "request_id": "travel",
+    "position": 0,
+    "seq": 0,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "6713a0766192",
+      "source_id": "travel-2",
+      "session_id": "travel",
+      "role": "user",
+      "timestamp": "2026-03-03T09:56:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "My flight to Lisbon leaves on Friday at 7am.",
+      "score": 0.0125,
+      "channels": {
+       "dense": {
+        "rank": 20,
+        "score": -0.339683056
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 2,
+      "seq": 2,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "de6379d620a0",
+      "source_id": "travel-3",
+      "session_id": "travel",
+      "role": "assistant",
+      "timestamp": "2026-03-03T10:03:00Z",
+      "start": 0,
+      "end": 57,
+      "text": "Leave for the airport by 5am for an international flight.",
+      "score": 0.0163934426,
+      "channels": {
+       "dense": {
+        "rank": 1,
+        "score": 0.387298346
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "session_id": "travel",
+      "role": "assistant",
+      "timestamp": "2026-03-03T09:49:00Z",
+      "start": 0,
+      "end": 59,
+      "text": "Lisbon in May is warm; book the hotel near the venue early.",
+      "score": 0.012345679,
+      "channels": {
+       "dense": {
+        "rank": 21,
+        "score": -0.408248305
+       }
+      },
+      "rerank_score": null,
+      "request_id": "travel",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   },
+   {
+    "id": "15ce9752be13",
+    "source_id": "garden-0",
+    "session_id": "garden",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "start": 0,
+    "end": 64,
+    "text": "I planted tomatoes and basil in the raised garden bed yesterday.",
+    "score": 0.0133333333,
+    "channels": {
+     "dense": {
+      "rank": 15,
+      "score": -0.113227725
+     }
+    },
+    "rerank_score": null,
+    "request_id": "garden",
+    "position": 0,
+    "seq": 0,
+    "neighbors": [],
+    "merged": [
+     {
+      "id": "f6117fc0e9e7",
+      "source_id": "garden-2",
+      "session_id": "garden",
+      "role": "user",
+      "timestamp": "2026-03-02T09:21:00Z",
+      "start": 0,
+      "end": 34,
+      "text": "The basil already has slugs on it.",
+      "score": 0.012987013,
+      "channels": {
+       "dense": {
+        "rank": 17,
+        "score": -0.182574153
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 2,
+      "seq": 2,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "cf158c96d9ff",
+      "source_id": "garden-4",
+      "session_id": "garden",
+      "role": "user",
+      "timestamp": "2026-03-02T09:35:00Z",
+      "start": 0,
+      "end": 54,
+      "text": "Next week I will add marigolds along the garden fence.",
+      "score": 0.0131578947,
+      "channels": {
+       "dense": {
+        "rank": 16,
+        "score": -0.166666627
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 4,
+      "seq": 4,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "51637415eba5",
+      "source_id": "garden-1",
+      "session_id": "garden",
+      "role": "assistant",
+      "timestamp": "2026-03-02T09:14:00Z",
+      "start": 0,
+      "end": 65,
+      "text": "Tomatoes and basil grow well together; water them in the morning.",
+      "score": 0.0128205128,
+      "channels": {
+       "dense": {
+        "rank": 18,
+        "score": -0.22645545
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 1,
+      "seq": 1,
+      "neighbors": [],
+      "merged": []
+     },
+     {
+      "id": "36af586608fa",
+      "source_id": "garden-3",
+      "session_id": "garden",
+      "role": "assistant",
+      "timestamp": "2026-03-02T09:28:00Z",
+      "start": 0,
+      "end": 44,
+      "text": "Copper tape around the bed keeps slugs away.",
+      "score": 0.0126582278,
+      "channels": {
+       "dense": {
+        "rank": 19,
+        "score": -0.258198857
+       }
+      },
+      "rerank_score": null,
+      "request_id": "garden",
+      "position": 3,
+      "seq": 3,
+      "neighbors": [],
+      "merged": []
+     }
+    ]
+   }
+  ],
+  "context": "[2026-03-04 Wed 10:10 UTC] user: Can you summarise the deployment migration warnings?\n[2026-03-04 Wed 10:17 UTC] assistant:  7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us \n[2026-03-04 Wed 10:24 UTC] user: Which shard had the most warnings during the migration?\n[2026-03-04 Wed 10:31 UTC] assistant: Shards 3, 7 and 11 each reported 3 warnings.\n[2026-03-04 Wed 10:38 UTC] user: 数据库迁移在周二完成。\n\n[2026-03-03 Tue 09:42 UTC] user: The conference is in Lisbon this year, not Porto. (this year = 2026)\n[2026-03-03 Tue 09:49 UTC] assistant: Lisbon in May is warm; book the hotel near the venue early.\n[2026-03-03 Tue 09:56 UTC] user: My flight to Lisbon leaves on Friday at 7am. (on friday = Friday, 27 February 2026)\n[2026-03-03 Tue 10:03 UTC] assistant: Leave for the airport by 5am for an international flight.\n\n[2026-03-02 Mon 09:07 UTC] user: I planted tomatoes and basil in the raised garden bed yesterday. (yesterday = Sunday, 1 March 2026)\n[2026-03-02 Mon 09:14 UTC] assistant: Tomatoes and basil grow well together; water them in the morning.\n[2026-03-02 Mon 09:21 UTC] user: The basil already has slugs on it.\n[2026-03-02 Mon 09:28 UTC] assistant: Copper tape around the bed keeps slugs away.\n[2026-03-02 Mon 09:35 UTC] user: Next week I will add marigolds along the garden fence. (next week = week of 9 March 2026)",
+  "trace": {
+   "mode": "hybrid",
+   "candidates": [
+    {
+     "chunk": {
+      "id": "ec59b32ce1b7",
+      "source_id": "ops-2",
+      "index": 0,
+      "start": 0,
+      "end": 55,
+      "text": "sha256:9aa4fef11ef0 len=55"
+     },
+     "fusion_score": 0.0299575229,
+     "channels": {
+      "lexical": {
+       "rank": 11,
+       "score": 0.232438103
+      },
+      "dense": {
+       "rank": 3,
+       "score": 0.246182978
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "a2a4047faf99",
+      "source_id": "ops-0",
+      "index": 0,
+      "start": 0,
+      "end": 52,
+      "text": "sha256:4c1c9843bbf0 len=52"
+     },
+     "fusion_score": 0.0281913838,
+     "channels": {
+      "lexical": {
+       "rank": 9,
+       "score": 0.493709498
+      },
+      "dense": {
+       "rank": 13,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "48f05df20d3d",
+      "source_id": "travel-0",
+      "index": 0,
+      "start": 0,
+      "end": 49,
+      "text": "sha256:af620e99e6a0 len=49"
+     },
+     "fusion_score": 0.014084507,
+     "channels": {
+      "dense": {
+       "rank": 11,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "7fd76b7c0bd2",
+      "source_id": "ops-4",
+      "index": 0,
+      "start": 0,
+      "end": 11,
+      "text": "sha256:d08af89df704 len=11"
+     },
+     "fusion_score": 0.0138888889,
+     "channels": {
+      "dense": {
+       "rank": 12,
+       "score": 0.0
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "15ce9752be13",
+      "source_id": "garden-0",
+      "index": 0,
+      "start": 0,
+      "end": 64,
+      "text": "sha256:68ffac2a6ce2 len=64"
+     },
+     "fusion_score": 0.0133333333,
+     "channels": {
+      "dense": {
+       "rank": 15,
+       "score": -0.113227725
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "cf158c96d9ff",
+      "source_id": "garden-4",
+      "index": 0,
+      "start": 0,
+      "end": 54,
+      "text": "sha256:46f4dab27afa len=54"
+     },
+     "fusion_score": 0.0131578947,
+     "channels": {
+      "dense": {
+       "rank": 16,
+       "score": -0.166666627
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "f6117fc0e9e7",
+      "source_id": "garden-2",
+      "index": 0,
+      "start": 0,
+      "end": 34,
+      "text": "sha256:f60ba41f99f0 len=34"
+     },
+     "fusion_score": 0.012987013,
+     "channels": {
+      "dense": {
+       "rank": 17,
+       "score": -0.182574153
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "6713a0766192",
+      "source_id": "travel-2",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:aee386e4e9da len=44"
+     },
+     "fusion_score": 0.0125,
+     "channels": {
+      "dense": {
+       "rank": 20,
+       "score": -0.339683056
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "d87b6b855482",
+      "source_id": "ops-1",
+      "index": 4,
+      "start": 640,
+      "end": 840,
+      "text": "sha256:98fc1db9adf2 len=200"
+     },
+     "fusion_score": 0.0320184426,
+     "channels": {
+      "lexical": {
+       "rank": 1,
+       "score": 2.34035169
+      },
+      "dense": {
+       "rank": 4,
+       "score": 0.187317133
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "90611027086a",
+      "source_id": "ops-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:be1d4940e609 len=44"
+     },
+     "fusion_score": 0.0320020481,
+     "channels": {
+      "lexical": {
+       "rank": 3,
+       "score": 2.2433031
+      },
+      "dense": {
+       "rank": 2,
+       "score": 0.374634326
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "de6379d620a0",
+      "source_id": "travel-3",
+      "index": 0,
+      "start": 0,
+      "end": 57,
+      "text": "sha256:b1e38359439f len=57"
+     },
+     "fusion_score": 0.0163934426,
+     "channels": {
+      "dense": {
+       "rank": 1,
+       "score": 0.387298346
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "51637415eba5",
+      "source_id": "garden-1",
+      "index": 0,
+      "start": 0,
+      "end": 65,
+      "text": "sha256:e2bbe97ef91b len=65"
+     },
+     "fusion_score": 0.0128205128,
+     "channels": {
+      "dense": {
+       "rank": 18,
+       "score": -0.22645545
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "36af586608fa",
+      "source_id": "garden-3",
+      "index": 0,
+      "start": 0,
+      "end": 44,
+      "text": "sha256:9f2bb3a2cd14 len=44"
+     },
+     "fusion_score": 0.0126582278,
+     "channels": {
+      "dense": {
+       "rank": 19,
+       "score": -0.258198857
+      }
+     },
+     "rerank_score": null
+    },
+    {
+     "chunk": {
+      "id": "95a4779e5cf9",
+      "source_id": "travel-1",
+      "index": 0,
+      "start": 0,
+      "end": 59,
+      "text": "sha256:65c5fe290da2 len=59"
+     },
+     "fusion_score": 0.012345679,
+     "channels": {
+      "dense": {
+       "rank": 21,
+       "score": -0.408248305
+      }
+     },
+     "rerank_score": null
+    }
+   ],
+   "atom_hits": [],
+   "context_candidates": [
+    {
+     "id": "b87abe405e41",
+     "source_id": "ops-0",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:10:00Z",
+     "start": 0,
+     "end": 52,
+     "text": "Can you summarise the deployment migration warnings?"
+    },
+    {
+     "id": "52fd92aebdc8",
+     "source_id": "ops-2",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 2,
+     "seq": 2,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:24:00Z",
+     "start": 0,
+     "end": 55,
+     "text": "Which shard had the most warnings during the migration?"
+    },
+    {
+     "id": "cae53cb34808",
+     "source_id": "ops-4",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 4,
+     "seq": 4,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-04T10:38:00Z",
+     "start": 0,
+     "end": 11,
+     "text": "数据库迁移在周二完成。"
+    },
+    {
+     "id": "79364f5032d6",
+     "source_id": "ops-1",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 1,
+     "seq": 1,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:17:00Z",
+     "start": 77,
+     "end": 1277,
+     "text": "checks for region eu passed. Step 2: the migration of shard 2 finished with 2 warnings and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished with 2 warnings and the deployment checks for region us passed. Step 11: the migration of shard 11 finished with 3 warnings and the deployment checks for region eu passed. Step 12: the migration of shard 12 finished with 0 warnings and the deployment checks for region us passed."
+    },
+    {
+     "id": "e36cf1ac289b",
+     "source_id": "ops-3",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 3,
+     "seq": 3,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:31:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "Shards 3, 7 and 11 each reported 3 warnings."
+    },
+    {
+     "id": "5c60bfb4488b",
+     "source_id": "ops-1",
+     "request_id": "ops",
+     "session_id": "ops",
+     "position": 1,
+     "seq": 1,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-04T10:17:00Z",
+     "start": 0,
+     "end": 1200,
+     "text": "Step 1: the migration of shard 1 finished with 1 warnings and the deployment checks for region eu passed. Step 2: the migration of shard 2 finished with 2 warnings and the deployment checks for region us passed. Step 3: the migration of shard 3 finished with 3 warnings and the deployment checks for region eu passed. Step 4: the migration of shard 4 finished with 0 warnings and the deployment checks for region us passed. Step 5: the migration of shard 5 finished with 1 warnings and the deployment checks for region eu passed. Step 6: the migration of shard 6 finished with 2 warnings and the deployment checks for region us passed. Step 7: the migration of shard 7 finished with 3 warnings and the deployment checks for region eu passed. Step 8: the migration of shard 8 finished with 0 warnings and the deployment checks for region us passed. Step 9: the migration of shard 9 finished with 1 warnings and the deployment checks for region eu passed. Step 10: the migration of shard 10 finished with 2 warnings and the deployment checks for region us passed. Step 11: the migration of shard 11 finished with 3 warnings and the deployment checks for region eu passed. Step 12: the migration of shar"
+    },
+    {
+     "id": "05bbe57f5f36",
+     "source_id": "travel-2",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 2,
+     "seq": 2,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-03T09:56:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "My flight to Lisbon leaves on Friday at 7am."
+    },
+    {
+     "id": "ec13867a8fa8",
+     "source_id": "travel-1",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 1,
+     "seq": 1,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-03T09:49:00Z",
+     "start": 0,
+     "end": 59,
+     "text": "Lisbon in May is warm; book the hotel near the venue early."
+    },
+    {
+     "id": "9c9f3ff3d385",
+     "source_id": "garden-1",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 1,
+     "seq": 1,
+     "offset": -1,
+     "role": "assistant",
+     "timestamp": "2026-03-02T09:14:00Z",
+     "start": 0,
+     "end": 65,
+     "text": "Tomatoes and basil grow well together; water them in the morning."
+    },
+    {
+     "id": "08af82dbd619",
+     "source_id": "garden-3",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 3,
+     "seq": 3,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-02T09:28:00Z",
+     "start": 0,
+     "end": 44,
+     "text": "Copper tape around the bed keeps slugs away."
+    },
+    {
+     "id": "c8e6394633dd",
+     "source_id": "garden-0",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:07:00Z",
+     "start": 0,
+     "end": 64,
+     "text": "I planted tomatoes and basil in the raised garden bed yesterday."
+    },
+    {
+     "id": "b34d2d6b07b6",
+     "source_id": "garden-2",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 2,
+     "seq": 2,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:21:00Z",
+     "start": 0,
+     "end": 34,
+     "text": "The basil already has slugs on it."
+    },
+    {
+     "id": "8d6f34f10285",
+     "source_id": "garden-4",
+     "request_id": "garden",
+     "session_id": "garden",
+     "position": 4,
+     "seq": 4,
+     "offset": 1,
+     "role": "user",
+     "timestamp": "2026-03-02T09:35:00Z",
+     "start": 0,
+     "end": 54,
+     "text": "Next week I will add marigolds along the garden fence."
+    },
+    {
+     "id": "7fc27decf9e2",
+     "source_id": "travel-3",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 3,
+     "seq": 3,
+     "offset": 1,
+     "role": "assistant",
+     "timestamp": "2026-03-03T10:03:00Z",
+     "start": 0,
+     "end": 57,
+     "text": "Leave for the airport by 5am for an international flight."
+    },
+    {
+     "id": "d325ad69de01",
+     "source_id": "travel-0",
+     "request_id": "travel",
+     "session_id": "travel",
+     "position": 0,
+     "seq": 0,
+     "offset": -1,
+     "role": "user",
+     "timestamp": "2026-03-03T09:42:00Z",
+     "start": 0,
+     "end": 49,
+     "text": "The conference is in Lisbon this year, not Porto."
+    }
+   ],
+   "omitted_context_ids": [
+    "b87abe405e41",
+    "52fd92aebdc8",
+    "cae53cb34808",
+    "79364f5032d6",
+    "e36cf1ac289b",
+    "5c60bfb4488b",
+    "05bbe57f5f36",
+    "ec13867a8fa8",
+    "9c9f3ff3d385",
+    "08af82dbd619",
+    "c8e6394633dd",
+    "b34d2d6b07b6",
+    "8d6f34f10285",
+    "7fc27decf9e2",
+    "d325ad69de01"
+   ],
+   "channel_counts": {
+    "lexical": 11,
+    "dense": 21
+   },
+   "packed_tokens": 400,
+   "evidence_tokens": 400,
+   "tokenizer": "golden-words",
+   "omitted_ids": [
+    "fee632b96fe4",
+    "61df357905af",
+    "285772c04e1a",
+    "66c65c8094db",
+    "db398e2eb16c",
+    "1fd2e18d7406",
+    "344cfe86b6d4"
+   ],
+   "candidate_limit": 100,
+   "chunk_density": 1.5,
+   "original_model_query_tokens": 6,
+   "model_query_tokens": 6,
+   "model_query_truncated": false,
+   "assistant_share": 0.809848088,
+   "role_first_applied": true,
+   "role_boost_applied": false
+  },
+  "sources": [
+   {
+    "namespace": "golden",
+    "id": "ops-2",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 2,
+    "content": "sha256:9aa4fef11ef0 len=55",
+    "role": "user",
+    "timestamp": "2026-03-04T10:24:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-0",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 0,
+    "content": "sha256:4c1c9843bbf0 len=52",
+    "role": "user",
+    "timestamp": "2026-03-04T10:10:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-4",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 4,
+    "content": "sha256:d08af89df704 len=11",
+    "role": "user",
+    "timestamp": "2026-03-04T10:38:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-1",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 1,
+    "content": "sha256:9228386ea129 len=1277",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:17:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "ops-3",
+    "request_id": "ops",
+    "session_id": "ops",
+    "position": 3,
+    "content": "sha256:be1d4940e609 len=44",
+    "role": "assistant",
+    "timestamp": "2026-03-04T10:31:00Z",
+    "session_seq": 3
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-0",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 0,
+    "content": "sha256:af620e99e6a0 len=49",
+    "role": "user",
+    "timestamp": "2026-03-03T09:42:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-2",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 2,
+    "content": "sha256:aee386e4e9da len=44",
+    "role": "user",
+    "timestamp": "2026-03-03T09:56:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-3",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 3,
+    "content": "sha256:b1e38359439f len=57",
+    "role": "assistant",
+    "timestamp": "2026-03-03T10:03:00Z",
+    "session_seq": 3
+   },
+   {
+    "namespace": "golden",
+    "id": "travel-1",
+    "request_id": "travel",
+    "session_id": "travel",
+    "position": 1,
+    "content": "sha256:65c5fe290da2 len=59",
+    "role": "assistant",
+    "timestamp": "2026-03-03T09:49:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-0",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 0,
+    "content": "sha256:68ffac2a6ce2 len=64",
+    "role": "user",
+    "timestamp": "2026-03-02T09:07:00Z",
+    "session_seq": 0
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-2",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 2,
+    "content": "sha256:f60ba41f99f0 len=34",
+    "role": "user",
+    "timestamp": "2026-03-02T09:21:00Z",
+    "session_seq": 2
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-4",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 4,
+    "content": "sha256:46f4dab27afa len=54",
+    "role": "user",
+    "timestamp": "2026-03-02T09:35:00Z",
+    "session_seq": 4
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-1",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 1,
+    "content": "sha256:e2bbe97ef91b len=65",
+    "role": "assistant",
+    "timestamp": "2026-03-02T09:14:00Z",
+    "session_seq": 1
+   },
+   {
+    "namespace": "golden",
+    "id": "garden-3",
+    "request_id": "garden",
+    "session_id": "garden",
+    "position": 3,
+    "content": "sha256:9f2bb3a2cd14 len=44",
+    "role": "assistant",
+    "timestamp": "2026-03-02T09:28:00Z",
+    "session_seq": 3
+   }
+  ]
+ }
+]

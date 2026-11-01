@@ -4,6 +4,7 @@ import re
 from collections.abc import Callable, Sequence
 from functools import lru_cache
 from importlib.metadata import version
+from typing import NamedTuple
 
 import tiktoken
 
@@ -35,6 +36,14 @@ class TiktokenCounter:
         return sum(map(self._piece_count, _PIECE_BREAK.split(text)))
 
 
+class Packed(NamedTuple):
+    evidence: tuple[Evidence, ...]
+    # The joined context, its token count, and the IDs of spans left out of it.
+    context: str
+    tokens: int
+    omitted_ids: tuple[str, ...]
+
+
 def pack(
     evidence: Sequence[Evidence],
     counter: TokenCounter,
@@ -44,7 +53,7 @@ def pack(
     merge_reach: int | None = None,
     overflow: Sequence[Evidence] = (),
     order_key: Callable[[Evidence], tuple[int, float, int]] | None = None,
-) -> tuple[tuple[Evidence, ...], str, int, tuple[str, ...]]:
+) -> Packed:
     """Select ranked anchors, then add their neighbors while the budget allows.
 
     ``overflow`` holds lower-priority spans (further chunks of messages already
@@ -152,4 +161,4 @@ def pack(
         selected.sort(key=order_key)
     texts, _ = render(selected)
     context = "\n\n".join(texts)
-    return tuple(selected), context, counter.count(context), tuple(omitted)
+    return Packed(tuple(selected), context, counter.count(context), tuple(omitted))
