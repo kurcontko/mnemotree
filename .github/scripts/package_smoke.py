@@ -252,6 +252,23 @@ async def evidence_roundtrip(workdir: Path) -> None:
         ], result.evidence
 
 
+def check_legacy_paths(*, bare: bool) -> None:
+    """The 1.0 mnemotree.evidence.<module> paths resolve to the moved modules."""
+    moved = {
+        "engine": "mnemotree.engine",
+        "models": "mnemotree.core.models",
+        "store": "mnemotree.storage.store",
+        "atoms": "mnemotree.ingest.atoms",
+        "providers": "mnemotree.providers.embeddings",
+        "cli": "mnemotree.cli.evidence",
+    }
+    if not bare:
+        moved["server"] = "mnemotree.service.app"
+    for old, new in moved.items():
+        module = importlib.import_module(f"mnemotree.evidence.{old}")
+        assert module is importlib.import_module(new), (old, new)
+
+
 def main() -> None:
     variant = sys.argv[1].removeprefix("--") if len(sys.argv) > 1 else "bare"
     assert variant in ("bare", "serve", "mcp"), variant
@@ -269,6 +286,7 @@ def main() -> None:
         return
     check_optional_absent()
     check_serve(bare=variant == "bare")
+    check_legacy_paths(bare=variant == "bare")
     # The mnemotree-mcp distribution owns that script; two owning it would clash.
     assert not script("mnemotree-mcp").exists(), "mnemotree installs a mnemotree-mcp script"
     with tempfile.TemporaryDirectory() as tmp:
