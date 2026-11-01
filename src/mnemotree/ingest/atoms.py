@@ -9,7 +9,7 @@ from typing import Protocol
 
 from pydantic import Field, field_validator
 
-from .models import Record, Source, digest
+from ..core.models import Record, Source, digest
 
 
 class ExtractorSpec(Record):

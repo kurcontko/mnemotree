@@ -23,7 +23,7 @@ from typing import Any
 SERVE_MODULES = ("fastapi", "uvicorn")
 # The embeddings and lite extras' dependencies, which neither variant installs.
 # If one starts arriving transitively, the lazy-import paths in
-# mnemotree.evidence stop being exercised anywhere, so fail loudly instead.
+# mnemotree stop being exercised anywhere, so fail loudly instead.
 OPTIONAL_MODULES = ("httpx", "tenacity", "sentence_transformers", "torch", "transformers")
 
 
@@ -138,7 +138,7 @@ async def asgi_call(
 async def service_roundtrip(workdir: Path) -> None:
     """Build the AML app and send Add and Search through its routes and middleware."""
     from mnemotree.evidence import Memory
-    from mnemotree.evidence.server import create_app
+    from mnemotree.service.app import create_app
 
     with Memory(workdir / "service.sqlite") as memory:
         app = create_app(memory, api_key="smoke-key")

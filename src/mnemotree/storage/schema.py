@@ -7,8 +7,8 @@ from pathlib import Path
 
 import sqlite_vec
 
+from ..core.models import EmbeddingSpec
 from ..errors import ConfigurationError
-from .models import EmbeddingSpec
 
 SCHEMA_VERSION = "5"
 

@@ -10,11 +10,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from ..core.models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
 from ..errors import ConfigurationError, IngestConflict
+from ..ingest.atoms import Atom
 from .atom_store import AtomStore
-from .atoms import Atom
 from .lexical import create_fts, fts_table, index_text, match_expression
-from .models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
 
 # Re-exported: these lived here before schema.py and vectors.py.
 from .schema import CHUNK_FTS as CHUNK_FTS

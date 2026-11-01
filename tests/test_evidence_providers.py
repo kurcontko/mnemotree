@@ -9,8 +9,8 @@ from functools import partial
 import httpx
 import pytest
 
-from mnemotree.evidence.providers import OpenAIEmbedder
-from mnemotree.evidence.retry import RetryAfterOrBackoff
+from mnemotree.providers.embeddings import OpenAIEmbedder
+from mnemotree.providers.retry import RetryAfterOrBackoff
 
 ACTUAL_CLIENT = httpx.AsyncClient
 
@@ -271,6 +271,6 @@ def test_providers_import_without_tenacity_for_local_embeddings():
     # A lite install has sentence-transformers but not tenacity (embeddings extra).
     code = (
         "import sys; sys.modules['tenacity'] = None\n"
-        "from mnemotree.evidence.providers import OpenAIEmbedder, SentenceTransformerEmbedder"
+        "from mnemotree.providers.embeddings import OpenAIEmbedder, SentenceTransformerEmbedder"
     )
     subprocess.run([sys.executable, "-c", code], check=True)

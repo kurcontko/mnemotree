@@ -7,10 +7,10 @@ import sqlite3
 from collections.abc import Sequence
 from typing import Any
 
+from ..core.models import Chunk, scope
 from ..errors import ConfigurationError
-from .atoms import Atom
+from ..ingest.atoms import Atom
 from .lexical import create_fts, fts_table, index_text, match_expression
-from .models import Chunk, scope
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS evidence_atoms(

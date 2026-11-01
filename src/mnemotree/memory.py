@@ -13,8 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .evidence import engine
-from .evidence.models import (
+from . import engine
+from .core.models import (
     Evidence,
     Message,
     Record,
@@ -24,7 +24,7 @@ from .evidence.models import (
     digest,
     scope,
 )
-from .evidence.protocols import Embedder, Reranker, TokenCounter
+from .core.protocols import Embedder, Reranker, TokenCounter
 
 
 class MemoryItem(Record):

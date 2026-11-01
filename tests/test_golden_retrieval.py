@@ -22,9 +22,9 @@ from typing import Any
 
 import pytest
 
+from mnemotree.core.models import EmbeddingSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.evidence.atoms import AtomDraft, Citation, ExtractorSpec
-from mnemotree.evidence.models import EmbeddingSpec
+from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec
 
 GOLDEN = Path(__file__).parent / "golden" / "retrieval"
 UPDATE = os.environ.get("MNEMOTREE_UPDATE_GOLDEN") == "1"
@@ -120,7 +120,7 @@ class OneAtomPerPassage:
 
 def aml_preset() -> dict[str, Any]:
     pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import aml_options
+    from mnemotree.service.app import aml_options
 
     class Embedded:
         embedder = True

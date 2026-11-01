@@ -16,9 +16,16 @@ from pathlib import Path
 # Config, open_memory and secret moved to mnemotree.config; importing them from
 # here keeps working.
 from ..config import Config, open_memory, secret
-from .engine import Memory
-from .evaluation import CorpusRecord, ablate, ablate_context, ablate_retrieval, evaluate, read_jsonl
-from .models import SearchOptions
+from ..core.models import SearchOptions
+from ..engine import Memory
+from ..evaluation import (
+    CorpusRecord,
+    ablate,
+    ablate_context,
+    ablate_retrieval,
+    evaluate,
+    read_jsonl,
+)
 
 
 def nonnegative(value: str) -> int:
@@ -46,13 +53,14 @@ def configure_logging() -> None:
 
 
 def code_identity() -> dict[str, str | None]:
-    """Identify the loaded evidence source even in installed packages without Git.
+    """Identify the loaded mnemotree source even in installed packages without Git.
 
     A container build may supply MNEMOTREE_BUILD_REVISION as a Git SHA. The source
-    digest also distinguishes uncommitted edits sharing the same revision.
+    digest covers every module of the package and also distinguishes uncommitted
+    edits sharing the same revision.
     """
-    package = Path(__file__).resolve().parent
-    root = package.parents[2]
+    package = Path(__file__).resolve().parents[1]
+    root = package.parents[1]
     revision = os.environ.get("MNEMOTREE_BUILD_REVISION", "")
     if not re.fullmatch(r"[0-9a-fA-F]{7,40}", revision):
         revision = ""
@@ -73,8 +81,8 @@ def code_identity() -> dict[str, str | None]:
                 revision = ""
     source_hash = hashlib.sha256()
     try:
-        for path in sorted(package.glob("*.py")):
-            source_hash.update(path.name.encode() + b"\0")
+        for path in sorted(package.rglob("*.py")):
+            source_hash.update(path.relative_to(package).as_posix().encode() + b"\0")
             source_hash.update(path.read_bytes() + b"\0")
         source_digest = source_hash.hexdigest()
     except OSError:
@@ -148,7 +156,7 @@ def main() -> None:
         if args.command == "serve":
             import uvicorn
 
-            from .server import BOOT, aml_options, create_app, emit, utc_now
+            from ..service.app import BOOT, aml_options, create_app, emit, utc_now
 
             options = config.search or aml_options(memory)
             sample_limit = args.sample_limit or None

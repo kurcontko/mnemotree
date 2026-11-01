@@ -25,16 +25,18 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from ..core.models import Evidence, Message, SearchOptions, scope
+from ..engine import Memory
 from ..errors import ConfigurationError, IngestConflict
-from .engine import Memory
-from .models import Evidence, Message, SearchOptions, scope
 
 # The platform never retries a 4xx, so an additive contract field must not fail a
 # whole run: request models ignore unknown keys (internal Records stay strict), and
 # top_k above the contract maximum is clamped rather than rejected.
 MAX_TOP_K = 100
 
-logger = logging.getLogger(__name__)
+# The 1.0 logger name: logging configuration addresses it, and the CLI
+# attaches its handler to "mnemotree.evidence".
+logger = logging.getLogger("mnemotree.evidence.server")
 # Per-process identity: a new value in the logs marks a restart, and seq orders the
 # requests of one process (the sampled payloads carry the same pair to join on).
 BOOT = secrets.token_hex(6)
