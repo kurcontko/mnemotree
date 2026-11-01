@@ -4,16 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import itertools
 import json
-import logging
-import secrets
 from collections import Counter
-from collections.abc import Awaitable, Callable, Sequence
-from datetime import UTC, datetime
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from time import perf_counter
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi import Request as HTTPRequest
@@ -22,172 +18,50 @@ from fastapi.exception_handlers import (
     request_validation_exception_handler,
 )
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..core.models import Evidence, Message, SearchOptions, scope
+from ..core.models import Evidence, SearchOptions
 from ..engine import EvidenceEngine
 from ..errors import ConfigurationError, IngestConflict
+from .presets import AML_TOKEN_BUDGET, aml_options
+from .request_log import (
+    BOOT,
+    MAX_LOGGED_PATH,
+    append_jsonl,
+    auth_scheme,
+    emit,
+    failure,
+    logger,
+    next_seq,
+    returned_role_chars,
+    utc_now,
+)
+from .schemas import MAX_TOP_K, AddMessage, AddRequest, Request, SearchRequest
 
-# The platform never retries a 4xx, so an additive contract field must not fail a
-# whole run: request models ignore unknown keys (internal Records stay strict), and
-# top_k above the contract maximum is clamped rather than rejected.
-MAX_TOP_K = 100
+# Everything mnemotree.evidence.server offered in 1.0 still resolves here.
+__all__ = [
+    "AML_TOKEN_BUDGET",
+    "BOOT",
+    "MAX_DETAIL_ERRORS",
+    "MAX_LOGGED_PATH",
+    "MAX_TOP_K",
+    "AddMessage",
+    "AddRequest",
+    "Request",
+    "SearchRequest",
+    "aml_options",
+    "append_jsonl",
+    "auth_scheme",
+    "create_app",
+    "emit",
+    "failure",
+    "logger",
+    "response_item",
+    "returned_role_chars",
+    "utc_now",
+]
 
-# The 1.0 logger name: logging configuration addresses it, and the CLI
-# attaches its handler to "mnemotree.evidence".
-logger = logging.getLogger("mnemotree.evidence.server")
-# Per-process identity: a new value in the logs marks a restart, and seq orders the
-# requests of one process (the sampled payloads carry the same pair to join on).
-BOOT = secrets.token_hex(6)
-_SEQ = itertools.count(1)
 MAX_DETAIL_ERRORS = 10
-MAX_LOGGED_PATH = 64
-
-
-def utc_now() -> str:
-    return datetime.now(UTC).isoformat(timespec="milliseconds")
-
-
-def append_jsonl(path: Path, record: dict[str, Any]) -> None:
-    """Append one line; never truncates, so a restart keeps the earlier records."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as file:
-        file.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-
-def emit(record: dict[str, Any], path: Path | None = None) -> None:
-    """One JSON line at INFO, and appended to ``path`` when given.
-
-    Logging must never fail a request, so a file error is reported, not raised.
-    """
-    line = json.dumps(record, ensure_ascii=False)
-    logger.info(line)
-    if path is not None:
-        try:
-            append_jsonl(path, record)
-        except OSError as exc:
-            logger.warning("request log write failed: %s", type(exc).__name__)
-
-
-def auth_scheme(authorization: str | None, x_api_key: str | None) -> str:
-    """The scheme the caller used, mirroring ``authorize``; never the credential."""
-    scheme = (authorization or "").partition(" ")[0].lower()
-    if scheme in ("bearer", "token"):
-        return scheme
-    if x_api_key is not None:
-        return "x-api-key"
-    # An unknown scheme word could itself be a bare credential, so it is not echoed.
-    return "other" if scheme else "none"
-
-
-def failure(exc: BaseException) -> dict[str, Any]:
-    """Class name and provider HTTP status of a failure; never bodies or headers."""
-    info: dict[str, Any] = {"error": type(exc).__name__}
-    seen: set[int] = set()
-    current: BaseException | None = exc
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        status = getattr(getattr(current, "response", None), "status_code", None)
-        if type(current).__name__ == "HTTPStatusError" and isinstance(status, int):
-            info["provider_status"] = status
-            break
-        current = current.__cause__ or current.__context__
-    return info
-
-
-def returned_role_chars(evidence: Sequence[Evidence]) -> dict[str, int]:
-    """Unique source characters by actual role, including merged spans and neighbors.
-
-    Count source offsets, excluding rendered role/date headers and derived date notes.
-    Overlaps between returned blocks count once as well as overlaps within a block.
-    """
-    spans: dict[tuple[str, str], list[tuple[int, int]]] = {}
-    for item in evidence:
-        for member in item.members():
-            for span in member.spans():
-                spans.setdefault((span.source_id, span.role), []).append((span.start, span.end))
-    counts: Counter[str] = Counter()
-    for (_, role), ranges in spans.items():
-        end = 0
-        for start, stop in sorted(ranges):
-            counts[role] += max(0, stop - max(start, end))
-            end = max(end, stop)
-    return dict(counts)
-
-
-class Request(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-
-class AddMessage(Request):
-    role: Literal["user", "assistant"]
-    # Public benchmark histories contain empty turns. Rejecting them with 422
-    # would stop the evaluation stage (never retried), so they are skipped.
-    content: str
-    timestamp: StrictInt | None = None
-
-    def source_message(self) -> Message:
-        return Message(
-            content=self.content,
-            role=self.role,
-            timestamp=(
-                datetime.fromtimestamp(self.timestamp / 1000, tz=UTC)
-                if self.timestamp is not None
-                else None
-            ),
-        )
-
-
-class AddRequest(Request):
-    request_id: str
-    user_id: str
-    session_id: str
-    messages: list[AddMessage] = Field(min_length=1)
-
-    @field_validator("request_id", "user_id", "session_id")
-    @classmethod
-    def valid_id(cls, value: str) -> str:
-        return scope(value)
-
-
-class SearchRequest(Request):
-    user_id: str
-    query: str = Field(min_length=1)
-    options: list[str] | None = None
-    top_k: int = Field(ge=1, strict=True)
-
-    @field_validator("user_id")
-    @classmethod
-    def valid_id(cls, value: str) -> str:
-        return scope(value)
-
-
-# Leave room for the question and answer-model instructions. This is a configurable
-# evidence allowance, not a claim about retrieval quality or a provider's context limit.
-AML_TOKEN_BUDGET = 8_000
-
-
-def aml_options(memory: EvidenceEngine) -> SearchOptions:
-    """Service defaults: adjacent turns merged into passages, within 8K tokens."""
-    return SearchOptions(
-        mode="hybrid" if memory.embedder else "lexical",
-        limit=100,
-        token_budget=AML_TOKEN_BUDGET,
-        neighbor_messages=1,
-        merge_blocks=True,
-        # Select diverse source anchors before completing long messages. Prefer user
-        # turns only in assistant-heavy histories; deepen the pool for long messages.
-        chunks_per_source=1,
-        role_first="user",
-        # Retain the measured hard partition; bounded priors require explicit opt-in.
-        role_boost=None,
-        role_first_min_assistant_share=0.65,
-        model_query_policy="combined",
-        candidate_limit=100,
-        deep_candidate_limit=300,
-        deep_history_density=2.0,
-    )
 
 
 def create_app(
@@ -258,7 +132,7 @@ def create_app(
     ) -> Response:
         started = perf_counter()
         http.state.ts = utc_now()
-        http.state.seq = next(_SEQ)
+        http.state.seq = next_seq()
         record: dict[str, Any] = {
             "ts": http.state.ts,
             "boot": BOOT,
