@@ -49,8 +49,8 @@ The [release workflow](.github/workflows/release.yml) checks that the tag is on
 `main` and matches the version, runs full CI on the tagged commit, builds the
 distributions and smoke-installs them. It then waits for approval in the `pypi`
 environment, uploads to PyPI through trusted publishing, and attaches the files
-to the GitHub release. To try it without uploading, run it from the Actions tab
-with the tag and `publish` unchecked.
+to the GitHub release. To try it on a tag without uploading, run
+`gh workflow run release.yml --ref v1.2.3`; add `-f publish=true` to upload.
 
 ## Reporting issues
 
