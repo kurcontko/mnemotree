@@ -178,6 +178,41 @@ jobs:
           PYTHONPATH: src
         run: python -m pytest --no-cov
 
+  memory_evals:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: ./.github/actions/setup-ci
+      - name: Install core dependencies (from uv.lock)
+        run: uv sync --locked --no-build --no-install-project
+      - name: Frozen LoCoMo and LongMemEval retrieval
+        env:
+          PYTHONPATH: src
+          EVAL_OUTPUT: ${{ runner.temp }}/memory-evals
+        run: python .github/scripts/check_memory_evals.py --output "$EVAL_OUTPUT"
+      - name: Evaluation summary
+        if: always()
+        env:
+          EVAL_OUTPUT: ${{ runner.temp }}/memory-evals
+        run: |
+          if [ -f "$EVAL_OUTPUT/summary.md" ]; then
+            cat "$EVAL_OUTPUT/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Evaluation report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frozen-memory-evals
+          path: ${{ runner.temp }}/memory-evals
+          if-no-files-found: warn
+          retention-days: 7
+
   lint:
     needs: [preflight]
     if: needs.preflight.outputs.run_code == 'true'
@@ -192,8 +227,8 @@ jobs:
       - run: uv sync --locked --no-build --no-install-project --extra dev --extra serve
       - name: ruff
         run: |
-          ruff check src tests .github/scripts
-          ruff format --check src tests .github/scripts
+          ruff check src tests .github/scripts benchmarks/ci
+          ruff format --check src tests .github/scripts benchmarks/ci
       - name: mypy
         run: mypy src
       - name: mypy (CI scripts)
@@ -230,7 +265,7 @@ jobs:
   # that silently stops running fails here.
   gate:
     name: gate
-    needs: [preflight, test, heavy, lint, package, workflow_sanity]
+    needs: [preflight, test, heavy, memory_evals, lint, package, workflow_sanity]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -245,6 +280,7 @@ jobs:
           SANITY_RESULT: ${{ needs.workflow_sanity.result }}
           TEST_RESULT: ${{ needs.test.result }}
           HEAVY_RESULT: ${{ needs.heavy.result }}
+          MEMORY_EVALS_RESULT: ${{ needs.memory_evals.result }}
           LINT_RESULT: ${{ needs.lint.result }}
         run: |
           set -uo pipefail
@@ -275,6 +311,7 @@ jobs:
           failures=0
           for lane in \
             "test|$TEST_RESULT|$DOCS_ONLY" \
+            "memory_evals|$MEMORY_EVALS_RESULT|$DOCS_ONLY" \
             "lint|$LINT_RESULT|$DOCS_ONLY" \
             "heavy|$HEAVY_RESULT|$heavy_may_skip"; do
             IFS='|' read -r name result may_skip <<< "$lane"
