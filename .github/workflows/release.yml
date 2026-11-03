@@ -118,10 +118,13 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
-          ls dist
+          ls -A dist
           test -f "dist/mnemotree-${VERSION}.tar.gz"
           test -f "dist/mnemotree-${VERSION}-py3-none-any.whl"
-          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 2
+          # uv build also writes dist/.gitignore. Hidden files are never
+          # uploaded (upload-artifact skips them), so only the rest must be
+          # exactly the two distributions.
+          test "$(find dist -maxdepth 1 -type f ! -name '.*' | wc -l)" -eq 2
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
