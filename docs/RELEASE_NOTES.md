@@ -1,3 +1,26 @@
+# Unreleased
+
+The MCP server starts with no configuration and searches semantically on a local
+model:
+
+```bash
+claude mcp add mnemotree -- uvx mnemotree-mcp
+```
+
+- New `mnemotree-mcp` package, released with `mnemotree` at the same version. It
+  adds `fastembed` and defaults to `granite-embedding-small-english-r2` (English,
+  384 dimensions, 8192-token context), downloaded once at a pinned revision to
+  `~/.mnemotree/models` (about 200 MB). The server answers while the model loads.
+- `mnemotree` itself stays slim and no longer installs a `mnemotree-mcp` script; use
+  `mnemotree mcp` (or `python -m mnemotree.mcp`) with `--config` or `--lexical`, as
+  before.
+- `--db` defaults to `~/.mnemotree/memory.sqlite` and `--namespace` to `default`.
+- New environment variables `MNEMOTREE_DB`, `MNEMOTREE_NAMESPACE`,
+  `MNEMOTREE_CONFIG` and `MNEMOTREE_LEXICAL`. The `MNEMOTREE_MCP_` names still work
+  when the new ones are unset.
+- Embedding config kind `fastembed` (`FastEmbedEmbedder`): any fastembed-supported
+  model at a pinned Hugging Face revision, loaded on first use.
+
 # 1.0.1 (2026-11-03)
 
 First release on PyPI; the code is unchanged from 1.0.0. The MCP server now runs

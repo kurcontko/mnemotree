@@ -46,7 +46,7 @@ appears only once. `timestamp` preserves the supplied timezone offset.
 
 ## MCP server
 
-`mnemotree-mcp` serves one namespace over stdio. It uses only the standard library
+The MCP server serves one namespace over stdio. It uses only the standard library
 (newline-delimited JSON-RPC 2.0, protocol versions 2024-11-05 to 2025-11-25), so a
 bare install runs it. Tools: `remember`, `remember_many`, `recall`, `get`, `forget`.
 Results carry JSON text and, from 2025-06-18, `structuredContent`; argument and
@@ -58,21 +58,52 @@ Use `get` to fetch full messages by ID. `packed_tokens` counts the context only;
 JSON framing and source metadata add response overhead.
 
 ```bash
-claude mcp add mnemotree -- mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
-  --namespace "$USER" --config ~/.mnemotree/config.json   # or --lexical
+claude mcp add mnemotree -- uvx mnemotree-mcp
 ```
 
-`--db`, `--namespace` and `--config` fall back to `MNEMOTREE_MCP_DB`,
-`MNEMOTREE_MCP_NAMESPACE` and `MNEMOTREE_MCP_CONFIG`. `--config` is the same JSON
-file `mnemotree-evidence` reads ([Configuration](#configuration)). A config without
-an embedding is refused unless `--lexical` is given: keyword-only retrieval misses
+The `mnemotree-mcp` package adds `fastembed` to `mnemotree` and embeds locally with
+[granite-embedding-small-english-r2](https://huggingface.co/ibm-granite/granite-embedding-small-english-r2):
+English only, 384 dimensions, and an 8192-token context, so a whole 1200-token chunk
+is embedded rather than truncated. The first start downloads the ONNX export at a
+pinned revision (about 200 MB) to `~/.mnemotree/models`, and later starts load it
+from there without the network. The model loads in the background: the server
+answers `initialize` at once, the first call that embeds waits for the load, and a
+failed download is reported by that call and retried by the next one. Progress and
+errors go to stderr.
+
+| Environment variable | Flag | Default |
+| --- | --- | --- |
+| `MNEMOTREE_DB` | `--db` | `~/.mnemotree/memory.sqlite` |
+| `MNEMOTREE_NAMESPACE` | `--namespace` | `default` |
+| `MNEMOTREE_CONFIG` | `--config` | none: the local model |
+| `MNEMOTREE_LEXICAL` (`1`, `true`, `yes`) | `--lexical` | off |
+
+Flags override the environment. `MNEMOTREE_MCP_DB`, `MNEMOTREE_MCP_NAMESPACE` and
+`MNEMOTREE_MCP_CONFIG`, read by earlier releases, still work when the new name is
+unset.
+
+```bash
+uvx mnemotree-mcp --lexical                            # keyword-only search
+uvx mnemotree-mcp --config ~/.mnemotree/config.json    # e.g. an HTTP embedder
+```
+
+`--config` is the same JSON file `mnemotree-evidence` reads
+([Configuration](#configuration)); its embedding replaces the local model. For the
+OpenAI-compatible provider, add the `embeddings` extra:
+`uvx --with "mnemotree[embeddings]" mnemotree-mcp --config ...`.
+A database records its embedding model, so switching models, or from `--lexical`
+to a model, needs a fresh `--db`.
+
+A library install (`pip install mnemotree`) runs the same server as `mnemotree mcp`
+or `python -m mnemotree.mcp`, without a default model: a config without an
+embedding is refused unless `--lexical` is given. Keyword-only retrieval misses
 paraphrases, so it is a choice, never a fallback.
 
 Each client session starts its own process. Processes pointed at the same `--db`
 share it: SQLite WAL serializes writes, and every acknowledged write is visible to
 the next recall in any session. Concurrent first opens of a new file retry briefly.
-Separate processes do not share an embedder, though: each loads its own, which
-matters for the local `lite` model.
+Separate processes do not share an embedder, though: each loads its own copy of a
+local model (the default one takes about 0.3 s to load once downloaded).
 
 Stored text is plain text in the database and comes back verbatim, so anything
 stored can reach the model: keep secrets out of it. Text that a model saved from
@@ -121,7 +152,11 @@ does not accept that parameter. A revision label cannot force an upstream API to
 weights, so use an explicit revision and rebuild when provider behavior changes. For
 local embeddings, set `kind` to `sentence-transformers` and supply `model`,
 `revision` and optional `query_prompt` / `document_prompt`; selecting it downloads
-the model. The default lexical configuration contacts no provider.
+the model. Kind `fastembed` (the `fastembed` package, which `mnemotree-mcp`
+installs) takes a fastembed-supported `model`, its Hugging Face `source` repository,
+a commit `revision`, `dimensions`, and optional `cache_dir` (default
+`~/.mnemotree/models`) and prompts; it downloads on first use, not when opened. The
+default lexical configuration contacts no provider.
 
 Python callers can pass a `Reranker` with async `score(query, texts)` returning one
 finite score per candidate. There is no automatic reranker or LLM. Evaluation
