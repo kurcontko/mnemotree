@@ -52,7 +52,7 @@ def open_memory(path: Path, config: Config) -> Memory:
         extractor = OpenAIExtractor(api_key=secret(key_env), **settings)
     embedder: Embedder | None = None
     if config.embedding is not None:
-        from .providers import OpenAIEmbedder, SentenceTransformerEmbedder
+        from .providers import FastEmbedEmbedder, OpenAIEmbedder, SentenceTransformerEmbedder
 
         settings = dict(config.embedding)
         kind = settings.pop("kind")
@@ -63,6 +63,8 @@ def open_memory(path: Path, config: Config) -> Memory:
             embedder = OpenAIEmbedder(api_key=secret(key_env), **settings)
         elif kind == "sentence-transformers":
             embedder = SentenceTransformerEmbedder(**settings)
+        elif kind == "fastembed":
+            embedder = FastEmbedEmbedder(**settings)
         else:
             raise ValueError(f"unknown embedding kind: {kind}")
     return Memory(
