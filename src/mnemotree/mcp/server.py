@@ -21,13 +21,13 @@ from typing import IO, TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from ..config import Config, open_memory
 from ..evidence.models import scope
 from ..memory import Memory
 from .tools import TOOLS
 
 if TYPE_CHECKING:
     from ..evidence import Memory as Engine
-    from ..evidence.cli import Config
 
 # Newest first. Tools behave the same in each; only structured results are newer.
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -213,8 +213,6 @@ def build_parser() -> argparse.ArgumentParser:
 def open_engine(path: Path, config: Config, attempts: int = 6) -> Engine:
     """Sessions started together may all create the same new file. SQLite reports
     the one-time switch to WAL as busy without waiting, so retry the open briefly."""
-    from ..evidence.cli import open_memory
-
     for attempt in range(attempts - 1):
         try:
             return open_memory(path, config)
@@ -226,8 +224,6 @@ def open_engine(path: Path, config: Config, attempts: int = 6) -> Engine:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from ..evidence.cli import Config
-
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.db or not args.namespace:

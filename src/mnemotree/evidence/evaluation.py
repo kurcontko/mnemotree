@@ -74,7 +74,7 @@ class QueryRecord(Record):
         return self
 
 
-def read_jsonl(path: Path) -> Iterator[dict]:
+def read_jsonl(path: Path) -> Iterator[dict[str, Any]]:
     with path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, 1):
             if not line.strip():
@@ -103,12 +103,14 @@ def file_hash(path: Path) -> str:
 
 async def evaluate(
     memory: Memory, corpus: Path, queries: Path, options: SearchOptions, *, candidate_k: int = 100
-) -> dict:
+) -> dict[str, Any]:
     ingestion = await ingest_corpus(memory, corpus)
     return await score_queries(memory, corpus, queries, options, ingestion, candidate_k=candidate_k)
 
 
-async def ablate(memory: Memory, corpus: Path, queries: Path, options: SearchOptions) -> dict:
+async def ablate(
+    memory: Memory, corpus: Path, queries: Path, options: SearchOptions
+) -> dict[str, Any]:
     if memory.extractor is None:
         raise ValueError("atomic ablation requires an extractor")
     ingestion = await ingest_corpus(memory, corpus)
@@ -127,7 +129,7 @@ async def ablate(memory: Memory, corpus: Path, queries: Path, options: SearchOpt
 
 async def ablate_context(
     memory: Memory, corpus: Path, queries: Path, options: SearchOptions
-) -> dict:
+) -> dict[str, Any]:
     ingestion = await ingest_corpus(memory, corpus)
     reports = {}
     for name, count in (("context_off", 0), ("context_on", options.neighbor_messages or 1)):
@@ -171,7 +173,7 @@ def retrieval_variants(memory: Memory, options: SearchOptions) -> dict[str, Sear
 
 async def ablate_retrieval(
     memory: Memory, corpus: Path, queries: Path, options: SearchOptions, *, candidate_k: int = 100
-) -> dict:
+) -> dict[str, Any]:
     variants = retrieval_variants(memory, options)
     ingestion = await ingest_corpus(memory, corpus)
     reports = {}
@@ -186,7 +188,7 @@ async def ablate_retrieval(
     }
 
 
-async def ingest_corpus(memory: Memory, corpus: Path) -> dict:
+async def ingest_corpus(memory: Memory, corpus: Path) -> dict[str, Any]:
     # Reject contaminated runs, including forgotten-source receipts.
     if memory.store.db.execute("SELECT 1 FROM evidence_requests LIMIT 1").fetchone():
         raise ValueError("evaluation requires a fresh empty database")
@@ -260,10 +262,10 @@ async def score_queries(
     corpus: Path,
     queries: Path,
     options: SearchOptions,
-    ingestion: dict,
+    ingestion: dict[str, Any],
     *,
     candidate_k: int = 100,
-) -> dict:
+) -> dict[str, Any]:
     if isinstance(candidate_k, bool) or not isinstance(candidate_k, int) or candidate_k < 1:
         raise ValueError("candidate_k must be a positive integer")
     records = [QueryRecord.model_validate(value) for value in read_jsonl(queries)]
@@ -274,7 +276,7 @@ async def score_queries(
     ids = [query.id for query in records]
     if len(set(ids)) != len(ids):
         raise ValueError("duplicate query id")
-    rows = []
+    rows: list[dict[str, Any]] = []
     for query in records:
         gold = set(query.relevant_source_ids) | {
             span.source_id for span in query.answer_spans or []
@@ -311,7 +313,7 @@ async def score_queries(
             (span.source_id, span.start, span.end)
             for item in result.evidence
             for member in item.members()
-            for span in (member, *member.neighbors)
+            for span in member.spans()
         ]
         packed = list(
             dict.fromkeys(source_id for item in result.evidence for source_id in item.source_ids())
@@ -396,7 +398,7 @@ async def score_queries(
             }
         )
 
-    def aggregate(items):
+    def aggregate(items: list[dict[str, Any]]) -> dict[str, Any]:
         answerable = [row for row in items if row["has_gold"]]
         span_labeled = [row for row in items if row["has_answer_spans"]]
         return {

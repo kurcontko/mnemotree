@@ -13,67 +13,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Config, open_memory and secret moved to mnemotree.config; importing them from
+# here keeps working.
+from ..config import Config, open_memory, secret
 from .engine import Memory
 from .evaluation import CorpusRecord, ablate, ablate_context, ablate_retrieval, evaluate, read_jsonl
-from .models import Record, SearchOptions
-from .packing import TiktokenCounter
-from .protocols import Embedder
-
-
-class Config(Record):
-    chunk_size: int = 1200
-    chunk_overlap: int = 200
-    tokenizer: str = "o200k_base"
-    embedding: dict | None = None
-    extraction: dict | None = None
-    extraction_batch_chars: int = 12000
-    search: SearchOptions | None = None
-
-
-def secret(name: str) -> str:
-    """A credential from the environment; a missing one names the variable to set."""
-    try:
-        return os.environ[name]
-    except KeyError:
-        raise SystemExit(f"mnemotree-evidence: set the {name} environment variable") from None
-
-
-def open_memory(path: Path, config: Config) -> Memory:
-    from .atoms import OpenAIExtractor
-
-    extractor = None
-    if config.extraction is not None:
-        settings = dict(config.extraction)
-        if settings.pop("kind") != "openai":
-            raise ValueError("extraction kind must be openai")
-        if "api_key" in settings:
-            raise ValueError("use api_key_env instead of storing a secret in configuration")
-        key_env = settings.pop("api_key_env", "EXTRACTION_API_KEY")
-        extractor = OpenAIExtractor(api_key=secret(key_env), **settings)
-    embedder: Embedder | None = None
-    if config.embedding is not None:
-        from .providers import OpenAIEmbedder, SentenceTransformerEmbedder
-
-        settings = dict(config.embedding)
-        kind = settings.pop("kind")
-        if kind == "openai":
-            if "api_key" in settings:
-                raise ValueError("use api_key_env instead of storing a secret in configuration")
-            key_env = settings.pop("api_key_env", "EMBEDDING_API_KEY")
-            embedder = OpenAIEmbedder(api_key=secret(key_env), **settings)
-        elif kind == "sentence-transformers":
-            embedder = SentenceTransformerEmbedder(**settings)
-        else:
-            raise ValueError(f"unknown embedding kind: {kind}")
-    return Memory(
-        path,
-        embedder=embedder,
-        chunk_size=config.chunk_size,
-        chunk_overlap=config.chunk_overlap,
-        token_counter=TiktokenCounter(config.tokenizer),
-        extractor=extractor,
-        extraction_batch_chars=config.extraction_batch_chars,
-    )
+from .models import SearchOptions
 
 
 def nonnegative(value: str) -> int:
@@ -249,7 +194,7 @@ def main() -> None:
             asyncio.run(run(args, memory, options))
 
 
-async def run(args, memory: Memory, options: SearchOptions) -> None:
+async def run(args: argparse.Namespace, memory: Memory, options: SearchOptions) -> None:
     if args.command == "add":
         for value in read_jsonl(args.corpus):
             record = CorpusRecord.model_validate(value)

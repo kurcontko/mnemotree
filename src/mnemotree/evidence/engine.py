@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from time import perf_counter
 
+from ..errors import ConfigurationError, InvalidInput
 from .atoms import AtomHit, Extractor, extract_atoms
 from .chunking import chunk_source
 from .models import (
@@ -23,6 +24,7 @@ from .models import (
     SearchTrace,
     Source,
     digest,
+    identifier,
     scope,
 )
 from .packing import TiktokenCounter, pack
@@ -151,10 +153,10 @@ class Memory:
         extraction_batch_chars: int = 12000,
     ) -> None:
         if chunk_size < 1 or not 0 <= chunk_overlap < chunk_size:
-            raise ValueError("require chunk_size > chunk_overlap >= 0")
+            raise ConfigurationError("require chunk_size > chunk_overlap >= 0")
         self.embedder = embedder
         if not 1 <= extraction_batch_chars <= 100000:
-            raise ValueError("extraction_batch_chars must be between 1 and 100000")
+            raise ConfigurationError("extraction_batch_chars must be between 1 and 100000")
         self.extractor = extractor
         self.extraction_batch_chars = extraction_batch_chars
         self.reranker = reranker
@@ -190,22 +192,19 @@ class Memory:
         session_id: str,
     ) -> IngestReceipt:
         scope(namespace)
-        for value in (request_id, session_id):
-            if not isinstance(value, str) or not value.strip() or len(value) > 256:
-                raise ValueError(
-                    "request_id and session_id must be nonblank and at most 256 characters"
-                )
+        identifier(request_id, "request_id")
+        identifier(session_id, "session_id")
         if not messages:
-            raise ValueError("messages must not be empty")
+            raise InvalidInput("messages must not be empty")
         messages = tuple(Message.model_validate(message) for message in messages)
         body_hash = digest([session_id, [message.model_dump(mode="json") for message in messages]])
         replay = await asyncio.to_thread(self.store.receipt, namespace, request_id, body_hash)
         if replay is not None:
             return replay
         if self.store.embedding_spec and self.embedder is None:
-            raise ValueError("writes to a dense database require its configured embedder")
+            raise ConfigurationError("writes to a dense database require its configured embedder")
         if self.store.extractor_config is not None and self.extractor is None:
-            raise ValueError("writes to an atom database require its configured extractor")
+            raise ConfigurationError("writes to an atom database require its configured extractor")
         ingested_at = now()
         sources = [
             Source(
@@ -273,10 +272,10 @@ class Memory:
     ) -> SearchResult:
         scope(namespace)
         if not isinstance(query, str) or not query.strip():
-            raise ValueError("query must not be blank")
+            raise InvalidInput("query must not be blank")
         options = options or SearchOptions(mode="hybrid" if self.embedder else "lexical")
         if options.representation != "raw" and self.store.extractor_config is None:
-            raise ValueError("atom retrieval requires an extracted corpus")
+            raise ConfigurationError("atom retrieval requires an extracted corpus")
         started = perf_counter()
         full_query = query + ("\n" + "\n".join(query_options) if query_options else "")
         unbounded_model_query = query if options.model_query_policy == "question" else full_query
@@ -286,7 +285,7 @@ class Memory:
         query_vector = None
         if options.mode in ("dense", "hybrid"):
             if self.embedder is None:
-                raise ValueError("dense/hybrid retrieval requires the indexed embedder")
+                raise ConfigurationError("dense/hybrid retrieval requires the indexed embedder")
             query_vector = await self.embedder.embed_query(bounded_query)
         embedding_ms = (perf_counter() - started) * 1000
         retrieval_start = perf_counter()

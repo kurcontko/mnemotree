@@ -95,7 +95,7 @@ async def test_online_wal_backup_restores_indexes_scope_and_deletion_receipts(tm
         await _seed(writer)
         expected = await _fingerprint(writer)
         assert writer.store.db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-        assert Path(str(live) + "-wal").stat().st_size > 0
+        assert Path(str(live) + "-wal").stat().st_size > 0  # noqa: ASYNC240
         # An online backup, rather than copying only the main file, includes
         # committed source, receipt, FTS and vector pages still held in the WAL.
         with closing(sqlite3.connect(snapshot)) as destination:
