@@ -29,6 +29,15 @@ make build       # wheel and source distribution
 Tests exercise real FTS5 and sqlite-vec and make no paid model calls. Keep it that
 way: use deterministic embedders and stubs for providers.
 
+`tests/test_golden_retrieval.py` compares retrieval over a fixed corpus with the
+snapshots in `tests/golden/retrieval/`. A refactor must leave them unchanged. A
+deliberate retrieval change regenerates them, and the snapshot diff belongs in the
+review:
+
+```bash
+MNEMOTREE_UPDATE_GOLDEN=1 .venv/bin/pytest tests/test_golden_retrieval.py
+```
+
 ## Pull requests
 
 1. Branch off `main`.
