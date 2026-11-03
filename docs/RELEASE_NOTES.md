@@ -1,3 +1,13 @@
+# 1.0.1 (2026-11-03)
+
+First release on PyPI; the code is unchanged from 1.0.0. The MCP server now runs
+without a checkout:
+
+```bash
+uvx --from mnemotree mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
+  --namespace "$USER" --lexical   # or --config with an embedding
+```
+
 # 1.0.0 (2026-10-31)
 
 Mnemotree now stores original messages in SQLite and retrieves source evidence.

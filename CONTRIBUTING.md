@@ -38,6 +38,20 @@ way: use deterministic embedders and stubs for providers.
 4. Open the pull request against `main` with a clear description, and reference any
    related issues.
 
+## Releasing
+
+1. On `main`, set `version` in `pyproject.toml` and add the entry to
+   [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
+2. Tag the merged commit and push the tag:
+   `git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`.
+
+The [release workflow](.github/workflows/release.yml) checks that the tag is on
+`main` and matches the version, runs full CI on the tagged commit, builds the
+distributions and smoke-installs them. It then waits for approval in the `pypi`
+environment, uploads to PyPI through trusted publishing, and attaches the files
+to the GitHub release. To try it on a tag without uploading, run
+`gh workflow run release.yml --ref v1.2.3`; add `-f publish=true` to upload.
+
 ## Reporting issues
 
 Search existing issues first, then open a new one using the provided templates.
