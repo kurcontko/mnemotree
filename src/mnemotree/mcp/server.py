@@ -15,6 +15,7 @@ import sqlite3
 import sys
 import threading
 import time
+from collections.abc import Callable, Mapping
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any
@@ -22,6 +23,7 @@ from typing import IO, TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from ..evidence.models import scope
+from ..evidence.providers import EmbedderUnavailable
 from ..memory import Memory
 from .tools import TOOLS
 
@@ -128,7 +130,7 @@ class Server:
         except ValidationError as exc:
             # Argument errors are tool results, so the model can correct itself.
             return self.failure(describe(exc))
-        except (ValueError, LookupError) as exc:
+        except (ValueError, LookupError, EmbedderUnavailable) as exc:
             return self.failure(str(exc))
         except Exception as exc:
             log.exception("tool %s failed", tool.name)
@@ -187,25 +189,40 @@ async def serve_stdio(
             writer.flush()
 
 
-def build_parser() -> argparse.ArgumentParser:
+DEFAULT_DB = "~/.mnemotree/memory.sqlite"
+DEFAULT_NAMESPACE = "default"
+TRUE, FALSE = ("1", "true", "yes"), ("", "0", "false", "no")
+
+
+def setting(name: str) -> str | None:
+    """MNEMOTREE_<name>, else the MNEMOTREE_MCP_<name> that earlier releases read."""
+    return os.environ.get(f"MNEMOTREE_{name}") or os.environ.get(f"MNEMOTREE_MCP_{name}") or None
+
+
+def build_parser(prog: str = "mnemotree-mcp") -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mnemotree-mcp", description="MCP stdio server for one mnemotree namespace."
+        prog=prog, description="MCP stdio server for one mnemotree namespace."
     )
     parser.add_argument(
-        "--db", default=os.environ.get("MNEMOTREE_MCP_DB"), help="SQLite file (MNEMOTREE_MCP_DB)"
+        "--db",
+        default=setting("DB") or DEFAULT_DB,
+        help=f"SQLite file (MNEMOTREE_DB, default {DEFAULT_DB})",
     )
     parser.add_argument(
         "--namespace",
-        default=os.environ.get("MNEMOTREE_MCP_NAMESPACE"),
-        help="isolation scope served by this process (MNEMOTREE_MCP_NAMESPACE)",
+        default=setting("NAMESPACE") or DEFAULT_NAMESPACE,
+        help=f"isolation scope served by this process (MNEMOTREE_NAMESPACE, default "
+        f"{DEFAULT_NAMESPACE!r})",
     )
     parser.add_argument(
         "--config",
-        default=os.environ.get("MNEMOTREE_MCP_CONFIG"),
-        help="Evidence JSON config with embedding and search settings (MNEMOTREE_MCP_CONFIG)",
+        default=setting("CONFIG"),
+        help="Evidence JSON config with embedding and search settings (MNEMOTREE_CONFIG)",
     )
     parser.add_argument(
-        "--lexical", action="store_true", help="run keyword-only retrieval without an embedder"
+        "--lexical",
+        action="store_true",
+        help="run keyword-only retrieval without an embedder (MNEMOTREE_LEXICAL=1)",
     )
     return parser
 
@@ -225,13 +242,38 @@ def open_engine(path: Path, config: Config, attempts: int = 6) -> Engine:
     return open_memory(path, config)
 
 
-def main(argv: list[str] | None = None) -> int:
+def warm_up(warm: Callable[[], object]) -> None:
+    try:
+        warm()
+    except Exception as exc:
+        # Calls that need embeddings retry the load and return its error themselves.
+        log.error("%s; calls that embed will retry", exc)
+
+
+def main(
+    argv: list[str] | None = None,
+    *,
+    default_embedding: Mapping[str, Any] | None = None,
+    prog: str = "mnemotree-mcp",
+) -> int:
+    """Run the server. ``default_embedding`` applies when no embedding is configured and
+    keyword-only retrieval was not chosen; without it, that case is an error."""
     from ..evidence.cli import Config
 
-    parser = build_parser()
+    parser = build_parser(prog)
+    if default_embedding is not None:
+        parser.epilog = (
+            f"Without an embedding in --config, or --lexical, embeds with "
+            f"{default_embedding.get('model')}, downloaded on first start to "
+            f"{default_embedding.get('cache_dir')}."
+        )
     args = parser.parse_args(argv)
-    if not args.db or not args.namespace:
-        parser.error("--db and --namespace are required")
+    flag = os.environ.get("MNEMOTREE_LEXICAL", "").strip().lower()
+    if flag not in TRUE + FALSE:
+        parser.error(f"MNEMOTREE_LEXICAL must be one of {', '.join(TRUE + FALSE[1:])}")
+    lexical = args.lexical or flag in TRUE
+    if not args.db:
+        parser.error("--db must not be empty")
     try:
         scope(args.namespace)
     except ValueError as exc:
@@ -247,20 +289,32 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, UnicodeDecodeError) as exc:
             parser.error(f"--config: {exc}")
     # Keyword-only retrieval misses paraphrases, so it must be chosen, never a fallback.
-    if config.embedding is None and not args.lexical:
-        parser.error("no embedding configured: pass --config with an embedding, or --lexical")
-    if config.embedding is not None and args.lexical:
-        parser.error("--lexical conflicts with the configured embedding")
-    if args.lexical and config.search is not None and config.search.mode != "lexical":
-        parser.error(f"--lexical conflicts with search mode {config.search.mode!r}")
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s: %(message)s")
+    if config.embedding is None and not lexical:
+        if default_embedding is None:
+            parser.error("no embedding configured: pass --config with an embedding, or --lexical")
+        config = config.model_copy(update={"embedding": dict(default_embedding)})
+    chosen = "--lexical" if args.lexical else "MNEMOTREE_LEXICAL"
+    if config.embedding is not None and lexical:
+        parser.error(f"{chosen} conflicts with the configured embedding")
+    if lexical and config.search is not None and config.search.mode != "lexical":
+        parser.error(f"{chosen} conflicts with search mode {config.search.mode!r}")
+    logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="%(name)s: %(message)s")
+    # Libraries only from WARNING: httpx alone logs every request of a model download.
+    logging.getLogger("mnemotree").setLevel(logging.INFO)
     # Clients that spawn the server directly pass a "~" through unexpanded.
     path = Path(args.db).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)  # NOSONAR
     try:
         engine = open_engine(path, config)
-    except ValueError as exc:
+    except (ValueError, ImportError) as exc:
         return parser.error(f"--config: {exc}")
+    # A local model may need a download first. Loading it in the background lets
+    # initialize be answered at once; the first call that embeds waits for it.
+    warm = getattr(engine.embedder, "warm", None)
+    if callable(warm):
+        threading.Thread(
+            target=warm_up, args=(warm,), name="mnemotree-mcp-embedder", daemon=True
+        ).start()
     memory = Memory.from_engine(engine, namespace=args.namespace, search=config.search)
     with memory:
         asyncio.run(serve_stdio(Server(memory)))

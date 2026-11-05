@@ -2,9 +2,10 @@
 
 Run with ``--bare`` against a plain ``pip install mnemotree``, or ``--serve``
 against ``mnemotree[serve]``. The MCP stdio server needs no extra, so both run
-it. CI's test lanes import the package from ``src/`` and never install the
-wheel, so this is the only place the wheel's file list, metadata, and
-console-script entry points are checked.
+it as ``mnemotree mcp``. Run with ``--mcp`` against ``mnemotree-mcp``, the
+zero-configuration server package. CI's test lanes import the package from
+``src/`` and never install the wheels, so this is the only place their file
+lists, metadata, and console-script entry points are checked.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -23,7 +25,18 @@ SERVE_MODULES = ("fastapi", "uvicorn")
 # The embeddings and lite extras' dependencies, which neither variant installs.
 # If one starts arriving transitively, the lazy-import paths in
 # mnemotree.evidence stop being exercised anywhere, so fail loudly instead.
-OPTIONAL_MODULES = ("httpx", "tenacity", "sentence_transformers", "torch", "transformers")
+# fastembed comes only with mnemotree-mcp.
+OPTIONAL_MODULES = (
+    "httpx",
+    "tenacity",
+    "sentence_transformers",
+    "torch",
+    "transformers",
+    "fastembed",
+    "onnxruntime",
+)
+# The point of fastembed: a local model without PyTorch.
+TORCH_MODULES = ("sentence_transformers", "torch", "transformers")
 
 
 def check_location() -> None:
@@ -35,20 +48,20 @@ def check_location() -> None:
 
 
 def check_cli(version: str) -> None:
-    cli = Path(sys.executable).parent / "mnemotree"
+    cli = script("mnemotree")
     out = subprocess.check_output([str(cli), "--version"], text=True)
     assert out.strip() == version, (out, version)
 
 
 def check_evidence_cli() -> None:
-    cli = Path(sys.executable).parent / "mnemotree-evidence"
+    cli = script("mnemotree-evidence")
     subprocess.check_output([str(cli), "--help"], text=True)
 
 
-def check_mcp(workdir: Path) -> None:
+def check_mcp(workdir: Path, command: list[str]) -> None:
+    """A lexical session, so no model is downloaded; HOME is the scratch directory."""
     import json
 
-    cli = Path(sys.executable).parent / "mnemotree-mcp"
     lines = [
         {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}},
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
@@ -60,17 +73,62 @@ def check_mcp(workdir: Path) -> None:
             "params": {"name": "remember", "arguments": {"content": "MCP smoke memory."}},
         },
     ]
+    env = {key: value for key, value in os.environ.items() if not key.startswith("MNEMOTREE_")}
+    env["HOME"] = str(workdir)
     out = subprocess.run(
-        [str(cli), "--db", str(workdir / "mcp.sqlite"), "--namespace", "smoke", "--lexical"],
+        [*command, "--db", str(workdir / "mcp.sqlite"), "--namespace", "smoke", "--lexical"],
         input="".join(json.dumps(line) + "\n" for line in lines),
         capture_output=True,
         text=True,
+        env=env,
         timeout=60,
         check=True,
     ).stdout
     replies = [json.loads(line) for line in out.splitlines()]
     assert [reply["id"] for reply in replies] == [0, 1, 2], replies
+    assert replies[0]["result"]["serverInfo"]["name"] == "mnemotree", replies[0]
     assert replies[2]["result"]["isError"] is False, replies[2]
+    assert not (workdir / ".mnemotree").exists(), "a lexical session touched the model cache"
+
+
+def script(name: str) -> Path:
+    return Path(sys.executable).parent / name
+
+
+def check_mcp_package(version: str) -> None:
+    """mnemotree-mcp: same version as mnemotree, pinned to it, owning the script."""
+    import re
+
+    import mnemotree_mcp
+
+    origin = Path(mnemotree_mcp.__file__).resolve()
+    assert "site-packages" in origin.parts, f"mnemotree_mcp imported from a checkout: {origin}"
+    assert importlib.metadata.version("mnemotree-mcp") == version
+    # The wheel just built, not the release of the same version on PyPI.
+    source = importlib.metadata.distribution("mnemotree").read_text("direct_url.json") or ""
+    assert '"file://' in source, f"mnemotree was not installed from the local wheel: {source}"
+    pins = [
+        requirement
+        for requirement in importlib.metadata.requires("mnemotree-mcp") or []
+        if re.split(r"[\s\[=<>!~;]", requirement, maxsplit=1)[0] == "mnemotree"
+    ]
+    assert pins == [f"mnemotree=={version}"], pins
+    (entry,) = importlib.metadata.entry_points(group="console_scripts", name="mnemotree-mcp")
+    assert entry.dist is not None and entry.dist.name == "mnemotree-mcp", entry
+    present = [name for name in TORCH_MODULES if importlib.util.find_spec(name) is not None]
+    assert not present, f"mnemotree-mcp pulled in {present}"
+    out = subprocess.check_output([str(script("mnemotree-mcp")), "--help"], text=True)
+    assert "granite-embedding-small-english-r2" in out, out
+
+
+def check_default_model() -> None:
+    """The installed fastembed knows the pinned model, so its files resolve offline."""
+    from mnemotree.evidence.providers import DEFAULT_LOCAL_EMBEDDING, FastEmbedEmbedder
+
+    settings = dict(DEFAULT_LOCAL_EMBEDDING)
+    settings.pop("kind")
+    files = FastEmbedEmbedder(**settings).files()
+    assert files[-2:] == ["onnx/model.onnx", "onnx/model.onnx_data"], files
 
 
 def check_optional_absent() -> None:
@@ -192,21 +250,31 @@ async def evidence_roundtrip(workdir: Path) -> None:
 
 
 def main() -> None:
-    bare = "--bare" in sys.argv
+    variant = sys.argv[1].removeprefix("--") if len(sys.argv) > 1 else "bare"
+    assert variant in ("bare", "serve", "mcp"), variant
     version = importlib.metadata.version("mnemotree")
 
     check_location()
-    check_optional_absent()
     check_cli(version)
     check_evidence_cli()
-    check_serve(bare=bare)
+    if variant == "mcp":
+        check_mcp_package(version)
+        check_default_model()
+        with tempfile.TemporaryDirectory() as tmp:
+            check_mcp(Path(tmp), [str(script("mnemotree-mcp"))])
+        print(f"mnemotree-mcp {version}: ok")
+        return
+    check_optional_absent()
+    check_serve(bare=variant == "bare")
+    # The mnemotree-mcp distribution owns that script; two owning it would clash.
+    assert not script("mnemotree-mcp").exists(), "mnemotree installs a mnemotree-mcp script"
     with tempfile.TemporaryDirectory() as tmp:
         asyncio.run(memory_roundtrip(Path(tmp)))
-        check_mcp(Path(tmp))
+        check_mcp(Path(tmp), [str(script("mnemotree")), "mcp"])
         asyncio.run(evidence_roundtrip(Path(tmp)))
-        if not bare:
+        if variant == "serve":
             asyncio.run(service_roundtrip(Path(tmp)))
-    print(f"mnemotree {version} ({'bare' if bare else 'serve'}): ok")
+    print(f"mnemotree {version} ({variant}): ok")
 
 
 if __name__ == "__main__":

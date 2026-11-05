@@ -1,4 +1,4 @@
-"""Run the MCP stdio server: python -m mnemotree.mcp --db PATH --namespace NAME."""
+"""Run the MCP stdio server: python -m mnemotree.mcp [--db PATH] [--namespace NAME]."""
 
 from .server import main
 

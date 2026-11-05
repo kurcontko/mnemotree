@@ -1,7 +1,8 @@
 name: release
 
-# Publishes a tagged version to PyPI, so `uvx --from mnemotree mnemotree-mcp`
-# works without a checkout.
+# Publishes a tagged version of mnemotree and mnemotree-mcp to PyPI, so
+# `uvx mnemotree-mcp` starts the MCP server without a checkout or configuration.
+# Both distributions are released together at the same version.
 #
 # Pushing a `v*` tag releases it. To dry-run, dispatch this workflow on a tag
 # (`gh workflow run release.yml --ref v1.2.3`): it builds and checks, and
@@ -11,8 +12,9 @@ name: release
 #
 # Upload uses PyPI trusted publishing (OIDC), so no token is stored anywhere.
 # PyPI accepts it only from this file, in this repository, through the `pypi`
-# environment: configure that publisher on PyPI and give the environment a
-# required reviewer, and a pushed tag waits for approval before the upload.
+# environment: configure that publisher on PyPI for each of the two projects
+# and give the environment a required reviewer, and a pushed tag waits for
+# approval before the upload.
 on:
   push:
     tags: ["v*"]
@@ -48,7 +50,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check the tag against main and pyproject.toml
+      - name: Check the tag against main and both pyproject.toml files
         id: resolve
         env:
           REF_TYPE: ${{ github.ref_type }}
@@ -73,6 +75,18 @@ jobs:
           version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
           if [ "v$version" != "$TAG" ]; then
             echo "::error::$TAG does not match pyproject.toml version $version"
+            exit 1
+          fi
+          # mnemotree-mcp is released with mnemotree and pins exactly that release.
+          mcp=packages/mnemotree-mcp/pyproject.toml
+          mcp_version=$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "$mcp")
+          if [ "v$mcp_version" != "$TAG" ]; then
+            echo "::error::$TAG does not match $mcp version $mcp_version"
+            exit 1
+          fi
+          mcp_pin=$(python3 -c 'import re, sys, tomllib; print(*[d for d in tomllib.load(open(sys.argv[1], "rb"))["project"]["dependencies"] if re.split(r"[\s\[=<>!~;]", d, maxsplit=1)[0] == "mnemotree"])' "$mcp")
+          if [ "$mcp_pin" != "mnemotree==$version" ]; then
+            echo "::error::$mcp requires '$mcp_pin', not mnemotree==$version"
             exit 1
           fi
           {
@@ -109,7 +123,7 @@ jobs:
           enable-cache: false
 
       # The same build, metadata check and clean-venv smoke installs as CI's
-      # package lane; it leaves the sdist and wheel in dist/.
+      # package lane; it leaves both packages' sdists and wheels in dist/.
       - name: Build, check, and smoke-install the distributions
         run: bash .github/scripts/check_package.sh
 
@@ -121,10 +135,12 @@ jobs:
           ls -A dist
           test -f "dist/mnemotree-${VERSION}.tar.gz"
           test -f "dist/mnemotree-${VERSION}-py3-none-any.whl"
+          test -f "dist/mnemotree_mcp-${VERSION}.tar.gz"
+          test -f "dist/mnemotree_mcp-${VERSION}-py3-none-any.whl"
           # uv build also writes dist/.gitignore. Hidden files are never
           # uploaded (upload-artifact skips them), so only the rest must be
-          # exactly the two distributions.
-          test "$(find dist -maxdepth 1 -type f ! -name '.*' | wc -l)" -eq 2
+          # exactly the four distributions.
+          test "$(find dist -maxdepth 1 -type f ! -name '.*' | wc -l)" -eq 4
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
