@@ -1,4 +1,4 @@
-# Unreleased
+# 1.0.2 (2026-11-05)
 
 The MCP server starts with no configuration and searches semantically on a local
 model:
