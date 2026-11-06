@@ -228,29 +228,25 @@ class EvidenceEngine:
     async def _embed_and_extract(
         self, sources: Sequence[Source], chunks: Sequence[Chunk]
     ) -> tuple[Sequence[Sequence[float]] | None, list[Atom]]:
-        """Embed the chunks and extract atoms; with both providers, concurrently."""
-        embedder, extractor = self.embedder, self.extractor
-        texts = [chunk.text for chunk in chunks]
-        if embedder is None or extractor is None:
-            vectors = await embedder.embed_documents(texts) if embedder else None
-            atoms = await self._extract(extractor, sources) if extractor else []
-            return vectors, atoms
+        """Embed the chunks and extract atoms, concurrently when both providers are set."""
+        embedding: asyncio.Task[Sequence[Sequence[float]]] | None = None
+        extraction: asyncio.Task[list[Atom]] | None = None
         try:
             async with asyncio.TaskGroup() as group:
-                embedding = group.create_task(embedder.embed_documents(texts))
-                extraction = group.create_task(self._extract(extractor, sources))
-        except ExceptionGroup:
-            # Raise the provider's own exception, as the sequential path does; a
-            # group would hide it from callers that catch its type.
-            errors = [
-                error
-                for task in (embedding, extraction)
-                if task.done() and not task.cancelled() and (error := task.exception()) is not None
-            ]
+                if self.embedder is not None:
+                    texts = [chunk.text for chunk in chunks]
+                    embedding = group.create_task(self.embedder.embed_documents(texts))
+                if self.extractor is not None:
+                    extraction = group.create_task(self._extract(self.extractor, sources))
+        except ExceptionGroup as failures:
+            # Raise the provider's own exception: a group would hide it from callers
+            # that catch its type. A failure cancels the other task, so it is the first.
+            error = failures.exceptions[0]
         else:
-            return embedding.result(), extraction.result()
+            vectors = embedding.result() if embedding is not None else None
+            return vectors, extraction.result() if extraction is not None else []
         # Raised outside the handler so the error keeps its own cause and context.
-        raise errors[0]
+        raise error
 
     async def _extract(self, extractor: Extractor, sources: Sequence[Source]) -> list[Atom]:
         return await extract_atoms(
