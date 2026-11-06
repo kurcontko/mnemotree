@@ -89,3 +89,11 @@ async def test_a_provider_failure_surfaces_unwrapped_and_writes_nothing(tmp_path
         found = await m.search("u", "Lisbon", options=SearchOptions(mode="lexical"))
         assert not found.evidence
         assert m.source("u", "m") is None
+
+
+async def test_a_lone_provider_failure_also_surfaces_unwrapped(tmp_path):
+    with memory(tmp_path / "m.db", Embedder(fail=True), None) as m:
+        with pytest.raises(ProviderDown) as raised:
+            await add(m)
+        assert isinstance(raised.value.__cause__, OSError)
+        assert m.source("u", "m") is None
