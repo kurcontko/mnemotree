@@ -168,6 +168,10 @@ jobs:
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          # One upload covers both packages. If it stops partway, re-running the
+          # job uploads only the files PyPI does not have yet.
+          skip-existing: true
 
   # After PyPI, so a release page never offers files the index refused.
   github_release:

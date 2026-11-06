@@ -1,3 +1,13 @@
+# 1.0.3 (2026-11-06)
+
+First release of `mnemotree-mcp` on PyPI; the code is unchanged from 1.0.2.
+`mnemotree-mcp` 1.0.2 was never uploaded, and `mnemotree` 1.0.2 reached PyPI as a
+wheel only. Use 1.0.3 for both:
+
+```bash
+claude mcp add mnemotree -- uvx mnemotree-mcp
+```
+
 # 1.0.2 (2026-11-05)
 
 The MCP server starts with no configuration and searches semantically on a local
