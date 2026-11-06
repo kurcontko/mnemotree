@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
-from .models import EmbeddingSpec
+from .models import AtomDraft, EmbeddingSpec, ExtractorSpec, Passage
 
 
 class Embedder(Protocol):
@@ -26,3 +26,10 @@ class TokenCounter(Protocol):
     def signature(self) -> str: ...
 
     def count(self, text: str) -> int: ...
+
+
+class Extractor(Protocol):
+    @property
+    def spec(self) -> ExtractorSpec: ...
+
+    async def extract(self, passages: Sequence[Passage]) -> Sequence[AtomDraft]: ...
