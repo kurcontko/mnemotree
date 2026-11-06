@@ -15,23 +15,8 @@ from ..errors import ConfigurationError, IngestConflict
 from ..ingest.atoms import Atom
 from .atom_store import AtomStore
 from .lexical import create_fts, fts_table, index_text, match_expression
-
-# Re-exported: these lived here before schema.py and vectors.py.
-from .schema import CHUNK_FTS as CHUNK_FTS
-from .schema import SCHEMA_VERSION as SCHEMA_VERSION
-from .schema import configure, connect, create_tables, stored_embedding_spec
-from .vectors import vector_blob as vector_blob
-
-__all__ = [
-    "CHUNK_FTS",
-    "SCHEMA_VERSION",
-    "IngestBlobs",
-    "IngestConflict",
-    "SQLiteEvidenceStore",
-    "Window",
-    "now",
-    "vector_blob",
-]
+from .schema import CHUNK_FTS, configure, connect, create_tables, stored_embedding_spec
+from .vectors import vector_blob
 
 
 class Window(NamedTuple):

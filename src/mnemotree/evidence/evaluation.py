@@ -1,11 +1,10 @@
-"""Moved to :mod:`mnemotree.evaluation`; this 1.0 path stays importable as the same module."""
+"""The 1.0 path of :mod:`mnemotree.evaluation`, kept importable until 2.0.
 
-import sys
-from typing import TYPE_CHECKING
+Also re-exports the names the 1.0 module offered that now live elsewhere.
+"""
 
-from mnemotree import evaluation as _module
+from mnemotree.engine import EvidenceEngine
+from mnemotree.evaluation import *
 
-if TYPE_CHECKING:
-    from mnemotree.evaluation import *  # noqa: F403
-
-sys.modules[__name__] = _module
+# The engine's 1.0 name.
+Memory = EvidenceEngine

@@ -123,7 +123,7 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
 
 def test_service_defaults_use_merged_context_in_a_bounded_window(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.service.app import AML_TOKEN_BUDGET, aml_options
+    from mnemotree.service.presets import AML_TOKEN_BUDGET, aml_options
 
     with Memory(tmp_path / "m.db") as memory:
         options = aml_options(memory)
@@ -444,7 +444,8 @@ def test_cli_names_a_missing_credential_variable(monkeypatch):
 
 async def test_request_log_bounds_unmatched_paths(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.service.app import MAX_LOGGED_PATH, create_app
+    from mnemotree.service.app import create_app
+    from mnemotree.service.request_log import MAX_LOGGED_PATH
 
     log = tmp_path / "r.jsonl"
     with Memory(tmp_path / "m.db") as memory:
@@ -460,7 +461,8 @@ async def test_request_log_bounds_unmatched_paths(tmp_path):
 
 async def test_search_clamps_top_k_in_the_options_the_engine_receives(tmp_path, monkeypatch):
     pytest.importorskip("fastapi")
-    from mnemotree.service.app import MAX_TOP_K, create_app
+    from mnemotree.service.app import create_app
+    from mnemotree.service.schemas import MAX_TOP_K
 
     with Memory(tmp_path / "m.db") as memory:
         limits = []
