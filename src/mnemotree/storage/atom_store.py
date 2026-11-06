@@ -7,9 +7,8 @@ import sqlite3
 from collections.abc import Sequence
 from typing import Any
 
-from ..core.models import Chunk, scope
+from ..core.models import Atom, Chunk, scope
 from ..errors import ConfigurationError
-from ..ingest.atoms import Atom
 from .lexical import create_fts, fts_table, index_text, match_expression
 
 SCHEMA = """

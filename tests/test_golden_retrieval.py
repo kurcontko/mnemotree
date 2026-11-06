@@ -22,9 +22,8 @@ from typing import Any
 
 import pytest
 
-from mnemotree.core.models import EmbeddingSpec
+from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec
 
 GOLDEN = Path(__file__).parent / "golden" / "retrieval"
 UPDATE = os.environ.get("MNEMOTREE_UPDATE_GOLDEN") == "1"

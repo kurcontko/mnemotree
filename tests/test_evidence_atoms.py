@@ -3,10 +3,10 @@ import json
 import httpx
 import pytest
 
-from mnemotree.core.models import EmbeddingSpec
+from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evaluation import ablate
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec, OpenAIExtractor
+from mnemotree.providers.extraction import OpenAIExtractor
 
 
 class Extractor:

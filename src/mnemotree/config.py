@@ -14,9 +14,8 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, model_validator
 
 from .core.models import Record, SearchOptions
-from .core.protocols import Embedder
+from .core.protocols import Embedder, Extractor
 from .engine import EvidenceEngine
-from .ingest.atoms import Extractor
 from .retrieval.packing import TiktokenCounter
 
 
@@ -109,7 +108,7 @@ class OpenAIExtractionConfig(ProviderConfig):
     timeout: float | None = None
 
     def build(self) -> Extractor:
-        from .ingest.atoms import OpenAIExtractor
+        from .providers.extraction import OpenAIExtractor
 
         return OpenAIExtractor(api_key=secret(self.api_key_env), **self.provider_kwargs())
 
