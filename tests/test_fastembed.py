@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from mnemotree.cli import evidence as evidence_cli
+from mnemotree.config import Config, open_memory
 from mnemotree.providers.embeddings import (
     DEFAULT_LOCAL_EMBEDDING,
     EmbedderUnavailable,
@@ -129,8 +129,8 @@ def test_missing_fastembed_fails_at_construction(monkeypatch, tmp_path):
 
 
 def test_open_memory_builds_the_fastembed_kind_without_loading(fake_fastembed, tmp_path):
-    config = evidence_cli.Config(embedding=fake_fastembed.settings(tmp_path / "models"))
-    with evidence_cli.open_memory(tmp_path / "m.db", config) as engine:
+    config = Config(embedding=fake_fastembed.settings(tmp_path / "models"))
+    with open_memory(tmp_path / "m.db", config) as engine:
         assert isinstance(engine.embedder, FastEmbedEmbedder)
         assert engine.embedder.spec.provider == "fastembed"
         assert engine.embedder.cache_dir == tmp_path / "models"

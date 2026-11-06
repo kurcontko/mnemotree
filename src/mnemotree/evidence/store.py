@@ -1,11 +1,10 @@
-"""Moved to :mod:`mnemotree.storage.store`; this 1.0 path stays importable as the same module."""
+"""The 1.0 path of :mod:`mnemotree.storage.store`, kept importable until 2.0.
 
-import sys
-from typing import TYPE_CHECKING
+Also re-exports the names the 1.0 module offered that now live elsewhere.
+"""
 
-from mnemotree.storage import store as _module
-
-if TYPE_CHECKING:
-    from mnemotree.storage.store import *  # noqa: F403
-
-sys.modules[__name__] = _module
+from mnemotree.errors import IngestConflict as IngestConflict
+from mnemotree.storage.schema import CHUNK_FTS as CHUNK_FTS
+from mnemotree.storage.schema import SCHEMA_VERSION as SCHEMA_VERSION
+from mnemotree.storage.store import *
+from mnemotree.storage.vectors import vector_blob as vector_blob

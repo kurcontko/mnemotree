@@ -9,7 +9,8 @@ import pytest
 from mnemotree.cli import evidence as cli
 from mnemotree.core.models import ContextSpan, EmbeddingSpec, Evidence
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.service.app import create_app, returned_role_chars
+from mnemotree.service.app import create_app
+from mnemotree.service.request_log import returned_role_chars
 
 
 def test_role_char_counts_include_merged_neighbors_and_union_overlaps():

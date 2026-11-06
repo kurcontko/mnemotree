@@ -8,7 +8,9 @@ sampling in the evidence HTTP service (last item).
 - The engine's modules moved out of `mnemotree.evidence` into `mnemotree.engine`,
   `mnemotree.core`, `.ingest`, `.retrieval`, `.storage`, `.providers`, `.service`,
   `.cli.evidence` and `.evaluation`. Each `mnemotree.evidence.<module>` path still
-  imports the moved module itself.
+  offers every name it had in 1.0, as the same objects, and type checkers see them.
+  Patching a function through an old path no longer reaches the code that calls it;
+  patch the new module instead.
 - Deliberate failures derive from `mnemotree.MnemotreeError`: `InvalidInput`,
   `ConfigurationError` and `IngestConflict`. All of them are still `ValueError`s.
 - CLI and MCP configs are validated when they load: an unknown provider `kind`, a

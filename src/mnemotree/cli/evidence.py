@@ -136,7 +136,9 @@ def main() -> None:
         if args.command == "serve":
             import uvicorn
 
-            from ..service.app import BOOT, aml_options, create_app, emit, utc_now
+            from ..service.app import create_app
+            from ..service.presets import aml_options
+            from ..service.request_log import BOOT, emit, utc_now
 
             options = config.search or aml_options(memory)
             app = create_app(

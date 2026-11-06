@@ -29,10 +29,6 @@ from .errors import ConfigurationError, InvalidInput
 from .ingest.atoms import Atom, AtomHit, Extractor, extract_atoms
 from .ingest.chunking import chunk_source
 from .retrieval.packing import Packed, TiktokenCounter, pack
-
-# Re-exported: these lived here before ranking.py held the pure ranking steps.
-from .retrieval.ranking import QUERY_EMBED_CHARS as QUERY_EMBED_CHARS
-from .retrieval.ranking import QUERY_EMBED_TOKENS as QUERY_EMBED_TOKENS
 from .retrieval.ranking import (
     RolePolicy,
     boost_role,
@@ -45,19 +41,8 @@ from .retrieval.ranking import (
     role_first,
     role_policy,
 )
-from .storage.store import SQLiteEvidenceStore, Window, now, vector_blob
-
-__all__ = [
-    "QUERY_EMBED_CHARS",
-    "QUERY_EMBED_TOKENS",
-    "EvidenceEngine",
-    "Memory",
-    "cap_per_source",
-    "chronological",
-    "fuse",
-    "model_query",
-    "role_first",
-]
+from .storage.store import SQLiteEvidenceStore, Window, now
+from .storage.vectors import vector_blob
 
 
 @dataclass(frozen=True, slots=True)
@@ -556,7 +541,3 @@ class EvidenceEngine:
 
     def forget(self, namespace: str, source_id: str) -> bool:
         return self.store.forget(namespace, source_id)
-
-
-# The 1.0 name, kept for ``mnemotree.evidence.Memory`` and existing callers.
-Memory = EvidenceEngine
