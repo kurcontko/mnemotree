@@ -1,9 +1,9 @@
-"""The 1.0 import paths of the engine, kept importable.
+"""The 1.0 import paths, kept importable until 2.0.
 
-The modules moved to ``mnemotree.engine``, ``mnemotree.core``, ``.ingest``,
+The engine's modules moved to ``mnemotree.engine``, ``mnemotree.core``, ``.ingest``,
 ``.retrieval``, ``.storage``, ``.providers``, ``.service``, ``.cli.evidence`` and
-``.evaluation``. Each ``mnemotree.evidence.<module>`` name is a small alias that
-resolves to the moved module itself, imported only when it is used.
+``.evaluation``. Each ``mnemotree.evidence.<module>`` re-exports the module that
+replaced it and is imported only when used. Nothing outside this package imports it.
 """
 
 from ..core.models import (
@@ -14,8 +14,11 @@ from ..core.models import (
     SearchOptions,
     SearchResult,
 )
-from ..engine import EvidenceEngine, Memory
+from ..engine import EvidenceEngine
 from ..errors import ConfigurationError, IngestConflict, InvalidInput, MnemotreeError
+
+# The engine's 1.0 name. ``mnemotree.Memory`` is the namespace-bound API.
+Memory = EvidenceEngine
 
 __all__ = [
     "ConfigurationError",
