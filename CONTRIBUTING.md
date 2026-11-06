@@ -40,8 +40,9 @@ way: use deterministic embedders and stubs for providers.
 
 ## Releasing
 
-1. On `main`, set `version` in `pyproject.toml` and add the entry to
-   [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
+1. On `main`, set `version` in `pyproject.toml` and in
+   `packages/mnemotree-mcp/pyproject.toml`, including its `mnemotree==` pin, and
+   add the entry to [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
 2. Tag the merged commit and push the tag:
    `git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`.
 
@@ -51,6 +52,10 @@ distributions and smoke-installs them. It then waits for approval in the `pypi`
 environment, uploads to PyPI through trusted publishing, and attaches the files
 to the GitHub release. To try it on a tag without uploading, run
 `gh workflow run release.yml --ref v1.2.3`; add `-f publish=true` to upload.
+If the upload fails partway, fix the cause and re-run the failed jobs: files
+already on PyPI are skipped. A new package needs a pending publisher on PyPI
+that matches the workflow exactly (repository, `release.yml`, environment
+`pypi`); otherwise PyPI refuses to create the project.
 
 ## Reporting issues
 

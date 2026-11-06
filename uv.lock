@@ -1002,7 +1002,7 @@ wheels = [
 
 [[package]]
 name = "mnemotree"
-version = "1.0.2"
+version = "1.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
@@ -1070,7 +1070,7 @@ provides-extras = ["embeddings", "serve", "lite", "dev", "all"]
 
 [[package]]
 name = "mnemotree-mcp"
-version = "1.0.2"
+version = "1.0.3"
 source = { editable = "packages/mnemotree-mcp" }
 dependencies = [
     { name = "fastembed" },
