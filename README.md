@@ -71,14 +71,32 @@ and `forget`. Pass an `embedder` for hybrid retrieval.
 ## MCP server
 
 `mnemotree-mcp` gives Claude Code, Claude Desktop, Codex and other MCP clients the
-same five tools over stdio. It needs no extra.
+same five tools over stdio, with semantic search on a local embedding model. It
+needs no API key or configuration:
 
 ```bash
-claude mcp add mnemotree -- mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
-  --namespace "$USER" --lexical   # or --config with an embedding
+claude mcp add mnemotree -- uvx mnemotree-mcp
 ```
 
-Sessions pointed at the same `--db` share one memory.
+The first start downloads the English-only
+[granite-embedding-small-english-r2](https://huggingface.co/ibm-granite/granite-embedding-small-english-r2)
+model (about 200 MB) to `~/.mnemotree/models`; the server answers while it loads.
+
+| Setting | Flag | Default |
+| --- | --- | --- |
+| `MNEMOTREE_DB` | `--db` | `~/.mnemotree/memory.sqlite` |
+| `MNEMOTREE_NAMESPACE` | `--namespace` | `default` |
+| `MNEMOTREE_CONFIG` | `--config` | local model |
+| `MNEMOTREE_LEXICAL=1` | `--lexical` | off |
+
+```bash
+uvx mnemotree-mcp --lexical                    # keyword-only, no model download
+uvx mnemotree-mcp --config ~/.mnemotree/config.json   # e.g. an HTTP embedder
+```
+
+Sessions pointed at the same database share one memory. With `pip install mnemotree`,
+`mnemotree mcp` runs the same server, but with no default model: pass `--config` or
+`--lexical`.
 
 ## Command line
 

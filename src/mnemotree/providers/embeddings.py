@@ -1,12 +1,16 @@
-"""Optional OpenAI-compatible embedding transport. No LangChain dependency."""
+"""Optional embedding providers: an OpenAI-compatible transport and local models."""
 
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
+import math
+import threading
 import time
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from ..core.models import EmbeddingSpec
 
@@ -253,3 +257,174 @@ class SentenceTransformerEmbedder:
 
     async def embed_query(self, text: str) -> list[float]:
         return (await self._encode([text], self.query_prompt))[0]
+
+
+# The zero-configuration MCP server's model: English, 384 dimensions and an 8192-token
+# context, so a whole 1200-token chunk is embedded rather than truncated. The revision
+# pins the ONNX export; a new upstream commit would change the vectors under the
+# same model name.
+DEFAULT_LOCAL_EMBEDDING: dict[str, Any] = {
+    "kind": "fastembed",
+    "model": "ibm-granite/granite-embedding-small-english-r2",
+    "source": "onnx-community/granite-embedding-small-english-r2-ONNX",
+    "revision": "1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8",
+    "dimensions": 384,
+    "cache_dir": "~/.mnemotree/models",
+}
+
+# What fastembed's ONNX text models read besides the model files themselves.
+TOKENIZER_FILES = (
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+)
+
+
+class EmbedderUnavailable(RuntimeError):
+    """The embedding model could not be downloaded or loaded; a later call retries."""
+
+
+class FastEmbedEmbedder:
+    """A local ONNX model through fastembed, fetched at a pinned revision on first use.
+
+    fastembed would download the latest revision into the system temp directory, which
+    macOS purges, so the files are fetched here with huggingface_hub into ``cache_dir``.
+    Nothing is imported or downloaded until the first embedding or ``warm()``, so
+    ``spec`` is available at once and a server can answer before the model is ready.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        *,
+        source: str,
+        revision: str,
+        dimensions: int,
+        cache_dir: str | Path = "~/.mnemotree/models",
+        query_prompt: str = "",
+        document_prompt: str = "",
+        batch_size: int = 8,
+    ) -> None:
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        # Checked without importing, so a missing package fails at startup, not on
+        # the first embedding.
+        if importlib.util.find_spec("fastembed") is None:
+            raise ImportError(
+                "the fastembed embedding kind needs the fastembed package "
+                "(install mnemotree-mcp, or pip install fastembed)"
+            )
+        self.source, self.revision = source, revision
+        self.cache_dir = Path(cache_dir).expanduser()
+        self.query_prompt, self.document_prompt = query_prompt, document_prompt
+        # Attention memory grows with batch size times the square of the longest text,
+        # and chunks run to 1200 tokens, so batches stay small.
+        self.batch_size = batch_size
+        # The source is part of the revision: another ONNX export of the same model
+        # gives different vectors.
+        self.spec = EmbeddingSpec(
+            provider="fastembed",
+            model=model,
+            revision=f"{source}@{revision}|query={query_prompt}|document={document_prompt}",
+            dimensions=dimensions,
+        )
+        self._lock = threading.Lock()
+        self._model: Any = None
+
+    def files(self) -> list[str]:
+        """The files to fetch, per fastembed's registry, after checking its dimensions."""
+        from fastembed import TextEmbedding
+
+        model = self.spec.model
+        entry = next(
+            (row for row in TextEmbedding.list_supported_models() if row["model"] == model),
+            None,
+        )
+        if entry is None:
+            raise ValueError(f"fastembed does not support the embedding model {model!r}")
+        if entry["dim"] != self.spec.dimensions:
+            raise ValueError(
+                f"{model} has {entry['dim']} dimensions, not the configured {self.spec.dimensions}"
+            )
+        return [*TOKENIZER_FILES, entry["model_file"], *entry.get("additional_files", [])]
+
+    def warm(self) -> None:
+        """Download and load the model now rather than on the first embedding."""
+        self._load()
+
+    def _load(self) -> Any:
+        # One lock, so concurrent first calls load once. A failure is not cached: the
+        # next call retries, so a dropped connection does not disable the process.
+        with self._lock:
+            if self._model is None:
+                self._model = self._open()
+            return self._model
+
+    def _open(self) -> Any:
+        files = self.files()
+        started = time.monotonic()
+        try:
+            path = self._fetch(files)
+            from fastembed import TextEmbedding
+
+            # cache_dir only keeps fastembed from creating its own in the temp directory.
+            model = TextEmbedding(
+                self.spec.model, cache_dir=str(self.cache_dir), specific_model_path=path
+            )
+        except Exception as exc:
+            raise EmbedderUnavailable(
+                f"embedding model {self.spec.model} could not be loaded: {exc}"
+            ) from exc
+        if model.embedding_size != self.spec.dimensions:
+            raise ValueError(
+                f"{self.spec.model} loaded with {model.embedding_size} dimensions, not the "
+                f"configured {self.spec.dimensions}"
+            )
+        logger.info(
+            "embedding model %s ready in %.1fs", self.spec.model, time.monotonic() - started
+        )
+        return model
+
+    def _fetch(self, files: list[str]) -> str:
+        from huggingface_hub import snapshot_download
+
+        options: dict[str, Any] = {
+            "repo_id": self.source,
+            "revision": self.revision,
+            "cache_dir": str(self.cache_dir),
+            "allow_patterns": files,
+        }
+        # Cached files first, so a restart neither needs the network nor waits on it.
+        # An interrupted download leaves the snapshot incomplete, so check every file.
+        try:
+            path = snapshot_download(**options, local_files_only=True)
+            if all((Path(path) / name).is_file() for name in files):
+                return str(path)
+        except OSError:
+            pass
+        logger.info(
+            "downloading embedding model %s@%s to %s", self.source, self.revision, self.cache_dir
+        )
+        return str(snapshot_download(**options))
+
+    def _encode(self, texts: Sequence[str], prompt: str) -> list[list[float]]:
+        model = self._load()
+        vectors = []
+        for vector in model.embed([prompt + text for text in texts], batch_size=self.batch_size):
+            values = [float(value) for value in vector]
+            if len(values) != self.spec.dimensions:
+                raise ValueError(
+                    f"{self.spec.model} returned {len(values)} dimensions, not the configured "
+                    f"{self.spec.dimensions}"
+                )
+            # fastembed leaves this model's vectors unnormalized.
+            norm = math.sqrt(sum(value * value for value in values))
+            vectors.append([value / norm for value in values] if norm else values)
+        return vectors
+
+    async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        return await asyncio.to_thread(self._encode, texts, self.document_prompt)
+
+    async def embed_query(self, text: str) -> list[float]:
+        return (await asyncio.to_thread(self._encode, [text], self.query_prompt))[0]

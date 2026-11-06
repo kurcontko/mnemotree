@@ -1,0 +1,204 @@
+name: release
+
+# Publishes a tagged version of mnemotree and mnemotree-mcp to PyPI, so
+# `uvx mnemotree-mcp` starts the MCP server without a checkout or configuration.
+# Both distributions are released together at the same version.
+#
+# Pushing a `v*` tag releases it. To dry-run, dispatch this workflow on a tag
+# (`gh workflow run release.yml --ref v1.2.3`): it builds and checks, and
+# uploads only when `publish` is set. Every job checks out the commit the run
+# itself is on, never a ref named by an input, so no job runs code from a ref
+# the trigger did not already point at.
+#
+# Upload uses PyPI trusted publishing (OIDC), so no token is stored anywhere.
+# PyPI accepts it only from this file, in this repository, through the `pypi`
+# environment: configure that publisher on PyPI for each of the two projects
+# and give the environment a required reviewer, and a pushed tag waits for
+# approval before the upload.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Upload to PyPI and attach the files to the GitHub release
+        type: boolean
+        default: false
+
+# Read-only by default; the two jobs that write ask for it themselves.
+permissions:
+  contents: read
+
+# Two runs for one tag would race to upload the same files; PyPI keeps the
+# first and rejects the second. Never cancel: an upload may be in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Fails before anything is built if the tag cannot be a release of main.
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The ancestry check below needs main's history, not one commit.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tag against main and both pyproject.toml files
+        id: resolve
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # A dispatch can name any branch; only a tag is a release.
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "::error::run this workflow on a tag, not the $REF_TYPE $TAG"
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
+            echo "::error::$TAG is not a version tag such as v1.2.3 or v1.2.3rc1"
+            exit 1
+          fi
+          # A tag on an unmerged branch would publish code nobody reviewed.
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::$TAG ($SHA) is not on main"
+            exit 1
+          fi
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::$TAG does not match pyproject.toml version $version"
+            exit 1
+          fi
+          # mnemotree-mcp is released with mnemotree and pins exactly that release.
+          mcp=packages/mnemotree-mcp/pyproject.toml
+          mcp_version=$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "$mcp")
+          if [ "v$mcp_version" != "$TAG" ]; then
+            echo "::error::$TAG does not match $mcp version $mcp_version"
+            exit 1
+          fi
+          mcp_pin=$(python3 -c 'import re, sys, tomllib; print(*[d for d in tomllib.load(open(sys.argv[1], "rb"))["project"]["dependencies"] if re.split(r"[\s\[=<>!~;]", d, maxsplit=1)[0] == "mnemotree"])' "$mcp")
+          if [ "$mcp_pin" != "mnemotree==$version" ]; then
+            echo "::error::$mcp requires '$mcp_pin', not mnemotree==$version"
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
+  # The full matrix, heavy lane included, against the exact tagged commit. CI
+  # already ran on main, but a tag can point at any commit on it.
+  ci:
+    needs: [resolve]
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.sha }}
+
+  build:
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Not the setup-ci action: it restores the shared uv cache, which any
+      # pull request run can write. The files uploaded below are built from a
+      # cold cache.
+      - name: Prefer uv-managed Python
+        run: echo "UV_PYTHON_PREFERENCE=only-managed" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.6"
+          python-version: "3.12"
+          enable-cache: false
+
+      # The same build, metadata check and clean-venv smoke installs as CI's
+      # package lane; it leaves both packages' sdists and wheels in dist/.
+      - name: Build, check, and smoke-install the distributions
+        run: bash .github/scripts/check_package.sh
+
+      - name: Check the file names carry the version
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -A dist
+          test -f "dist/mnemotree-${VERSION}.tar.gz"
+          test -f "dist/mnemotree-${VERSION}-py3-none-any.whl"
+          test -f "dist/mnemotree_mcp-${VERSION}.tar.gz"
+          test -f "dist/mnemotree_mcp-${VERSION}-py3-none-any.whl"
+          # uv build also writes dist/.gitignore. Hidden files are never
+          # uploaded (upload-artifact skips them), so only the rest must be
+          # exactly the four distributions.
+          test "$(find dist -maxdepth 1 -type f ! -name '.*' | wc -l)" -eq 4
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [resolve, ci, build]
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mnemotree/${{ needs.resolve.outputs.version }}/
+    permissions:
+      # Trusted publishing exchanges this job's OIDC token for a short-lived
+      # upload token, and signs the PEP 740 attestations uploaded with it.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          # One upload covers both packages. If it stops partway, re-running the
+          # job uploads only the files PyPI does not have yet.
+          skip-existing: true
+
+  # After PyPI, so a release page never offers files the index refused.
+  github_release:
+    needs: [resolve, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release and upload its files
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+
+      - name: Attach the files to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # A release written by hand before the tag was published keeps its
+          # notes; only the files are added.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            flags=(--verify-tag --generate-notes)
+            if [[ "$TAG" =~ (a|b|rc)[0-9]+$ ]]; then flags+=(--prerelease); fi
+            gh release create "$TAG" dist/* "${flags[@]}"
+          fi

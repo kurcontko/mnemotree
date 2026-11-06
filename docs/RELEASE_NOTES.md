@@ -18,6 +18,49 @@ No breaking changes: every 1.0 import path, class name and CLI keeps working.
 - `code_identity` in evaluation reports and service startup logs now hashes every
   module of the package, so its `source_digest` differs from 1.0's for the same code.
 
+# 1.0.3 (2026-11-06)
+
+First release of `mnemotree-mcp` on PyPI; the code is unchanged from 1.0.2.
+`mnemotree-mcp` 1.0.2 was never uploaded, and `mnemotree` 1.0.2 reached PyPI as a
+wheel only. Use 1.0.3 for both:
+
+```bash
+claude mcp add mnemotree -- uvx mnemotree-mcp
+```
+
+# 1.0.2 (2026-11-05)
+
+The MCP server starts with no configuration and searches semantically on a local
+model:
+
+```bash
+claude mcp add mnemotree -- uvx mnemotree-mcp
+```
+
+- New `mnemotree-mcp` package, released with `mnemotree` at the same version. It
+  adds `fastembed` and defaults to `granite-embedding-small-english-r2` (English,
+  384 dimensions, 8192-token context), downloaded once at a pinned revision to
+  `~/.mnemotree/models` (about 200 MB). The server answers while the model loads.
+- `mnemotree` itself stays slim and no longer installs a `mnemotree-mcp` script; use
+  `mnemotree mcp` (or `python -m mnemotree.mcp`) with `--config` or `--lexical`, as
+  before.
+- `--db` defaults to `~/.mnemotree/memory.sqlite` and `--namespace` to `default`.
+- New environment variables `MNEMOTREE_DB`, `MNEMOTREE_NAMESPACE`,
+  `MNEMOTREE_CONFIG` and `MNEMOTREE_LEXICAL`. The `MNEMOTREE_MCP_` names still work
+  when the new ones are unset.
+- Embedding config kind `fastembed` (`FastEmbedEmbedder`): any fastembed-supported
+  model at a pinned Hugging Face revision, loaded on first use.
+
+# 1.0.1 (2026-11-03)
+
+First release on PyPI; the code is unchanged from 1.0.0. The MCP server now runs
+without a checkout:
+
+```bash
+uvx --from mnemotree mnemotree-mcp --db ~/.mnemotree/memory.sqlite \
+  --namespace "$USER" --lexical   # or --config with an embedding
+```
+
 # 1.0.0 (2026-10-31)
 
 Mnemotree now stores original messages in SQLite and retrieves source evidence.

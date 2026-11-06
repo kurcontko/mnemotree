@@ -77,8 +77,26 @@ class SentenceTransformerEmbeddingConfig(ProviderConfig):
         return SentenceTransformerEmbedder(**self.provider_kwargs())
 
 
+class FastEmbedEmbeddingConfig(ProviderConfig):
+    kind: Literal["fastembed"]
+    model: str
+    source: str
+    revision: str
+    dimensions: int
+    cache_dir: str | None = None
+    query_prompt: str | None = None
+    document_prompt: str | None = None
+    batch_size: int | None = None
+
+    def build(self) -> Embedder:
+        from .providers.embeddings import FastEmbedEmbedder
+
+        return FastEmbedEmbedder(**self.provider_kwargs())
+
+
 EmbeddingConfig = Annotated[
-    OpenAIEmbeddingConfig | SentenceTransformerEmbeddingConfig, Field(discriminator="kind")
+    OpenAIEmbeddingConfig | SentenceTransformerEmbeddingConfig | FastEmbedEmbeddingConfig,
+    Field(discriminator="kind"),
 ]
 
 

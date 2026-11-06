@@ -1,0 +1,33 @@
+[project]
+name = "mnemotree-mcp"
+# Released together with mnemotree, at the same version.
+version = "1.0.3"
+description = "Mnemotree's MCP memory server with a local embedding model, no configuration needed"
+authors = [
+    { name = "kurcontko", email = "mikeqrc@gmail.com" }
+]
+dependencies = [
+    "mnemotree==1.0.3",
+    "fastembed>=0.9.1,<0.10",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.scripts]
+mnemotree-mcp = "mnemotree_mcp:main"
+
+[project.urls]
+Homepage = "https://github.com/kurcontko/mnemotree"
+Repository = "https://github.com/kurcontko/mnemotree.git"
+Issues = "https://github.com/kurcontko/mnemotree/issues"
+
+[tool.uv.sources]
+mnemotree = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mnemotree_mcp"]

@@ -1,6 +1,6 @@
 [project]
 name = "mnemotree"
-version = "1.0.0"
+version = "1.0.3"
 description = "Persistent, source-first memory for LLM agents"
 authors = [
     { name = "kurcontko", email = "mikeqrc@gmail.com" }
@@ -37,6 +37,10 @@ all = ["mnemotree[embeddings,serve,lite]"]
 [tool.uv]
 package = true
 
+# packages/mnemotree-mcp is the zero-configuration MCP server, released with this one.
+[tool.uv.workspace]
+members = ["packages/mnemotree-mcp"]
+
 [project.urls]
 Homepage = "https://github.com/kurcontko/mnemotree"
 Repository = "https://github.com/kurcontko/mnemotree.git"
@@ -48,6 +52,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mnemotree"]
+
+# The workspace member ships as its own distribution.
+[tool.hatch.build.targets.sdist]
+exclude = ["/packages"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -107,10 +115,13 @@ warn_required_dynamic_aliases = true
 
 # Optional extras without type information; each is imported only where it is used.
 [[tool.mypy.overrides]]
-module = ["sqlite_vec", "sentence_transformers", "sentence_transformers.*", "uvicorn"]
+module = [
+    "sqlite_vec", "sentence_transformers", "sentence_transformers.*", "uvicorn",
+    "fastembed", "huggingface_hub",
+]
 ignore_missing_imports = true
 
 [project.scripts]
 mnemotree-evidence = "mnemotree.cli.evidence:main"
+# mnemotree-mcp comes from the mnemotree-mcp distribution; here it is `mnemotree mcp`.
 mnemotree = "mnemotree.cli:main"
-mnemotree-mcp = "mnemotree.mcp.server:main"
