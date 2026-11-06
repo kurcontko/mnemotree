@@ -10,9 +10,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from ..core.models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
+from ..core.models import (
+    Atom,
+    Chunk,
+    ContextSpan,
+    EmbeddingSpec,
+    IngestReceipt,
+    Source,
+    digest,
+    scope,
+)
 from ..errors import ConfigurationError, IngestConflict
-from ..ingest.atoms import Atom
 from .atom_store import AtomStore
 from .lexical import create_fts, fts_table, index_text, match_expression
 from .schema import CHUNK_FTS, configure, connect, create_tables, stored_embedding_spec

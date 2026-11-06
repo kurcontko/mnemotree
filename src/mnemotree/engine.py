@@ -10,6 +10,8 @@ from pathlib import Path
 from time import perf_counter
 
 from .core.models import (
+    Atom,
+    AtomHit,
     Candidate,
     Chunk,
     ContextSpan,
@@ -24,9 +26,9 @@ from .core.models import (
     identifier,
     scope,
 )
-from .core.protocols import Embedder, Reranker, TokenCounter
+from .core.protocols import Embedder, Extractor, Reranker, TokenCounter
 from .errors import ConfigurationError, InvalidInput
-from .ingest.atoms import Atom, AtomHit, Extractor, extract_atoms
+from .ingest.atoms import extract_atoms
 from .ingest.chunking import chunk_source
 from .retrieval.packing import Packed, TiktokenCounter, pack
 from .retrieval.ranking import (

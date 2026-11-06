@@ -285,7 +285,7 @@ The extractor is an **engine** option. Configure `examples/evidence/atomic.json`
 ```python
 import os
 from mnemotree import EvidenceEngine, Memory, SearchOptions
-from mnemotree.ingest.atoms import OpenAIExtractor
+from mnemotree.providers.extraction import OpenAIExtractor
 
 engine = EvidenceEngine(
     "atoms.sqlite",
