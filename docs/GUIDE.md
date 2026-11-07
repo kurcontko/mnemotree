@@ -53,8 +53,10 @@ appears only once. `timestamp` preserves the supplied timezone offset.
 Deliberate failures derive from `mnemotree.MnemotreeError` and from `ValueError`:
 `InvalidInput` for an unusable argument (blank query, bad namespace or ID),
 `ConfigurationError` when the configuration or database cannot serve the call
-(schema version, embedding or extractor signature, missing provider), and
-`IngestConflict` when a request or source ID is reused for different content.
+(schema version, embedding or extractor signature, missing provider or credential),
+`IngestConflict` when a request or source ID is reused for different content, and
+`ProviderError` when an embedder, reranker or extractor returns output that breaks
+its contract. A failed ingestion writes nothing.
 
 ## MCP server
 

@@ -18,7 +18,7 @@ Key locations:
 - 1.0 import paths: `src/mnemotree/evidence/` only re-exports the moved modules, and nothing else in the package may import it; 2.0 deletes the directory (`tests/test_compat_paths.py`, which pins every 1.0 name)
 - Public API: `src/mnemotree/memory.py` (`Memory`, `MemoryItem`, `Recall`)
 - CLI/MCP JSON config, opened as an engine with `Config.open(path)`: `src/mnemotree/config.py`
-- Exceptions (`MnemotreeError`, `InvalidInput`, `ConfigurationError`, `IngestConflict`): `src/mnemotree/errors.py`
+- Exceptions (`MnemotreeError`, `InvalidInput`, `ConfigurationError`, `IngestConflict`, `ProviderError`): `src/mnemotree/errors.py`
 - MCP stdio server: `src/mnemotree/mcp/` (standard library only), run as `mnemotree mcp`; the zero-config `mnemotree-mcp` package in `packages/mnemotree-mcp/` (a uv workspace member, released at the same version) adds fastembed and defaults to a local model (`FastEmbedEmbedder`, `DEFAULT_LOCAL_EMBEDDING` in `src/mnemotree/providers/embeddings.py`)
 - CLI: `mnemotree-evidence` (`src/mnemotree/cli/evidence.py`), `mnemotree` with `mnemotree mcp` (`src/mnemotree/cli/__init__.py`), `mnemotree-mcp` (`packages/mnemotree-mcp/`)
 - Guide: `docs/GUIDE.md` (API, MCP, configuration, retrieval, atomic projections, AML service, evaluation, limits)

@@ -9,6 +9,7 @@ from collections.abc import Sequence
 
 from ..core.models import Atom, AtomDraft, Passage, Source, SourceSpan, digest
 from ..core.protocols import Extractor
+from ..errors import ProviderError
 
 
 def batches(sources: Sequence[Source], max_chars: int) -> list[list[Passage]]:
@@ -46,21 +47,23 @@ async def extract_atoms(
         passages = {passage.id: passage for passage in batch}
         drafts = list(await extractor.extract(batch))
         if len(drafts) > 64:
-            raise ValueError("extractor returned more than 64 atoms for one batch")
+            raise ProviderError("extractor returned more than 64 atoms for one batch")
         for value in drafts:
             draft = AtomDraft.model_validate(value)
             spans: dict[tuple[str, int, int], SourceSpan] = {}
             for citation in draft.citations:
                 passage = passages.get(citation.passage_id)
                 if passage is None:
-                    raise ValueError("atom cites a passage outside its extraction batch")
+                    raise ProviderError("atom cites a passage outside its extraction batch")
                 offset = passage.text.find(citation.quote)
                 if (
                     not citation.quote.strip()
                     or offset < 0
                     or offset != passage.text.rfind(citation.quote)
                 ):
-                    raise ValueError("citation must be an exact, unambiguous quote in its passage")
+                    raise ProviderError(
+                        "citation must be an exact, unambiguous quote in its passage"
+                    )
                 start = passage.start + offset
                 key = (passage.source_id, start, start + len(citation.quote))
                 spans[key] = SourceSpan(source_id=key[0], start=key[1], end=key[2])
