@@ -22,7 +22,7 @@ from typing import IO, TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from ..config import Config, open_memory
+from ..config import Config
 from ..core.models import scope
 from ..memory import Memory
 from ..providers.embeddings import EmbedderUnavailable
@@ -232,12 +232,12 @@ def open_engine(path: Path, config: Config, attempts: int = 6) -> EvidenceEngine
     the one-time switch to WAL as busy without waiting, so retry the open briefly."""
     for attempt in range(attempts - 1):
         try:
-            return open_memory(path, config)
+            return config.open(path)
         except sqlite3.OperationalError as exc:
             if "locked" not in str(exc):
                 raise
             time.sleep(0.05 * 2**attempt)
-    return open_memory(path, config)
+    return config.open(path)
 
 
 def warm_up(warm: Callable[[], object]) -> None:
