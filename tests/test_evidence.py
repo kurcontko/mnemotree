@@ -5,6 +5,7 @@ from importlib import import_module
 
 import pytest
 
+from mnemotree import ProviderError
 from mnemotree.core.models import Chunk
 from mnemotree.evidence import (
     EmbeddingSpec,
@@ -409,7 +410,7 @@ async def test_invalid_embedding_and_reranker_responses(tmp_path):
         assert memory.store.stats("alice")["requests"] == 0
     with Memory(tmp_path / "rank.db", reranker=BrokenRanker()) as memory:
         await add(memory)
-        with pytest.raises(ValueError, match="finite score"):
+        with pytest.raises(ProviderError, match="finite score"):
             await memory.search("alice", "apple")
 
 

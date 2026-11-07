@@ -27,7 +27,7 @@ from .core.models import (
     scope,
 )
 from .core.protocols import Embedder, Extractor, Reranker, TokenCounter
-from .errors import ConfigurationError, InvalidInput
+from .errors import ConfigurationError, InvalidInput, ProviderError
 from .ingest.atoms import extract_atoms
 from .ingest.chunking import chunk_source
 from .retrieval.packing import Packed, TiktokenCounter, pack
@@ -465,7 +465,9 @@ class EvidenceEngine:
         if source is None:
             source = self.store.get_source(namespace, chunk.source_id)
             if source is None:
-                raise ValueError("retrieved chunk has no source")
+                # One read transaction covers the chunk and its source, so this
+                # means the database is inconsistent, not that the input is bad.
+                raise RuntimeError("retrieved chunk has no source")
             sources[chunk.source_id] = source
         return self.store.window(namespace, chunk, options.neighbor_chunks, source=source)
 
@@ -474,7 +476,7 @@ class EvidenceEngine:
             return candidates
         scores = list(await self.reranker.score(query, [item.chunk.text for item in candidates]))
         if len(scores) != len(candidates) or not all(math.isfinite(score) for score in scores):
-            raise ValueError("reranker must return one finite score per candidate")
+            raise ProviderError("reranker must return one finite score per candidate")
         return sorted(
             (
                 item.model_copy(update={"rerank_score": float(score)})

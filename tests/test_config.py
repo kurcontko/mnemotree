@@ -4,7 +4,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from mnemotree import ConfigurationError, IngestConflict, InvalidInput, MnemotreeError
+from mnemotree import (
+    ConfigurationError,
+    IngestConflict,
+    InvalidInput,
+    MnemotreeError,
+    ProviderError,
+)
 from mnemotree.config import (
     Config,
     OpenAIEmbeddingConfig,
@@ -112,7 +118,7 @@ def test_the_1_0_cli_names_keep_exiting_on_a_missing_credential(monkeypatch, tmp
 
 
 def test_errors_are_value_errors():
-    for error in (InvalidInput, ConfigurationError, IngestConflict):
+    for error in (InvalidInput, ConfigurationError, IngestConflict, ProviderError):
         assert issubclass(error, MnemotreeError)
         assert issubclass(error, ValueError)
 

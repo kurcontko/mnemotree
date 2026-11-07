@@ -26,3 +26,12 @@ class ConfigurationError(MnemotreeError, ValueError):
 
 class IngestConflict(MnemotreeError, ValueError):
     """A request or source ID was reused for a different occurrence."""
+
+
+class ProviderError(MnemotreeError, ValueError):
+    """A provider's output breaks its contract, and nothing was written.
+
+    Raised for embeddings of the wrong count or dimensions or with non-finite values,
+    reranker scores that do not match the candidates, and atoms whose citations are
+    not exact quotes of their passages.
+    """

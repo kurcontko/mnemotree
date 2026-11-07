@@ -13,7 +13,13 @@ from .core.models import (
     SearchResult,
 )
 from .engine import EvidenceEngine
-from .errors import ConfigurationError, IngestConflict, InvalidInput, MnemotreeError
+from .errors import (
+    ConfigurationError,
+    IngestConflict,
+    InvalidInput,
+    MnemotreeError,
+    ProviderError,
+)
 from .memory import Memory, MemoryItem, Recall
 
 __all__ = [
@@ -28,6 +34,7 @@ __all__ = [
     "MemoryItem",
     "Message",
     "MnemotreeError",
+    "ProviderError",
     "Recall",
     "SearchOptions",
     "SearchResult",
