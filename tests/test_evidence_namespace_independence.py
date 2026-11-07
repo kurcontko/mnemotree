@@ -10,9 +10,8 @@ import re
 
 import pytest
 
-from mnemotree.core.models import EmbeddingSpec
+from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec
 from mnemotree.storage.atom_store import ATOM_FTS
 from mnemotree.storage.lexical import fts_table
 

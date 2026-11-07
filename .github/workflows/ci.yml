@@ -169,7 +169,7 @@ jobs:
         run: |
           python -W error -c "
           import torch, transformers, sentence_transformers
-          from mnemotree.evidence.providers import SentenceTransformerEmbedder
+          from mnemotree.providers.embeddings import SentenceTransformerEmbedder
           print('torch', torch.__version__, '| transformers', transformers.__version__,
                 '| sentence-transformers', sentence_transformers.__version__)
           "

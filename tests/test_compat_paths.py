@@ -1,6 +1,8 @@
 """The 1.0 module paths under mnemotree.evidence keep working after the move."""
 
+import ast
 import importlib
+import json
 import os
 import subprocess
 import sys
@@ -17,11 +19,8 @@ MOVED = {
     "temporal": "mnemotree.core.temporal",
     "chunking": "mnemotree.ingest.chunking",
     "atoms": "mnemotree.ingest.atoms",
-    "ranking": "mnemotree.retrieval.ranking",
     "packing": "mnemotree.retrieval.packing",
     "store": "mnemotree.storage.store",
-    "schema": "mnemotree.storage.schema",
-    "vectors": "mnemotree.storage.vectors",
     "lexical": "mnemotree.storage.lexical",
     "atom_store": "mnemotree.storage.atom_store",
     "providers": "mnemotree.providers.embeddings",
@@ -32,53 +31,60 @@ MOVED = {
     "cli": "mnemotree.cli.evidence",
 }
 SRC = str(Path(mnemotree.__file__).parents[1])
+# Every public name each 1.0 module defined or imported from the package, read from
+# the 1.0.3 sources; none of them may stop importing before 2.0.
+# Wrappers that keep a 1.0 behaviour the moved function changed: secret exits.
+KEEPS_1_0_BEHAVIOUR = {("cli", "secret")}
+NAMES_1_0 = json.loads(
+    (Path(__file__).parent / "golden" / "compat" / "evidence-1.0-names.json").read_text()
+)
+
+
+def test_the_aliases_cover_every_1_0_module():
+    assert set(NAMES_1_0) == set(MOVED)
 
 
 @pytest.mark.parametrize(("old", "new"), sorted(MOVED.items()))
-def test_old_path_is_the_moved_module(old, new):
+def test_every_1_0_name_still_imports_from_its_old_path(old, new):
     module = importlib.import_module(f"mnemotree.evidence.{old}")
-    assert module is importlib.import_module(new)
     assert getattr(mnemotree.evidence, old) is module
-
-
-def test_names_used_from_the_old_paths_still_import():
-    from mnemotree.evidence.atoms import OpenAIExtractor
-    from mnemotree.evidence.cli import Config, main, open_memory, secret
-    from mnemotree.evidence.engine import QUERY_EMBED_TOKENS, Memory, fuse, model_query
-    from mnemotree.evidence.models import Evidence, SearchOptions, render_line
-    from mnemotree.evidence.packing import TiktokenCounter
-    from mnemotree.evidence.providers import OpenAIEmbedder, SentenceTransformerEmbedder
-    from mnemotree.evidence.server import aml_options, create_app
-    from mnemotree.evidence.store import CHUNK_FTS, IngestConflict, vector_blob
-
-    assert Memory is mnemotree.evidence.Memory
-    assert IngestConflict is mnemotree.IngestConflict
-    for name in (OpenAIExtractor, Config, main, open_memory, secret, QUERY_EMBED_TOKENS, fuse):
-        assert name is not None
-    for name in (model_query, Evidence, SearchOptions, render_line, TiktokenCounter):
-        assert name is not None
-    for name in (OpenAIEmbedder, SentenceTransformerEmbedder, aml_options, create_app):
-        assert name is not None
-    assert CHUNK_FTS and vector_blob
+    missing = [name for name in NAMES_1_0[old] if not hasattr(module, name)]
+    assert not missing
+    # The same objects, not copies, so isinstance and identity checks keep holding.
+    moved = importlib.import_module(new)
+    for name in NAMES_1_0[old]:
+        if hasattr(moved, name) and (old, name) not in KEEPS_1_0_BEHAVIOUR:
+            assert getattr(module, name) is getattr(moved, name), name
 
 
 def test_the_engine_keeps_its_1_0_name():
-    from mnemotree.engine import Memory as EngineMemory
     from mnemotree.evidence.engine import Memory as OldEngineMemory
 
     assert mnemotree.EvidenceEngine is mnemotree.evidence.EvidenceEngine
-    assert mnemotree.evidence.Memory is mnemotree.EvidenceEngine
-    assert EngineMemory is OldEngineMemory is mnemotree.EvidenceEngine
+    assert mnemotree.evidence.Memory is OldEngineMemory is mnemotree.EvidenceEngine
     # The namespace-bound API is a different class and keeps its own name.
     assert mnemotree.Memory is not mnemotree.EvidenceEngine
 
 
-def test_patching_through_an_old_path_reaches_the_moved_module(monkeypatch):
-    from mnemotree.evidence import store as old
-    from mnemotree.storage import store as new
-
-    monkeypatch.setattr(old, "now", lambda: "patched")
-    assert new.now() == "patched"
+def test_only_the_aliases_import_the_1_0_paths():
+    package = Path(mnemotree.__file__).parent
+    offenders = []
+    for path in package.rglob("*.py"):
+        if path.parent.name == "evidence":
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom):
+                target = "." * node.level + (node.module or "")
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.Import):
+                target, names = "", [alias.name for alias in node.names]
+            else:
+                continue
+            if "evidence" in target.split(".") or any(
+                name.startswith("mnemotree.evidence") or name == "evidence" for name in names
+            ):
+                offenders.append(f"{path.relative_to(package)}:{node.lineno}")
+    assert not offenders
 
 
 def run(code: str) -> subprocess.CompletedProcess[str]:

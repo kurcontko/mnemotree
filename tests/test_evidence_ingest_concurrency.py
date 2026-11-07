@@ -2,9 +2,9 @@ import asyncio
 
 import pytest
 
-from mnemotree.core.models import EmbeddingSpec
+from mnemotree import ProviderError
+from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec
 
 
 class CharCounter:
@@ -89,4 +89,24 @@ async def test_a_provider_failure_surfaces_unwrapped_and_writes_nothing(tmp_path
                 await add(m)
         found = await m.search("u", "Lisbon", options=SearchOptions(mode="lexical"))
         assert not found.evidence
+        assert m.source("u", "m") is None
+
+
+async def test_a_lone_provider_failure_also_surfaces_unwrapped(tmp_path):
+    with memory(tmp_path / "m.db", Embedder(fail=True), None) as m:
+        with pytest.raises(ProviderDown) as raised:
+            await add(m)
+        assert isinstance(raised.value.__cause__, OSError)
+        assert m.source("u", "m") is None
+
+
+class WrongDimensionsEmbedder(Embedder):
+    async def embed_documents(self, texts):
+        return [[1.0, 0.0, 0.0] for _ in texts]
+
+
+async def test_an_embedding_of_the_wrong_dimensions_is_a_provider_error(tmp_path):
+    with memory(tmp_path / "m.db", WrongDimensionsEmbedder(), None) as m:
+        with pytest.raises(ProviderError, match="expected 2 embedding dimensions, got 3"):
+            await add(m)
         assert m.source("u", "m") is None

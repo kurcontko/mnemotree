@@ -10,8 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from mnemotree.core.temporal import annotate
-from mnemotree.errors import InvalidInput
+from ..errors import InvalidInput
+from .temporal import annotate
 
 MAX_IDENTIFIER_CHARS = 256
 
@@ -316,3 +316,59 @@ def identifier(value: object, name: str) -> str:
 
 def scope(value: object) -> str:
     return identifier(value, "namespace")
+
+
+# Atomic projections: optional derived search records cited back to source spans.
+
+
+class ExtractorSpec(Record):
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    revision: str = Field(min_length=1)
+    prompt_hash: str = Field(min_length=1)
+
+
+class Passage(Record):
+    id: str
+    source_id: str
+    start: int
+    text: str
+    role: str
+    timestamp: datetime | None
+
+
+class Citation(Record):
+    passage_id: str
+    quote: str = Field(min_length=1)
+
+
+class AtomDraft(Record):
+    text: str = Field(min_length=1, max_length=2000)
+    citations: tuple[Citation, ...] = Field(min_length=1, max_length=16)
+
+    @field_validator("text")
+    @classmethod
+    def nonblank(cls, text: str) -> str:
+        if not text.strip():
+            raise ValueError("atom text must not be blank")
+        return text
+
+
+class SourceSpan(Record):
+    source_id: str
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+
+
+class Atom(Record):
+    id: str
+    text: str
+    spans: tuple[SourceSpan, ...]
+    extractor_signature: str
+
+
+class AtomHit(Record):
+    atom: Atom
+    channel: str
+    rank: int
+    score: float

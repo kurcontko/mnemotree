@@ -5,8 +5,8 @@ from importlib import import_module
 
 import pytest
 
+from mnemotree import ProviderError
 from mnemotree.core.models import Chunk
-from mnemotree.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
 from mnemotree.evidence import (
     EmbeddingSpec,
     IngestConflict,
@@ -16,8 +16,10 @@ from mnemotree.evidence import (
     SearchOptions,
 )
 from mnemotree.retrieval.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
+from mnemotree.retrieval.ranking import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
 from mnemotree.storage.lexical import fts_table
-from mnemotree.storage.store import CHUNK_FTS, vector_blob
+from mnemotree.storage.schema import CHUNK_FTS
+from mnemotree.storage.vectors import vector_blob
 
 
 class ToyEmbedder:
@@ -408,7 +410,7 @@ async def test_invalid_embedding_and_reranker_responses(tmp_path):
         assert memory.store.stats("alice")["requests"] == 0
     with Memory(tmp_path / "rank.db", reranker=BrokenRanker()) as memory:
         await add(memory)
-        with pytest.raises(ValueError, match="finite score"):
+        with pytest.raises(ProviderError, match="finite score"):
             await memory.search("alice", "apple")
 
 
@@ -652,7 +654,7 @@ def test_counter_by_piece_matches_whole_text(encoding):
 
 
 def test_model_query_is_token_aware():
-    from mnemotree.engine import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, model_query
+    from mnemotree.retrieval.ranking import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, model_query
 
     counter = TiktokenCounter("o200k_base")
     latin = (

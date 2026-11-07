@@ -4,6 +4,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -236,7 +237,7 @@ async def test_stdio_loop_survives_lines_it_cannot_answer_normally(server):
 def run_server(
     db: Path | str, *messages: dict, namespace: str = "t", extra: tuple[str, ...] = ()
 ) -> list[dict]:
-    env = {key: value for key, value in os.environ.items() if not key.startswith("MNEMOTREE_MCP")}
+    env = {key: value for key, value in os.environ.items() if not key.startswith("MNEMOTREE_")}
     env["PYTHONPATH"] = str(Path(mnemotree.__file__).parents[1])
     proc = subprocess.run(
         [sys.executable, "-m", "mnemotree.mcp", "--db", str(db), "--namespace", namespace]
@@ -288,12 +289,10 @@ def test_cli_expands_home_in_paths(tmp_path, monkeypatch):
     assert (tmp_path / "nested" / "m.db").exists()
 
 
-def test_cli_requires_scope_and_an_explicit_retrieval_choice(tmp_path, capsys, monkeypatch):
-    for name in ("MNEMOTREE_MCP_DB", "MNEMOTREE_MCP_NAMESPACE", "MNEMOTREE_MCP_CONFIG"):
-        monkeypatch.delenv(name, raising=False)
+def test_cli_requires_an_explicit_retrieval_choice(tmp_path, capsys, clean_env):
     with pytest.raises(SystemExit):
-        main(["--db", str(tmp_path / "m.db")])
-    assert "--namespace" in capsys.readouterr().err
+        main(["--db", ""])
+    assert "--db must not be empty" in capsys.readouterr().err
     with pytest.raises(SystemExit):
         main(["--db", str(tmp_path / "m.db"), "--namespace", "t"])
     assert "--lexical" in capsys.readouterr().err
@@ -321,7 +320,7 @@ def test_cli_requires_scope_and_an_explicit_retrieval_choice(tmp_path, capsys, m
     "contents",
     ["{not json", '{"search": {"limit": 0}}', '{"embedding": {"kind": "nope"}}', None],
 )
-def test_cli_reports_a_bad_config_without_a_traceback(tmp_path, capsys, contents):
+def test_cli_reports_a_bad_config_without_a_traceback(tmp_path, capsys, contents, clean_env):
     config = tmp_path / "c.json"
     if contents is not None:
         config.write_text(contents)
@@ -331,7 +330,7 @@ def test_cli_reports_a_bad_config_without_a_traceback(tmp_path, capsys, contents
     assert not (tmp_path / "m.db").exists()
 
 
-def test_cli_refuses_a_bad_namespace_before_creating_the_database(tmp_path, capsys):
+def test_cli_refuses_a_bad_namespace_before_creating_the_database(tmp_path, capsys, clean_env):
     db = tmp_path / "nested" / "m.db"
     with pytest.raises(SystemExit):
         main(["--db", str(db), "--namespace", "   ", "--lexical"])
@@ -339,17 +338,184 @@ def test_cli_refuses_a_bad_namespace_before_creating_the_database(tmp_path, caps
     assert not db.parent.exists()
 
 
+@pytest.fixture
+def clean_env(monkeypatch, tmp_path):
+    """No MNEMOTREE_ settings from the caller's shell, and a home of the test's own."""
+    for name in list(os.environ):
+        if name.startswith("MNEMOTREE_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    return monkeypatch
+
+
+@pytest.fixture
+def served(monkeypatch):
+    """Run main() in-process: record its Server and answer ``served.messages`` in turn."""
+    record = types.SimpleNamespace(server=None, messages=[], replies=[])
+
+    async def fake_serve(server, stdin=None, stdout=None):
+        record.server = server
+        for message in record.messages:
+            if callable(message):
+                message()
+            else:
+                record.replies.append(await server.handle(message))
+
+    monkeypatch.setattr(mcp_server, "serve_stdio", fake_serve)
+    return record
+
+
+def test_cli_defaults_to_a_home_database_and_the_default_namespace(tmp_path, clean_env, served):
+    assert main(["--lexical"]) == 0
+    assert served.server.memory.namespace == "default"
+    assert (tmp_path / "home" / ".mnemotree" / "memory.sqlite").exists()
+
+
+def test_cli_reads_settings_from_the_environment(tmp_path, clean_env, served):
+    config = tmp_path / "c.json"
+    config.write_text(json.dumps({"search": {"mode": "lexical", "limit": 3}}))
+    clean_env.setenv("MNEMOTREE_DB", str(tmp_path / "new.db"))
+    clean_env.setenv("MNEMOTREE_NAMESPACE", "alice")
+    clean_env.setenv("MNEMOTREE_CONFIG", str(config))
+    clean_env.setenv("MNEMOTREE_LEXICAL", "1")
+    assert main([]) == 0
+    assert served.server.memory.namespace == "alice"
+    assert served.server.memory.search.limit == 3
+    assert (tmp_path / "new.db").exists()
+
+
+def test_cli_keeps_the_old_names_as_fallbacks(tmp_path, clean_env, served):
+    config = tmp_path / "c.json"
+    config.write_text(json.dumps({"search": {"mode": "lexical", "limit": 4}}))
+    clean_env.setenv("MNEMOTREE_MCP_DB", str(tmp_path / "old.db"))
+    clean_env.setenv("MNEMOTREE_MCP_NAMESPACE", "bob")
+    clean_env.setenv("MNEMOTREE_MCP_CONFIG", str(config))
+    assert main(["--lexical"]) == 0
+    assert served.server.memory.namespace == "bob"
+    assert served.server.memory.search.limit == 4
+    assert (tmp_path / "old.db").exists()
+    # The new name wins over the old one, and a flag over both.
+    clean_env.setenv("MNEMOTREE_NAMESPACE", "carol")
+    assert main(["--lexical"]) == 0
+    assert served.server.memory.namespace == "carol"
+    assert main(["--lexical", "--namespace", "dave", "--db", str(tmp_path / "flag.db")]) == 0
+    assert served.server.memory.namespace == "dave"
+    assert (tmp_path / "flag.db").exists()
+
+
+@pytest.mark.parametrize("value", ["1", "true", "YES"])
+def test_lexical_env_var_chooses_keyword_only_retrieval(tmp_path, clean_env, served, value):
+    clean_env.setenv("MNEMOTREE_LEXICAL", value)
+    assert main(["--db", str(tmp_path / "m.db")]) == 0
+    assert served.server.memory.engine.embedder is None
+
+
+@pytest.mark.parametrize(("value", "message"), [("0", "--lexical"), ("maybe", "MNEMOTREE_LEXICAL")])
+def test_lexical_env_var_off_or_invalid(tmp_path, clean_env, capsys, value, message):
+    clean_env.setenv("MNEMOTREE_LEXICAL", value)
+    with pytest.raises(SystemExit):
+        main(["--db", str(tmp_path / "m.db")])
+    assert message in capsys.readouterr().err
+    assert not (tmp_path / "m.db").exists()
+
+
+def test_lexical_env_var_conflicts_like_the_flag(tmp_path, clean_env, capsys):
+    config = tmp_path / "c.json"
+    config.write_text(json.dumps({"search": {"mode": "dense"}}))
+    clean_env.setenv("MNEMOTREE_LEXICAL", "1")
+    with pytest.raises(SystemExit):
+        main(["--db", str(tmp_path / "m.db"), "--config", str(config)])
+    assert "MNEMOTREE_LEXICAL conflicts with search mode 'dense'" in capsys.readouterr().err
+
+
+def test_default_embedding_applies_only_when_nothing_is_configured(
+    tmp_path, clean_env, served, fake_fastembed
+):
+    default = fake_fastembed.settings(tmp_path / "models")
+    assert main([], default_embedding=default) == 0
+    spec = served.server.memory.engine.embedder.spec
+    assert (spec.provider, spec.model) == ("fastembed", "toy/embedder")
+
+    assert main(["--db", str(tmp_path / "lexical.db"), "--lexical"], default_embedding=default) == 0
+    assert served.server.memory.engine.embedder is None
+
+    configured = fake_fastembed.settings(tmp_path / "models") | {"dimensions": 2}
+    fake_fastembed.registry.append({**fake_fastembed.registry[0], "model": "toy/b", "dim": 2})
+    config = tmp_path / "c.json"
+    config.write_text(json.dumps({"embedding": configured | {"model": "toy/b"}}))
+    db = str(tmp_path / "configured.db")
+    assert main(["--db", db, "--config", str(config)], default_embedding=default) == 0
+    assert served.server.memory.engine.embedder.spec.model == "toy/b"
+
+
+def test_initialize_is_answered_while_the_model_loads(tmp_path, clean_env, served, fake_fastembed):
+    fake_fastembed.release.clear()
+    loaded_before_release = []
+    served.messages = [
+        request(0, "initialize", {"protocolVersion": "2025-11-25"}),
+        call(1, "get", {"ids": ["x"]}),
+        lambda: loaded_before_release.append(len(fake_fastembed.loads)),
+        fake_fastembed.release.set,
+        call(2, "remember", {"content": "The spare key is under the blue pot.", "id": "key"}),
+        call(3, "recall", {"query": "spare key"}),
+    ]
+    assert main([], default_embedding=fake_fastembed.settings(tmp_path / "models")) == 0
+    initialize, get, remember, recall = served.replies
+    assert loaded_before_release == [0]
+    assert initialize["result"]["serverInfo"]["name"] == "mnemotree"
+    assert get["result"]["isError"] is False  # Calls that do not embed need no model.
+    assert remember["result"]["isError"] is False
+    found = recall["result"]["structuredContent"]["memories"]
+    assert [memory["id"] for memory in found] == ["key"]
+    assert len(fake_fastembed.loads) == 1
+
+
+def test_a_model_that_fails_to_load_is_a_tool_error(tmp_path, clean_env, served, fake_fastembed):
+    fake_fastembed.download_error = OSError("network unreachable")
+    served.messages = [
+        request(0, "initialize", {}),
+        call(1, "remember", {"content": "A note that cannot be embedded."}),
+        call(2, "recall", {"query": "note"}),
+    ]
+    assert main([], default_embedding=fake_fastembed.settings(tmp_path / "models")) == 0
+    initialize, remember, recall = served.replies
+    assert "result" in initialize
+    for reply in (remember, recall):
+        assert reply["result"]["isError"] is True
+        assert "could not be loaded: network unreachable" in reply["result"]["content"][0]["text"]
+
+
+def test_help_names_the_default_model(clean_env, capsys):
+    with pytest.raises(SystemExit):
+        main(["--help"], default_embedding={"model": "toy/embedder", "cache_dir": "~/models"})
+    out = capsys.readouterr().out
+    assert "MNEMOTREE_DB" in out and "toy/embedder" in out
+
+
+def test_mnemotree_mcp_subcommand_runs_the_server_without_a_default(
+    tmp_path, clean_env, served, capsys
+):
+    from mnemotree import cli
+
+    assert cli.main(["mcp", "--db", str(tmp_path / "m.db"), "--lexical"]) == 0
+    assert served.server.memory.namespace == "default"
+    with pytest.raises(SystemExit):
+        cli.main(["mcp", "--db", str(tmp_path / "other.db")])
+    err = capsys.readouterr().err
+    assert "usage: mnemotree mcp" in err and "--lexical" in err
+
+
 def flaky_open(monkeypatch, errors):
-    """Patch open_memory to raise ``errors`` in turn, then succeed; return the call log."""
+    """Patch Config.open to raise ``errors`` in turn, then succeed; return the call log."""
     calls = []
 
-    def fake(path, config):
+    def fake(config, path):
         calls.append(path)
         if len(calls) <= len(errors):
             raise errors[len(calls) - 1]
         return "engine"
 
-    monkeypatch.setattr(mcp_server, "open_memory", fake)
+    monkeypatch.setattr(Config, "open", fake)
     monkeypatch.setattr(mcp_server.time, "sleep", lambda seconds: None)
     return calls
 
@@ -378,7 +544,7 @@ def test_open_engine_gives_up_after_its_attempts(tmp_path, monkeypatch):
 def test_separate_stdio_sessions_share_one_database(tmp_path):
     # Each Claude Code session spawns its own server; WAL lets them share the file.
     db = tmp_path / "shared.db"
-    env = {key: value for key, value in os.environ.items() if not key.startswith("MNEMOTREE_MCP")}
+    env = {key: value for key, value in os.environ.items() if not key.startswith("MNEMOTREE_")}
     env["PYTHONPATH"] = str(Path(mnemotree.__file__).parents[1])
     command = [sys.executable, "-m", "mnemotree.mcp", "--db", str(db), "--namespace", "t"]
     initialize = json.dumps(request(0, "initialize", {"protocolVersion": "2025-11-25"}))

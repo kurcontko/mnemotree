@@ -10,6 +10,8 @@ from pathlib import Path
 from time import perf_counter
 
 from .core.models import (
+    Atom,
+    AtomHit,
     Candidate,
     Chunk,
     ContextSpan,
@@ -24,15 +26,11 @@ from .core.models import (
     identifier,
     scope,
 )
-from .core.protocols import Embedder, Reranker, TokenCounter
-from .errors import ConfigurationError, InvalidInput
-from .ingest.atoms import Atom, AtomHit, Extractor, extract_atoms
+from .core.protocols import Embedder, Extractor, Reranker, TokenCounter
+from .errors import ConfigurationError, InvalidInput, ProviderError
+from .ingest.atoms import extract_atoms
 from .ingest.chunking import chunk_source
 from .retrieval.packing import Packed, TiktokenCounter, pack
-
-# Re-exported: these lived here before ranking.py held the pure ranking steps.
-from .retrieval.ranking import QUERY_EMBED_CHARS as QUERY_EMBED_CHARS
-from .retrieval.ranking import QUERY_EMBED_TOKENS as QUERY_EMBED_TOKENS
 from .retrieval.ranking import (
     RolePolicy,
     boost_role,
@@ -45,19 +43,8 @@ from .retrieval.ranking import (
     role_first,
     role_policy,
 )
-from .storage.store import SQLiteEvidenceStore, Window, now, vector_blob
-
-__all__ = [
-    "QUERY_EMBED_CHARS",
-    "QUERY_EMBED_TOKENS",
-    "EvidenceEngine",
-    "Memory",
-    "cap_per_source",
-    "chronological",
-    "fuse",
-    "model_query",
-    "role_first",
-]
+from .storage.store import SQLiteEvidenceStore, Window, now
+from .storage.vectors import vector_blob
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,29 +228,25 @@ class EvidenceEngine:
     async def _embed_and_extract(
         self, sources: Sequence[Source], chunks: Sequence[Chunk]
     ) -> tuple[Sequence[Sequence[float]] | None, list[Atom]]:
-        """Embed the chunks and extract atoms; with both providers, concurrently."""
-        embedder, extractor = self.embedder, self.extractor
-        texts = [chunk.text for chunk in chunks]
-        if embedder is None or extractor is None:
-            vectors = await embedder.embed_documents(texts) if embedder else None
-            atoms = await self._extract(extractor, sources) if extractor else []
-            return vectors, atoms
+        """Embed the chunks and extract atoms, concurrently when both providers are set."""
+        embedding: asyncio.Task[Sequence[Sequence[float]]] | None = None
+        extraction: asyncio.Task[list[Atom]] | None = None
         try:
             async with asyncio.TaskGroup() as group:
-                embedding = group.create_task(embedder.embed_documents(texts))
-                extraction = group.create_task(self._extract(extractor, sources))
-        except ExceptionGroup:
-            # Raise the provider's own exception, as the sequential path does; a
-            # group would hide it from callers that catch its type.
-            errors = [
-                error
-                for task in (embedding, extraction)
-                if task.done() and not task.cancelled() and (error := task.exception()) is not None
-            ]
+                if self.embedder is not None:
+                    texts = [chunk.text for chunk in chunks]
+                    embedding = group.create_task(self.embedder.embed_documents(texts))
+                if self.extractor is not None:
+                    extraction = group.create_task(self._extract(self.extractor, sources))
+        except ExceptionGroup as failures:
+            # Raise the provider's own exception: a group would hide it from callers
+            # that catch its type. A failure cancels the other task, so it is the first.
+            error = failures.exceptions[0]
         else:
-            return embedding.result(), extraction.result()
+            vectors = embedding.result() if embedding is not None else None
+            return vectors, extraction.result() if extraction is not None else []
         # Raised outside the handler so the error keeps its own cause and context.
-        raise errors[0]
+        raise error
 
     async def _extract(self, extractor: Extractor, sources: Sequence[Source]) -> list[Atom]:
         return await extract_atoms(
@@ -482,7 +465,9 @@ class EvidenceEngine:
         if source is None:
             source = self.store.get_source(namespace, chunk.source_id)
             if source is None:
-                raise ValueError("retrieved chunk has no source")
+                # One read transaction covers the chunk and its source, so this
+                # means the database is inconsistent, not that the input is bad.
+                raise RuntimeError("retrieved chunk has no source")
             sources[chunk.source_id] = source
         return self.store.window(namespace, chunk, options.neighbor_chunks, source=source)
 
@@ -491,7 +476,7 @@ class EvidenceEngine:
             return candidates
         scores = list(await self.reranker.score(query, [item.chunk.text for item in candidates]))
         if len(scores) != len(candidates) or not all(math.isfinite(score) for score in scores):
-            raise ValueError("reranker must return one finite score per candidate")
+            raise ProviderError("reranker must return one finite score per candidate")
         return sorted(
             (
                 item.model_copy(update={"rerank_score": float(score)})
@@ -556,7 +541,3 @@ class EvidenceEngine:
 
     def forget(self, namespace: str, source_id: str) -> bool:
         return self.store.forget(namespace, source_id)
-
-
-# The 1.0 name, kept for ``mnemotree.evidence.Memory`` and existing callers.
-Memory = EvidenceEngine
