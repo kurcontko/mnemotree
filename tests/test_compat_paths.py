@@ -33,6 +33,8 @@ MOVED = {
 SRC = str(Path(mnemotree.__file__).parents[1])
 # Every public name each 1.0 module defined or imported from the package, read from
 # the 1.0.3 sources; none of them may stop importing before 2.0.
+# Wrappers that keep a 1.0 behaviour the moved function changed: secret exits.
+KEEPS_1_0_BEHAVIOUR = {("cli", "secret")}
 NAMES_1_0 = json.loads(
     (Path(__file__).parent / "golden" / "compat" / "evidence-1.0-names.json").read_text()
 )
@@ -51,7 +53,7 @@ def test_every_1_0_name_still_imports_from_its_old_path(old, new):
     # The same objects, not copies, so isinstance and identity checks keep holding.
     moved = importlib.import_module(new)
     for name in NAMES_1_0[old]:
-        if hasattr(moved, name):
+        if hasattr(moved, name) and (old, name) not in KEEPS_1_0_BEHAVIOUR:
             assert getattr(module, name) is getattr(moved, name), name
 
 

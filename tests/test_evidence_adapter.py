@@ -434,12 +434,14 @@ async def test_provider_failure_logs_status_without_provider_body(tmp_path, monk
     assert "SECRET" not in text and "rate limited" not in text and "provider.test" not in text
 
 
-def test_cli_names_a_missing_credential_variable(monkeypatch):
-    from mnemotree.cli.evidence import secret
+def test_cli_names_a_missing_credential_variable(monkeypatch, tmp_path):
+    from mnemotree.cli.evidence import main
 
     monkeypatch.delenv("NO_SUCH_KEY", raising=False)
-    with pytest.raises(SystemExit, match="set the NO_SUCH_KEY environment variable"):
-        secret("NO_SUCH_KEY")
+    argv = ["mnemotree-evidence", "--db", str(tmp_path / "m.db"), "serve", "--key-env"]
+    monkeypatch.setattr("sys.argv", [*argv, "NO_SUCH_KEY"])
+    with pytest.raises(SystemExit, match="mnemotree-evidence: set the NO_SUCH_KEY environment"):
+        main()
 
 
 async def test_request_log_bounds_unmatched_paths(tmp_path):

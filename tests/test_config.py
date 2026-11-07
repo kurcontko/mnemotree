@@ -5,7 +5,6 @@ import pytest
 from pydantic import ValidationError
 
 from mnemotree import ConfigurationError, IngestConflict, InvalidInput, MnemotreeError
-from mnemotree.cli import evidence as evidence_cli
 from mnemotree.config import (
     Config,
     OpenAIEmbeddingConfig,
@@ -94,16 +93,22 @@ def test_omitted_settings_keep_the_provider_defaults(monkeypatch):
 def test_missing_key_names_the_variable(monkeypatch):
     monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
     config = OpenAIEmbeddingConfig(kind="openai", model="m", dimensions=4, revision="r")
-    with pytest.raises(SystemExit, match="EMBEDDING_API_KEY"):
+    with pytest.raises(ConfigurationError, match="set the EMBEDDING_API_KEY environment"):
         config.build()
 
 
-def test_cli_module_still_exports_the_config_api():
+def test_the_1_0_cli_names_keep_exiting_on_a_missing_credential(monkeypatch, tmp_path):
     from mnemotree import config
+    from mnemotree.evidence import cli as legacy_cli
 
-    assert evidence_cli.Config is config.Config
-    assert evidence_cli.open_memory is config.open_memory
-    assert evidence_cli.secret is config.secret
+    monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
+    assert legacy_cli.Config is config.Config
+    with pytest.raises(SystemExit, match="mnemotree-evidence: set the EMBEDDING_API_KEY"):
+        legacy_cli.secret("EMBEDDING_API_KEY")
+    settings = {"kind": "openai", "model": "m", "dimensions": 4, "revision": "r"}
+    with pytest.raises(SystemExit, match="EMBEDDING_API_KEY"):
+        legacy_cli.open_memory(tmp_path / "m.db", config.Config(embedding=settings))
+    assert not (tmp_path / "m.db").exists()
 
 
 def test_errors_are_value_errors():

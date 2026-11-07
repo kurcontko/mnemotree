@@ -506,16 +506,16 @@ def test_mnemotree_mcp_subcommand_runs_the_server_without_a_default(
 
 
 def flaky_open(monkeypatch, errors):
-    """Patch open_memory to raise ``errors`` in turn, then succeed; return the call log."""
+    """Patch Config.open to raise ``errors`` in turn, then succeed; return the call log."""
     calls = []
 
-    def fake(path, config):
+    def fake(config, path):
         calls.append(path)
         if len(calls) <= len(errors):
             raise errors[len(calls) - 1]
         return "engine"
 
-    monkeypatch.setattr(mcp_server, "open_memory", fake)
+    monkeypatch.setattr(Config, "open", fake)
     monkeypatch.setattr(mcp_server.time, "sleep", lambda seconds: None)
     return calls
 
