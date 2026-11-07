@@ -81,10 +81,12 @@ frozen answers must never be scored as responses to new contexts.
 To reproduce the export on the existing recording host:
 
 ```sh
-python export_recording.py \
-  --recording /home/qrc/bench/invmem-comparison-2026-10-27-v3 \
-  --output /tmp/open-model-v1.zip
+cd /tmp && python /path/to/export_recording.py \
+  --recording /home/qrc/bench/invmem-comparison-2026-10-27-v3
 ```
+
+It writes `open-model-v1.zip` to the current directory and refuses to
+overwrite an existing file.
 
 The exporter reads the recorded dataset loader, verified source datasets,
 exact vector cache, and cached tokenizer; it makes no model requests. It fails

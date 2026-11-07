@@ -1,7 +1,8 @@
 """Export a small offline fixture from the recorded local Qwen comparison.
 
 Run with the recording's Python environment. Reads existing data and vectors;
-never constructs a provider client or generates missing vectors.
+never constructs a provider client or generates missing vectors. Writes
+open-model-v1.zip to the current directory and refuses to overwrite it.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ REVISION = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"
 DIMENSIONS = 256
 TOKENIZER_CACHE_KEY = "fb374d419588a4632f3f557e76b4b70aebbca790"
 TOKENIZER_SHA256 = "446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d"
+OUTPUT = Path("open-model-v1.zip")
 
 
 def sha(data: bytes) -> str:
@@ -43,7 +45,7 @@ def selection_key(value) -> str:
     return sha((SEED + ":" + value.id).encode())
 
 
-def export(recording: Path, output: Path) -> None:
+def export(recording: Path) -> None:
     spec = importlib.util.spec_from_file_location(
         "recorded_data", recording / "benchmarks/aml/data.py"
     )
@@ -226,9 +228,8 @@ def export(recording: Path, output: Path) -> None:
         "files": {name: {"sha256": sha(data), "bytes": len(data)} for name, data in files.items()},
     }
     files["provenance.json"] = encoded(provenance)
-    output.parent.mkdir(parents=True, exist_ok=True)
     with (
-        output.open("xb") as handle,
+        OUTPUT.open("xb") as handle,
         zipfile.ZipFile(handle, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive,
     ):
         for name, data in sorted(files.items()):
@@ -238,9 +239,9 @@ def export(recording: Path, output: Path) -> None:
     print(
         json.dumps(
             {
-                "output": str(output),
-                "bytes": output.stat().st_size,
-                "sha256": sha(output.read_bytes()),
+                "output": str(OUTPUT.resolve()),
+                "bytes": OUTPUT.stat().st_size,
+                "sha256": sha(OUTPUT.read_bytes()),
                 "selection": provenance["selection"],
             }
         )
@@ -250,6 +251,5 @@ def export(recording: Path, output: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recording", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    export(args.recording, args.output)
+    export(args.recording)

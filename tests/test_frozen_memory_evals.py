@@ -64,8 +64,9 @@ def test_lost_labels_cannot_turn_a_regression_into_an_unlabeled_case():
 
 def test_baseline_for_another_model_fixture_is_rejected():
     baseline = {"fixture_sha256": "old-model", "cases": [case()]}
+    current = [case()]
     with pytest.raises(ValueError, match="different fixture"):
-        evals.compare([case()], baseline, "new-model")
+        evals.compare(current, baseline, "new-model")
 
 
 async def test_exact_vectors_replay_and_changed_text_requires_refresh(recording):
@@ -132,12 +133,13 @@ def test_joined_context_and_block_token_counts_are_checked_separately():
     recall = SimpleNamespace(context=context, evidence=evidence, items=(), trace=trace)
     labels = {"abstention": False, "evidence": [], "evidence_sessions": []}
     counter = SimpleNamespace(count=len)
-    result = evals.inspect_recall(recall, sources, labels, SearchOptions(), counter)
+    options = SearchOptions()
+    result = evals.inspect_recall(recall, sources, labels, options, counter)
     assert result["packed_tokens"] > result["evidence_tokens"]
     trace.packed_tokens -= 1
     with pytest.raises(ValueError, match="Packed token accounting differs"):
-        evals.inspect_recall(recall, sources, labels, SearchOptions(), counter)
+        evals.inspect_recall(recall, sources, labels, options, counter)
     trace.packed_tokens += 1
     trace.evidence_tokens -= 1
     with pytest.raises(ValueError, match="Evidence token accounting differs"):
-        evals.inspect_recall(recall, sources, labels, SearchOptions(), counter)
+        evals.inspect_recall(recall, sources, labels, options, counter)
