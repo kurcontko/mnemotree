@@ -12,7 +12,8 @@ sampling in the evidence HTTP service (last item).
   Patching a function through an old path no longer reaches the code that calls it;
   patch the new module instead.
 - Deliberate failures derive from `mnemotree.MnemotreeError`: `InvalidInput`,
-  `ConfigurationError` and `IngestConflict`. All of them are still `ValueError`s.
+  `ConfigurationError`, `IngestConflict` and `ProviderError` (provider output that
+  breaks its contract). All of them are still `ValueError`s.
 - `mnemotree.config.Config.open(path)` opens an engine from a CLI config. A missing
   provider credential raises `ConfigurationError` there; both CLIs still exit with
   the variable to set, and `mnemotree.evidence.cli.open_memory` and `.secret` still
