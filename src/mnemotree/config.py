@@ -1,4 +1,4 @@
-"""Typed JSON configuration shared by the CLIs, and the factory that opens an engine from it.
+"""Typed JSON configuration shared by the CLIs; ``Config.open`` opens an engine from it.
 
 Provider settings left out (or ``null``) fall back to the provider's own defaults,
 so those defaults live in one place. Keys never go in the config: ``api_key_env``
@@ -16,6 +16,7 @@ from pydantic import Field, model_validator
 from .core.models import Record, SearchOptions
 from .core.protocols import Embedder, Extractor
 from .engine import EvidenceEngine
+from .errors import ConfigurationError
 from .retrieval.packing import TiktokenCounter
 
 
@@ -24,7 +25,7 @@ def secret(name: str) -> str:
     try:
         return os.environ[name]
     except KeyError:
-        raise SystemExit(f"mnemotree-evidence: set the {name} environment variable") from None
+        raise ConfigurationError(f"set the {name} environment variable") from None
 
 
 class ProviderConfig(Record):
@@ -122,17 +123,19 @@ class Config(Record):
     extraction_batch_chars: int = 12000
     search: SearchOptions | None = None
 
+    def open(self, path: Path) -> EvidenceEngine:
+        """Open the engine at ``path`` with the providers this config selects.
 
-def open_memory(path: Path, config: Config) -> EvidenceEngine:
-    """Open the engine at ``path`` with the providers ``config`` selects."""
-    extractor = config.extraction.build() if config.extraction is not None else None
-    embedder = config.embedding.build() if config.embedding is not None else None
-    return EvidenceEngine(
-        path,
-        embedder=embedder,
-        chunk_size=config.chunk_size,
-        chunk_overlap=config.chunk_overlap,
-        token_counter=TiktokenCounter(config.tokenizer),
-        extractor=extractor,
-        extraction_batch_chars=config.extraction_batch_chars,
-    )
+        A provider credential missing from the environment raises ConfigurationError.
+        """
+        extractor = self.extraction.build() if self.extraction is not None else None
+        embedder = self.embedding.build() if self.embedding is not None else None
+        return EvidenceEngine(
+            path,
+            embedder=embedder,
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            token_counter=TiktokenCounter(self.tokenizer),
+            extractor=extractor,
+            extraction_batch_chars=self.extraction_batch_chars,
+        )

@@ -13,6 +13,10 @@ sampling in the evidence HTTP service (last item).
   patch the new module instead.
 - Deliberate failures derive from `mnemotree.MnemotreeError`: `InvalidInput`,
   `ConfigurationError` and `IngestConflict`. All of them are still `ValueError`s.
+- `mnemotree.config.Config.open(path)` opens an engine from a CLI config. A missing
+  provider credential raises `ConfigurationError` there; both CLIs still exit with
+  the variable to set, and `mnemotree.evidence.cli.open_memory` and `.secret` still
+  exit as in 1.0.
 - CLI and MCP configs are validated when they load: an unknown provider `kind`, a
   missing `model` or `revision`, or an unrecognized key is reported before any
   database is opened. A sentence-transformers embedding now needs `revision` there.
