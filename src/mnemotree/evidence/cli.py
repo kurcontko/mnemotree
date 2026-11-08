@@ -21,13 +21,6 @@ from .evaluation import CorpusRecord, ablate, ablate_context, ablate_retrieval, 
 from .models import SearchOptions
 
 
-def nonnegative(value: str) -> int:
-    number = int(value)
-    if number < 0:
-        raise argparse.ArgumentTypeError("must be 0 (unlimited) or a positive count")
-    return number
-
-
 def positive(value: str) -> int:
     number = int(value)
     if number < 1:
@@ -122,25 +115,12 @@ def main() -> None:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     serve.add_argument("--key-env", default="MNEMOTREE_API_KEY")
-    # Environment defaults let docker compose toggle these without conditional flags.
+    # An environment default lets docker compose toggle it without a conditional flag.
     serve.add_argument(
         "--request-log",
         type=Path,
         default=os.environ.get("AML_REQUEST_LOG") or None,
         help="append one metadata-only JSON line per request (default: $AML_REQUEST_LOG)",
-    )
-    serve.add_argument(
-        "--sample-payloads",
-        type=Path,
-        default=os.environ.get("AML_SAMPLE_PAYLOADS") or None,
-        help="append Add/Search payloads as JSONL, Smoke inspection only "
-        "(default: $AML_SAMPLE_PAYLOADS)",
-    )
-    serve.add_argument(
-        "--sample-limit",
-        type=nonnegative,
-        default=os.environ.get("AML_SAMPLE_LIMIT") or "50",
-        help="payloads sampled per route, 0 = unlimited (default: $AML_SAMPLE_LIMIT or 50)",
     )
     args = parser.parse_args()
     config = Config.model_validate_json(args.config.read_text()) if args.config else Config()
@@ -151,13 +131,10 @@ def main() -> None:
             from .server import BOOT, aml_options, create_app, emit, utc_now
 
             options = config.search or aml_options(memory)
-            sample_limit = args.sample_limit or None
             app = create_app(
                 memory,
                 api_key=secret(args.key_env),
                 options=options,
-                sample_path=args.sample_payloads,
-                sample_limit=sample_limit,
                 request_log=args.request_log,
             )
             configure_logging()
@@ -174,10 +151,6 @@ def main() -> None:
                     # The spec holds provider, model, dimensions and revision; no key.
                     "embedding": spec.model_dump() if spec is not None else None,
                     "request_log": str(args.request_log) if args.request_log else None,
-                    "sample_payloads": (
-                        str(args.sample_payloads) if args.sample_payloads else None
-                    ),
-                    "sample_limit": sample_limit if args.sample_payloads else None,
                 },
                 args.request_log,
             )

@@ -230,33 +230,6 @@ async def test_reproducible_source_recall_report(tmp_path):
             await evaluate(memory, corpus, queries, SearchOptions(mode="lexical"))
 
 
-async def test_payload_sampling_is_bounded(tmp_path):
-    pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
-
-    samples = tmp_path / "samples.jsonl"
-    with Memory(tmp_path / "m.db") as memory:
-        app = create_app(memory, api_key="k", sample_path=samples, sample_limit=1)
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://test",
-            headers={"Authorization": "Bearer k"},
-        ) as client:
-            for index in range(3):
-                payload = {
-                    "request_id": f"r{index}",
-                    "user_id": "u",
-                    "session_id": "s",
-                    "messages": [{"role": "user", "content": "Caroline: hello"}],
-                }
-                assert (await client.post("/v1/memories/add", json=payload)).status_code == 200
-                query = {"query": "hello", "user_id": "u", "top_k": 5}
-                assert (await client.post("/v1/memories/search", json=query)).status_code == 200
-    rows = [json.loads(line) for line in samples.read_text().splitlines()]
-    assert [row["kind"] for row in rows] == ["add", "search"]
-    assert rows[0]["messages"][0]["content"] == "Caroline: hello"
-
-
 def read_log(path):
     return [json.loads(line) for line in path.read_text().splitlines()]
 
@@ -366,38 +339,6 @@ async def test_request_log_explains_validation_and_auth_failures(tmp_path):
     assert unauthorized["status"] == 401 and unauthorized["auth_scheme"] == "token"
     assert unauthorized["detail"] == "invalid credentials"
     assert "secret-user" not in log.read_text() and "wrong" not in log.read_text()
-
-
-async def test_unlimited_payload_sampling_joins_the_request_log(tmp_path):
-    pytest.importorskip("fastapi")
-    from mnemotree.evidence.server import create_app
-
-    log, samples = tmp_path / "r.jsonl", tmp_path / "samples" / "p.jsonl"
-    with Memory(tmp_path / "m.db") as memory:
-        app = create_app(
-            memory, api_key="k", sample_path=samples, sample_limit=None, request_log=log
-        )
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://test",
-            headers={"Authorization": "Bearer k"},
-        ) as client:
-            for index in range(60):
-                payload = {
-                    "request_id": f"r{index}",
-                    "user_id": "u",
-                    "session_id": "s",
-                    "messages": [{"role": "user", "content": f"note {index}"}],
-                }
-                assert (await client.post("/v1/memories/add", json=payload)).status_code == 200
-            query = {"query": "note", "user_id": "u", "top_k": 5}
-            assert (await client.post("/v1/memories/search", json=query)).status_code == 200
-    rows, logged = read_log(samples), read_log(log)
-    assert len(rows) == len(logged) == 61
-    assert [row["kind"] for row in rows] == ["add"] * 60 + ["search"]
-    for row, line in zip(rows, logged, strict=True):
-        assert (row["seq"], row["boot"], row["ts"]) == (line["seq"], line["boot"], line["ts"])
-    assert rows[-1]["query"] == "note" and rows[0]["messages"][0]["content"] == "note 0"
 
 
 async def test_provider_failure_logs_status_without_provider_body(tmp_path, monkeypatch):

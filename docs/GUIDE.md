@@ -324,9 +324,7 @@ The default evidence budget is 8,000 tokens of returned content. The platform's
 final prompt also holds the question, options and instructions, so the 117,760
 input-token ceiling is not an evidence allowance: leave headroom and count with the
 answer model's tokenizer. `--request-log` (`AML_REQUEST_LOG`) appends one
-metadata-only line per request; `--sample-payloads` (`AML_SAMPLE_PAYLOADS`) and
-`--sample-limit` (`AML_SAMPLE_LIMIT`, default 50) sample payloads for smoke
-inspection.
+metadata-only line per request.
 
 Without a `search` block, the service applies its defaults (`aml_options` in
 `evidence/server.py`): hybrid retrieval when an embedder is configured, one neighboring
