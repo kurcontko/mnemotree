@@ -163,4 +163,4 @@ async def test_real_default_model_finds_a_paraphrase():
     assert len(query) == 384
     similarity = [sum(a * b for a, b in zip(query, doc, strict=True)) for doc in (near, far)]
     assert similarity[0] > similarity[1]
-    assert Path(model.cache_dir).is_dir()
+    assert await asyncio.to_thread(Path(model.cache_dir).is_dir)

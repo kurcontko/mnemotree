@@ -22,6 +22,7 @@ from typing import IO, TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from ..config import Config, open_memory
 from ..evidence.models import scope
 from ..evidence.providers import EmbedderUnavailable
 from ..memory import Memory
@@ -29,7 +30,6 @@ from .tools import TOOLS
 
 if TYPE_CHECKING:
     from ..evidence import Memory as Engine
-    from ..evidence.cli import Config
 
 # Newest first. Tools behave the same in each; only structured results are newer.
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -230,8 +230,6 @@ def build_parser(prog: str = "mnemotree-mcp") -> argparse.ArgumentParser:
 def open_engine(path: Path, config: Config, attempts: int = 6) -> Engine:
     """Sessions started together may all create the same new file. SQLite reports
     the one-time switch to WAL as busy without waiting, so retry the open briefly."""
-    from ..evidence.cli import open_memory
-
     for attempt in range(attempts - 1):
         try:
             return open_memory(path, config)
@@ -245,7 +243,8 @@ def open_engine(path: Path, config: Config, attempts: int = 6) -> Engine:
 def warm_up(warm: Callable[[], object]) -> None:
     try:
         warm()
-    except Exception as exc:
+    # Any failure: this thread only reports it, and the next call that embeds retries.
+    except Exception as exc:  # noqa: BLE001
         # Calls that need embeddings retry the load and return its error themselves.
         log.error("%s; calls that embed will retry", exc)
 
@@ -258,8 +257,6 @@ def main(
 ) -> int:
     """Run the server. ``default_embedding`` applies when no embedding is configured and
     keyword-only retrieval was not chosen; without it, that case is an error."""
-    from ..evidence.cli import Config
-
     parser = build_parser(prog)
     if default_embedding is not None:
         parser.epilog = (
@@ -292,7 +289,10 @@ def main(
     if config.embedding is None and not lexical:
         if default_embedding is None:
             parser.error("no embedding configured: pass --config with an embedding, or --lexical")
-        config = config.model_copy(update={"embedding": dict(default_embedding)})
+        # Validated, unlike model_copy(update=...), so the default becomes a typed provider config.
+        config = Config.model_validate(
+            {**config.model_dump(exclude_unset=True), "embedding": dict(default_embedding)}
+        )
     chosen = "--lexical" if args.lexical else "MNEMOTREE_LEXICAL"
     if config.embedding is not None and lexical:
         parser.error(f"{chosen} conflicts with the configured embedding")

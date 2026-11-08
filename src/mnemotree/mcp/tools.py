@@ -155,7 +155,8 @@ def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
             return [resolve(value) for value in node]
         return node
 
-    return resolve(schema)
+    resolved: dict[str, Any] = resolve(schema)
+    return resolved
 
 
 WRITE = {"readOnlyHint": False, "destructiveHint": False}

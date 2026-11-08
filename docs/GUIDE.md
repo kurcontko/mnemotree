@@ -44,6 +44,12 @@ even if another process replaces or deletes a source during retrieval. The sourc
 order follows evidence blocks, with each anchor followed by its neighbors; a source
 appears only once. `timestamp` preserves the supplied timezone offset.
 
+Deliberate failures derive from `mnemotree.MnemotreeError` and from `ValueError`:
+`InvalidInput` for an unusable argument (blank query, bad namespace or ID),
+`ConfigurationError` when the configuration or database cannot serve the call
+(schema version, embedding or extractor signature, missing provider), and
+`IngestConflict` when a request or source ID is reused for different content.
+
 ## MCP server
 
 The MCP server serves one namespace over stdio. It uses only the standard library
@@ -147,7 +153,10 @@ config:
 ```
 
 Keys never go in the config: `api_key_env` names the environment variable that holds
-them (`EMBEDDING_API_KEY` by default). Set `send_dimensions` to false if the endpoint
+them (`EMBEDDING_API_KEY` by default). The config is validated when it loads
+(`mnemotree.config.Config`): an unknown `kind`, a missing `model` or `revision`, or an
+unrecognized key is reported before any database is opened, and provider settings left
+out keep the provider's defaults. Set `send_dimensions` to false if the endpoint
 does not accept that parameter. A revision label cannot force an upstream API to pin
 weights, so use an explicit revision and rebuild when provider behavior changes. For
 local embeddings, set `kind` to `sentence-transformers` and supply `model`,
@@ -315,9 +324,7 @@ The default evidence budget is 8,000 tokens of returned content. The platform's
 final prompt also holds the question, options and instructions, so the 117,760
 input-token ceiling is not an evidence allowance: leave headroom and count with the
 answer model's tokenizer. `--request-log` (`AML_REQUEST_LOG`) appends one
-metadata-only line per request; `--sample-payloads` (`AML_SAMPLE_PAYLOADS`) and
-`--sample-limit` (`AML_SAMPLE_LIMIT`, default 50) sample payloads for smoke
-inspection.
+metadata-only line per request.
 
 Without a `search` block, the service applies its defaults (`aml_options` in
 `evidence/server.py`): hybrid retrieval when an embedder is configured, one neighboring

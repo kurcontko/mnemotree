@@ -1,3 +1,11 @@
+# Unreleased
+
+- Payload sampling is removed from the evidence HTTP service: `create_app` no longer
+  takes `sample_path` or `sample_limit`, and `mnemotree-evidence serve` no longer
+  accepts `--sample-payloads` or `--sample-limit` (`AML_SAMPLE_PAYLOADS`,
+  `AML_SAMPLE_LIMIT`). It wrote raw message and query text to disk. The
+  metadata-only `--request-log` is unchanged.
+
 # 1.0.3 (2026-11-06)
 
 First release of `mnemotree-mcp` on PyPI; the code is unchanged from 1.0.2.

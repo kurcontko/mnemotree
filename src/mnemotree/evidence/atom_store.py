@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Sequence
+from typing import Any
 
+from ..errors import ConfigurationError
 from .atoms import Atom
 from .lexical import create_fts, fts_table, index_text, match_expression
 from .models import Chunk, scope
@@ -48,15 +50,17 @@ class AtomStore:
                 "WHERE atom_rowid=old.rowid; END"
             )
 
-    def configure(self, config: dict | None) -> dict | None:
+    def configure(self, config: dict[str, Any] | None) -> dict[str, Any] | None:
         row = self.db.execute("SELECT value FROM evidence_config WHERE key='extractor'").fetchone()
         saved = json.loads(row[0]) if row else None
         if config is not None:
             if saved is not None and saved != config:
-                raise ValueError("extractor signature mismatch; rebuild into a fresh database")
+                raise ConfigurationError(
+                    "extractor signature mismatch; rebuild into a fresh database"
+                )
             if saved is None:
                 if self.db.execute("SELECT 1 FROM evidence_requests LIMIT 1").fetchone():
-                    raise ValueError("existing corpus needs an explicit extraction rebuild")
+                    raise ConfigurationError("existing corpus needs an explicit extraction rebuild")
                 self.db.execute(
                     "INSERT INTO evidence_config VALUES('extractor',?)", (json.dumps(config),)
                 )
