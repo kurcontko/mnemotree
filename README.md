@@ -23,8 +23,8 @@ instead of rewritten summaries.
   candidate, rank and packing loss.
 - **Isolated:** every read and write is scoped to one namespace.
 
-The default install needs only Pydantic, sqlite-vec and tiktoken. This repository
-does not yet publish reproducible retrieval-quality benchmarks.
+The default install needs only Pydantic, sqlite-vec and tiktoken. See
+[Benchmarks](#benchmarks) for end-to-end results on LoCoMo and LongMemEval.
 
 ## Install
 
@@ -67,6 +67,30 @@ asyncio.run(main())
 
 `Memory` binds one namespace and offers `remember`, `remember_many`, `recall`, `get`
 and `forget`. Pass an `embedder` for hybrid retrieval.
+
+## Benchmarks
+
+These scores measure end-to-end question answering with the `v1.0.0` engine.
+Mnemotree packs at most 8,000 tokens of evidence per question. gpt-4o-mini answers
+from that evidence and also judges the answer. Embeddings come from DashScope
+`text-embedding-v4` at 1,024 dimensions. Retrieval fuses BM25 and vector search
+with RRF and adds the neighboring messages around each hit. No LLM runs inside
+Mnemotree.
+
+| Benchmark | Questions | Mnemotree | Published, gpt-4o-mini answering |
+| --- | ---: | ---: | --- |
+| LoCoMo, categories 1 to 4 | 1,540 | 72.1 | Full context (26K tokens) 72.9, Mem0 with graph 68.4, Mem0 66.9, Zep 66.0, LangMem 58.1 ([Mem0 paper](https://arxiv.org/abs/2504.19413), Table 2) |
+| LongMemEval-S | 500 | 60.8 | Zep 63.8, full context (115K tokens) 55.4 ([Zep paper](https://arxiv.org/abs/2501.13956), Table 2) |
+
+On LoCoMo-Refined, a cleaned release of LoCoMo with 1,382 questions, Mnemotree
+scores 78.7 with the [official scorer](https://github.com/mem-eval-suite/LoCoMo_refined),
+which judges with Qwen3-14B. That run used Nemotron-3-Embed-8B embeddings.
+
+Each score is a single run of ours. The published rows are the authors' own runs
+with their own prompts and judges, and the Zep paper judges LongMemEval with gpt-4o.
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md) has the setup, the method, how to size the
+evidence budget and the limitations. The evaluation harness is not in this
+repository yet.
 
 ## MCP server
 
@@ -118,7 +142,8 @@ mnemotree-evidence --db service.sqlite serve
 
 [docs/GUIDE.md](docs/GUIDE.md) covers the API contract, MCP configuration, embeddings,
 storage and retrieval behavior, atomic projections, the AML service, evaluation
-and limits.
+and limits. [docs/BENCHMARKS.md](docs/BENCHMARKS.md) records how the benchmark
+numbers were produced and what they leave out.
 
 Releases up to 0.4.0 shipped `MemoryCore`, pluggable vector/graph backends and an
 older MCP server. They have been removed, and `Memory` does not read their databases.
