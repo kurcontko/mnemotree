@@ -127,11 +127,48 @@ original.
 We ran the official scorer ourselves. The organizers have not reviewed or placed
 this result.
 
+### BEAM, official code
+
+[BEAM](https://arxiv.org/abs/2510.27246) asks probing questions about single
+conversations of 100K to 10M tokens. This run used BEAM's own code without
+changes, at commit `b2da22e`: its truncated chats, its answer prompt and reader
+wrapper, and its scorer. The scorer judges each rubric item with gpt-4.1-mini and
+scores event ordering with Kendall tau. A score is the mean over BEAM's ten
+abilities, averaged over conversations.
+
+gpt-4.1-nano answered every arm at temperature 0, so only the evidence in the
+prompt differs. Mnemotree ran `v1.0.0` (`02aefee`) with the default AML profile and
+the 8,000-token budget. BEAM's RAG baseline ran from the same code with its
+published settings: user-assistant pair chunks, dense retrieval with
+`BAAI/bge-small-en-v1.5`, top 5. The headline embedder is Qwen3-Embedding-4B at
+`5cf2132`, self-hosted in BF16. The control arm gives Mnemotree the RAG baseline's
+own bge-small, so the comparison holds with the embedder fixed.
+
+| Size | Conversations | Questions | Mnemotree, Qwen3-Embedding-4B | Mnemotree, bge-small | BEAM RAG |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 100K | 20 | 400 | 37.7 | 38.5 | 32.5 |
+| 500K | 35 | 700 | 41.2 | 38.5 | 33.4 |
+| 1M | 35 | 700 | 38.5 | 37.7 | 31.8 |
+| 10M | 10 | 200 | 29.9 | 33.6 | 21.9 |
+
+Paired by conversation, Mnemotree's lead over RAG and its 95% bootstrap interval:
+
+| Size | Qwen3-Embedding-4B | bge-small |
+| --- | --- | --- |
+| 100K | +5.2 (2.3 to 8.1), 15 of 20 conversations | +6.0 (2.3 to 9.8), 14 of 20 |
+| 500K | +7.7 (5.2 to 10.3), 29 of 35 | +5.0 (2.4 to 7.7), 27 of 35 |
+| 1M | +6.7 (4.1 to 9.4), 29 of 35 | +5.9 (3.3 to 8.5), 27 of 35 |
+| 10M | +8.0 (2.1 to 13.2), 7 of 10 | +11.7 (7.9 to 15.5), 10 of 10 |
+
+To check the harness, we also scored our RAG run with BEAM's paper-era scorer,
+`ef7f230`. It gives 29.7, 31.8, 28.8 and 22.1 at the four sizes, against 30.9,
+31.4, 30.2 and 21.8 in the paper's Table 1 for gpt-4.1-nano with RAG. That older
+scorer gave no credit for half-satisfied rubric items (upstream issue #8), so it
+scores lower than `b2da22e`. Table 1, LIGHT included, can't be set against the
+scores above, and we haven't scored Mnemotree with `ef7f230`.
+
 ## Not reported yet
 
-- **BEAM.** Published BEAM results use other answer models and judges, so we have
-  nothing comparable to set our number against. We will publish BEAM after a run
-  that matches a published setup.
 - **LongMemEval-V2.** Its histories are web and enterprise agent trajectories made
   of ordered states, actions, accessibility trees and screenshots. Mnemotree is
   built for conversational text and handles that data poorly. Tuning won't fix it.
@@ -161,5 +198,14 @@ this result.
 - **No question date on LongMemEval.** Our reader prompt leaves out the date the
   question is asked, so temporal-reasoning questions are harder for our reader than
   in the official setup.
+- **BEAM evidence sizes differ.** Mnemotree packs up to 8,000 tokens, while BEAM's
+  RAG baseline passes its top 5 chunks, as published. The comparison is against
+  that baseline, not at equal context. At 10M only 10 conversations exist, so its
+  intervals are the widest. BEAM was one of the sets behind the default profile's
+  tuning, in an earlier harness with another reader and judge.
+- **BEAM's upstream issues stay in.** The `b2da22e` judge prompt leaves out the
+  question (upstream issue #15), and some gold labels are disputed (#4 to #7, #16).
+  Fixing either would make the scores incomparable with BEAM's own, and both
+  affect every arm alike.
 - **Harness not public.** The drivers that produced these numbers are not in this
   repository yet, so nobody can reproduce the results from it alone.
