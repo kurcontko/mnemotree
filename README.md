@@ -86,6 +86,21 @@ On LoCoMo-Refined, a cleaned release of LoCoMo with 1,382 questions, Mnemotree
 scores 78.7 with the [official scorer](https://github.com/mem-eval-suite/LoCoMo_refined),
 which judges with Qwen3-14B. That run used Nemotron-3-Embed-8B embeddings.
 
+On [BEAM](https://arxiv.org/abs/2510.27246) we ran BEAM's own answer and scoring
+code, with gpt-4.1-nano answering and gpt-4.1-mini judging. We also ran BEAM's RAG
+baseline in the same harness. Its scores under the paper-era scorer match the
+paper's Table 1.
+
+| BEAM conversation length | Questions | Mnemotree | BEAM RAG, same harness |
+| --- | ---: | ---: | ---: |
+| 100K tokens | 400 | 37.7 | 32.5 |
+| 500K tokens | 700 | 41.2 | 33.4 |
+| 1M tokens | 700 | 38.5 | 31.8 |
+| 10M tokens | 200 | 29.9 | 21.9 |
+
+Mnemotree used Qwen3-Embedding-4B embeddings here. With the RAG baseline's own
+bge-small embedder it still leads at every length.
+
 Each score is a single run of ours. The published rows are the authors' own runs
 with their own prompts and judges, and the Zep paper judges LongMemEval with gpt-4o.
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) has the setup, the method, how to size the
