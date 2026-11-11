@@ -126,11 +126,10 @@ class SQLiteEvidenceStore:
         )
         with self.transaction():
             # Another process may have configured the file since this instance opened it.
-            if stored_embedding_spec(self.db) != self.embedding_spec:
-                raise ConfigurationError(
-                    "database configuration changed; reopen this Memory instance"
-                )
-            if self.atoms.configure(self.extractor_config) != self.extractor_config:
+            if (
+                stored_embedding_spec(self.db) != self.embedding_spec
+                or self.atoms.configure(self.extractor_config) != self.extractor_config
+            ):
                 raise ConfigurationError(
                     "database configuration changed; reopen this Memory instance"
                 )
@@ -173,54 +172,45 @@ class SQLiteEvidenceStore:
 
         Runs before the write transaction, so a malformed request never holds the lock.
         """
-        if not sources or len({source.id for source in sources}) != len(sources):
-            raise ValueError("a request needs sources with distinct IDs")
-        if any(
-            source.namespace != namespace
-            or source.request_id != request_id
-            or source.session_id != session_id
-            for source in sources
-        ):
-            raise ValueError("source scope does not match ingestion request")
-        source_map = {source.id: source for source in sources}
-        for chunk in chunks:
-            source = source_map.get(chunk.source_id)
-            if source is None or not 0 <= chunk.start < chunk.end <= len(source.content):
-                raise ValueError("invalid chunk source span")
-            if source.content[chunk.start : chunk.end] != chunk.text:
-                raise ValueError("chunk is not an exact source span")
-        if {chunk.source_id for chunk in chunks} != set(source_map):
-            raise ValueError("every source must have searchable chunks")
-        blobs: list[bytes] = []
-        if self.embedding_spec:
-            if vectors is None or len(vectors) != len(chunks):
-                raise ProviderError(
-                    "every chunk requires an embedding before acknowledging ingestion"
-                )
-            blobs = [vector_blob(vector, self.embedding_spec.dimensions) for vector in vectors]
-        elif vectors is not None:
-            raise ValueError("vectors supplied without an embedding specification")
-        atom_blobs: list[bytes] = []
+        by_id = _check_sources(namespace, request_id, session_id, sources)
+        _check_chunks(chunks, by_id)
+        chunk_blobs = self._encode_chunk_vectors(vectors, len(chunks))
+        self._check_atoms(atoms, by_id)
+        return IngestBlobs(chunk_blobs, self._encode_atom_vectors(atom_vectors, len(atoms)))
+
+    def _encode_chunk_vectors(
+        self, vectors: Sequence[Sequence[float]] | None, chunk_count: int
+    ) -> list[bytes]:
+        if not self.embedding_spec:
+            if vectors is not None:
+                raise ValueError("vectors supplied without an embedding specification")
+            return []
+        if vectors is None or len(vectors) != chunk_count:
+            raise ProviderError("every chunk requires an embedding before acknowledging ingestion")
+        return [vector_blob(vector, self.embedding_spec.dimensions) for vector in vectors]
+
+    def _check_atoms(self, atoms: Sequence[Atom], by_id: dict[str, Source]) -> None:
+        signature = digest(self.extractor_config) if self.extractor_config is not None else None
         for atom in atoms:
-            if self.extractor_config is None or atom.extractor_signature != digest(
-                self.extractor_config
-            ):
+            if signature is None or atom.extractor_signature != signature:
                 raise ValueError("atom extractor signature does not match the database")
             if not atom.spans:
                 raise ValueError("atoms require source evidence")
             for span in atom.spans:
-                source = source_map.get(span.source_id)
+                source = by_id.get(span.source_id)
                 if source is None or not 0 <= span.start < span.end <= len(source.content):
                     raise ValueError("atom evidence must belong to this ingestion request")
-        if self.embedding_spec and atoms:
-            if atom_vectors is None or len(atom_vectors) != len(atoms):
-                raise ProviderError("every atom requires an embedding")
-            atom_blobs = [
-                vector_blob(vector, self.embedding_spec.dimensions) for vector in atom_vectors
-            ]
-        elif atom_vectors:
-            raise ValueError("unexpected atom vectors")
-        return IngestBlobs(blobs, atom_blobs)
+
+    def _encode_atom_vectors(
+        self, vectors: Sequence[Sequence[float]] | None, atom_count: int
+    ) -> list[bytes]:
+        if not (self.embedding_spec and atom_count):
+            if vectors:
+                raise ValueError("unexpected atom vectors")
+            return []
+        if vectors is None or len(vectors) != atom_count:
+            raise ProviderError("every atom requires an embedding")
+        return [vector_blob(vector, self.embedding_spec.dimensions) for vector in vectors]
 
     def _insert(
         self,
@@ -516,6 +506,34 @@ class SQLiteEvidenceStore:
                 ).fetchone()[0]
                 for table in ("sources", "chunks", "requests")
             }
+
+
+def _check_sources(
+    namespace: str, request_id: str, session_id: str, sources: Sequence[Source]
+) -> dict[str, Source]:
+    """The request's sources by ID, once they are distinct and all in its scope."""
+    if not sources or len({source.id for source in sources}) != len(sources):
+        raise ValueError("a request needs sources with distinct IDs")
+    if any(
+        source.namespace != namespace
+        or source.request_id != request_id
+        or source.session_id != session_id
+        for source in sources
+    ):
+        raise ValueError("source scope does not match ingestion request")
+    return {source.id: source for source in sources}
+
+
+def _check_chunks(chunks: Sequence[Chunk], by_id: dict[str, Source]) -> None:
+    """Every chunk is an exact span of its source, and every source has a chunk."""
+    for chunk in chunks:
+        source = by_id.get(chunk.source_id)
+        if source is None or not 0 <= chunk.start < chunk.end <= len(source.content):
+            raise ValueError("invalid chunk source span")
+        if source.content[chunk.start : chunk.end] != chunk.text:
+            raise ValueError("chunk is not an exact source span")
+    if {chunk.source_id for chunk in chunks} != set(by_id):
+        raise ValueError("every source must have searchable chunks")
 
 
 def now() -> datetime:
