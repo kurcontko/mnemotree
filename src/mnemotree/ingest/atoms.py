@@ -50,24 +50,25 @@ async def extract_atoms(
             raise ProviderError("extractor returned more than 64 atoms for one batch")
         for value in drafts:
             draft = AtomDraft.model_validate(value)
-            spans: dict[tuple[str, int, int], SourceSpan] = {}
-            for citation in draft.citations:
-                passage = passages.get(citation.passage_id)
-                if passage is None:
-                    raise ProviderError("atom cites a passage outside its extraction batch")
-                offset = passage.text.find(citation.quote)
-                if (
-                    not citation.quote.strip()
-                    or offset < 0
-                    or offset != passage.text.rfind(citation.quote)
-                ):
-                    raise ProviderError(
-                        "citation must be an exact, unambiguous quote in its passage"
-                    )
-                start = passage.start + offset
-                key = (passage.source_id, start, start + len(citation.quote))
-                spans[key] = SourceSpan(source_id=key[0], start=key[1], end=key[2])
-            ordered = tuple(spans[key] for key in sorted(spans))
-            id = digest([signature, draft.text, [span.model_dump() for span in ordered]])
-            atoms[id] = Atom(id=id, text=draft.text, spans=ordered, extractor_signature=signature)
+            ordered = cited_spans(draft, passages)
+            atom_id = digest([signature, draft.text, [span.model_dump() for span in ordered]])
+            atoms[atom_id] = Atom(
+                id=atom_id, text=draft.text, spans=ordered, extractor_signature=signature
+            )
     return list(atoms.values())
+
+
+def cited_spans(draft: AtomDraft, passages: dict[str, Passage]) -> tuple[SourceSpan, ...]:
+    """Resolve a draft's citations to verified, deduplicated, sorted source spans."""
+    spans: dict[tuple[str, int, int], SourceSpan] = {}
+    for citation in draft.citations:
+        passage = passages.get(citation.passage_id)
+        if passage is None:
+            raise ProviderError("atom cites a passage outside its extraction batch")
+        offset = passage.text.find(citation.quote)
+        if not citation.quote.strip() or offset < 0 or offset != passage.text.rfind(citation.quote):
+            raise ProviderError("citation must be an exact, unambiguous quote in its passage")
+        start = passage.start + offset
+        key = (passage.source_id, start, start + len(citation.quote))
+        spans[key] = SourceSpan(source_id=key[0], start=key[1], end=key[2])
+    return tuple(spans[key] for key in sorted(spans))
