@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import math
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
@@ -62,25 +63,43 @@ class QueryPlan:
     vector: Sequence[float] | None
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class Retrieval:
     """Everything one search reads from a single store snapshot."""
 
     candidate_limit: int
     chunk_density: float | None
     assistant_share: float | None
-    channels: dict[str, list[tuple[Chunk, float]]] = field(default_factory=dict)
-    atom_hits: list[AtomHit] = field(default_factory=list)
+    channels: dict[str, list[tuple[Chunk, float]]]
+    atom_hits: list[AtomHit]
     # Fused anchors, and chunks only placed into budget the anchors leave unused.
-    candidates: list[Candidate] = field(default_factory=list)
-    overflow: list[Candidate] = field(default_factory=list)
-    windows: dict[str, Window] = field(default_factory=dict)
-    neighbors: dict[str, tuple[ContextSpan, ...]] = field(default_factory=dict)
-    sources: dict[str, Source] = field(default_factory=dict)
+    candidates: list[Candidate]
+    overflow: list[Candidate]
+    windows: dict[str, Window]
+    neighbors: dict[str, tuple[ContextSpan, ...]]
+    sources: dict[str, Source]
 
     def roles(self) -> dict[str, str]:
         """Role of each retrieved chunk's source, by chunk ID."""
         return {id: window.source.role for id, window in self.windows.items()}
+
+
+@dataclass(slots=True)
+class Stopwatch:
+    """Milliseconds each stage of one search took, and the total."""
+
+    started: float = field(default_factory=perf_counter)
+    ms: dict[str, float] = field(default_factory=dict)
+
+    @contextmanager
+    def stage(self, name: str) -> Iterator[None]:
+        started = perf_counter()
+        yield
+        self.ms[name] = (perf_counter() - started) * 1000
+
+    def stop(self) -> dict[str, float]:
+        self.ms["total"] = (perf_counter() - self.started) * 1000
+        return self.ms
 
 
 def to_evidence(
@@ -110,6 +129,27 @@ def to_evidence(
     )
 
 
+def _sources(
+    namespace: str, messages: Sequence[Message], request_id: str, session_id: str
+) -> list[Source]:
+    """One source per message, in order; a message without an ID gets a stable one."""
+    ingested_at = now()
+    return [
+        Source(
+            namespace=namespace,
+            id=message.id if message.id is not None else digest([request_id, index]),
+            request_id=request_id,
+            session_id=session_id,
+            position=index,
+            content=message.content,
+            role=message.role,
+            timestamp=message.timestamp,
+            ingested_at=ingested_at,
+        )
+        for index, message in enumerate(messages)
+    ]
+
+
 class EvidenceEngine:
     """Source-first memory over one SQLite file, with every namespace passed per call.
 
@@ -131,9 +171,9 @@ class EvidenceEngine:
     ) -> None:
         if chunk_size < 1 or not 0 <= chunk_overlap < chunk_size:
             raise ConfigurationError("require chunk_size > chunk_overlap >= 0")
-        self.embedder = embedder
         if not 1 <= extraction_batch_chars <= 100000:
             raise ConfigurationError("extraction_batch_chars must be between 1 and 100000")
+        self.embedder = embedder
         self.extractor = extractor
         self.extraction_batch_chars = extraction_batch_chars
         self.reranker = reranker
@@ -182,21 +222,7 @@ class EvidenceEngine:
             raise ConfigurationError("writes to a dense database require its configured embedder")
         if self.store.extractor_config is not None and self.extractor is None:
             raise ConfigurationError("writes to an atom database require its configured extractor")
-        ingested_at = now()
-        sources = [
-            Source(
-                namespace=namespace,
-                id=message.id if message.id is not None else digest([request_id, index]),
-                request_id=request_id,
-                session_id=session_id,
-                position=index,
-                content=message.content,
-                role=message.role,
-                timestamp=message.timestamp,
-                ingested_at=ingested_at,
-            )
-            for index, message in enumerate(messages)
-        ]
+        sources = _sources(namespace, messages, request_id, session_id)
         chunks = [
             chunk
             for source in sources
@@ -270,26 +296,20 @@ class EvidenceEngine:
         options = options or SearchOptions(mode="hybrid" if self.embedder else "lexical")
         if options.representation != "raw" and self.store.extractor_config is None:
             raise ConfigurationError("atom retrieval requires an extracted corpus")
-        timings: dict[str, float] = {}
-        started = perf_counter()
-        plan = await self._plan_query(query, query_options, options)
-        timings["embedding"] = (perf_counter() - started) * 1000
-
-        stage = perf_counter()
-        retrieval = await asyncio.to_thread(self._retrieve, namespace, plan, options)
-        timings["retrieval"] = (perf_counter() - stage) * 1000
+        watch = Stopwatch()
+        with watch.stage("embedding"):
+            plan = await self._plan_query(query, query_options, options)
+        with watch.stage("retrieval"):
+            retrieval = await asyncio.to_thread(self._retrieve, namespace, plan, options)
 
         policy = role_policy(options, retrieval.assistant_share)
         candidates = retrieval.candidates
-        if policy.boost and options.role_first is not None and options.role_boost is not None:
-            candidates = boost_role(
-                candidates, retrieval.roles(), options.role_first, options.role_boost
-            )
-        stage = perf_counter()
-        candidates = await self._rerank(plan.model_input, candidates)
-        timings["reranking"] = (perf_counter() - stage) * 1000
-        if policy.partition and options.role_first is not None:
-            candidates = role_first(candidates, retrieval.roles(), options.role_first)
+        if policy.boost:
+            candidates = boost_role(candidates, retrieval.roles(), policy.role, policy.boost_by)
+        with watch.stage("reranking"):
+            candidates = await self._rerank(plan.model_input, candidates)
+        if policy.partition:
+            candidates = role_first(candidates, retrieval.roles(), policy.role)
 
         with_position = bool(options.neighbor_messages)
         evidence = [
@@ -305,22 +325,19 @@ class EvidenceEngine:
             to_evidence(c, retrieval.windows[c.chunk.id], (), with_position=with_position)
             for c in retrieval.overflow
         ]
-        stage = perf_counter()
-        packed = await asyncio.to_thread(
-            pack,
-            evidence,
-            self.counter,
-            budget=options.token_budget,
-            limit=options.limit,
-            overflow=overflow,
-            # Anchors whose neighbor windows would touch share one item.
-            merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
-            order_key=chronological if options.order == "time" else None,
-        )
-        timings["packing"] = (perf_counter() - stage) * 1000
+        with watch.stage("packing"):
+            packed = await asyncio.to_thread(
+                pack,
+                evidence,
+                self.counter,
+                budget=options.token_budget,
+                limit=options.limit,
+                overflow=overflow,
+                # Anchors whose neighbor windows would touch share one item.
+                merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
+                order_key=chronological if options.order == "time" else None,
+            )
         trace = self._trace(options, plan, retrieval, candidates, packed, policy)
-        # Measured last, so the total includes building the trace.
-        timings["total"] = (perf_counter() - started) * 1000
         return SearchResult(
             evidence=packed.evidence,
             context=packed.context,
@@ -330,7 +347,8 @@ class EvidenceEngine:
                     id for entry in packed.evidence for id in entry.source_ids()
                 )
             ),
-            trace=trace.model_copy(update={"timings_ms": timings}),
+            # Stopped last, so the total includes building the trace.
+            trace=trace.model_copy(update={"timings_ms": watch.stop()}),
         )
 
     async def _plan_query(
@@ -367,85 +385,106 @@ class EvidenceEngine:
                 chunk_density = self.store.chunk_density(namespace)
                 if chunk_density > options.deep_history_density:
                     candidate_limit = options.deep_candidate_limit
-            retrieval = Retrieval(
-                candidate_limit=candidate_limit,
-                chunk_density=chunk_density,
-                assistant_share=(
-                    self.store.assistant_share(namespace)
-                    if options.role_first is not None
-                    else None
-                ),
+            assistant_share = (
+                self.store.assistant_share(namespace) if options.role_first is not None else None
             )
-            atom_ranks = self._read_channels(namespace, plan, options, retrieval)
-            retrieval.candidates = fuse(
-                retrieval.channels,
-                weights=channel_weights(options),
-                k=options.rrf_k,
-                ranks=atom_ranks,
+            channels = self._chunk_channels(namespace, plan, options, candidate_limit)
+            atom_hits, atom_channels, atom_ranks = self._atom_channels(
+                namespace, plan, options, candidate_limit
             )
+            channels.update(atom_channels)
+            candidates = fuse(
+                channels, weights=channel_weights(options), k=options.rrf_k, ranks=atom_ranks
+            )
+            overflow: list[Candidate] = []
             if options.chunks_per_source is not None:
-                self._cap_per_source(namespace, options.chunks_per_source, retrieval)
-            for candidate in retrieval.overflow:
-                retrieval.windows[candidate.chunk.id] = self._window(
-                    namespace, candidate.chunk, options, retrieval.sources
+                candidates, overflow = self._cap_per_source(
+                    namespace, options.chunks_per_source, candidates
                 )
-            for candidate in retrieval.candidates:
-                window = self._window(namespace, candidate.chunk, options, retrieval.sources)
-                retrieval.windows[candidate.chunk.id] = window
-                retrieval.neighbors[candidate.chunk.id] = self.store.conversation_context(
+            sources: dict[str, Source] = {}
+            windows: dict[str, Window] = {}
+            neighbors: dict[str, tuple[ContextSpan, ...]] = {}
+            for candidate in overflow:
+                windows[candidate.chunk.id] = self._window(
+                    namespace, candidate.chunk, options, sources
+                )
+            for candidate in candidates:
+                window = self._window(namespace, candidate.chunk, options, sources)
+                windows[candidate.chunk.id] = window
+                neighbors[candidate.chunk.id] = self.store.conversation_context(
                     namespace,
                     window.source,
                     neighbors=options.neighbor_messages,
                     max_chars=options.neighbor_chars,
-                    source_cache=retrieval.sources,
+                    source_cache=sources,
                 )
-        return retrieval
+        return Retrieval(
+            candidate_limit=candidate_limit,
+            chunk_density=chunk_density,
+            assistant_share=assistant_share,
+            channels=channels,
+            atom_hits=atom_hits,
+            candidates=candidates,
+            overflow=overflow,
+            windows=windows,
+            neighbors=neighbors,
+            sources=sources,
+        )
 
-    def _read_channels(
-        self, namespace: str, plan: QueryPlan, options: SearchOptions, retrieval: Retrieval
-    ) -> dict[str, dict[str, int]]:
-        """Fill ``retrieval.channels``; return each atom channel's rank by chunk ID."""
-        limit = retrieval.candidate_limit
-        lexical = options.mode in ("lexical", "hybrid")
-        if options.representation != "atoms":
-            if lexical:
-                retrieval.channels["lexical"] = self.store.lexical(
-                    namespace, plan.text, limit, options=plan.options
-                )
-            if plan.vector is not None:
-                retrieval.channels["dense"] = self.store.dense(namespace, plan.vector, limit)
+    def _chunk_channels(
+        self, namespace: str, plan: QueryPlan, options: SearchOptions, limit: int
+    ) -> dict[str, list[tuple[Chunk, float]]]:
+        """Chunks ranked by each raw channel the options ask for."""
+        channels: dict[str, list[tuple[Chunk, float]]] = {}
+        if options.representation == "atoms":
+            return channels
+        if options.mode in ("lexical", "hybrid"):
+            channels["lexical"] = self.store.lexical(
+                namespace, plan.text, limit, options=plan.options
+            )
+        if plan.vector is not None:
+            channels["dense"] = self.store.dense(namespace, plan.vector, limit)
+        return channels
+
+    def _atom_channels(
+        self, namespace: str, plan: QueryPlan, options: SearchOptions, limit: int
+    ) -> tuple[list[AtomHit], dict[str, list[tuple[Chunk, float]]], dict[str, dict[str, int]]]:
+        """Atom hits, the chunks they cite per channel, and each chunk's rank there."""
+        hits: list[AtomHit] = []
+        channels: dict[str, list[tuple[Chunk, float]]] = {}
+        ranks: dict[str, dict[str, int]] = {}
         if options.representation == "raw":
-            return {}
-        atom_channels = {}
-        if lexical:
-            atom_channels["atom_lexical"] = self.store.atoms.lexical(
+            return hits, channels, ranks
+        found = {}
+        if options.mode in ("lexical", "hybrid"):
+            found["atom_lexical"] = self.store.atoms.lexical(
                 namespace, plan.text, limit, options=plan.options
             )
         if plan.vector is not None:
             assert self.store.embedding_spec is not None
-            atom_channels["atom_dense"] = self.store.atoms.dense(
+            found["atom_dense"] = self.store.atoms.dense(
                 namespace,
                 vector_blob(plan.vector, self.store.embedding_spec.dimensions),
                 limit,
             )
         # An atom ranks the chunks its citations fall in; each chunk keeps the rank
         # and score of the best atom that reached it.
-        atom_ranks: dict[str, dict[str, int]] = {}
-        for channel, hits in atom_channels.items():
+        for channel, atoms in found.items():
             expanded: dict[str, tuple[Chunk, float]] = {}
-            ranks = atom_ranks[channel] = {}
-            for rank, (atom, score) in enumerate(hits, 1):
-                retrieval.atom_hits.append(
-                    AtomHit(atom=atom, channel=channel, rank=rank, score=score)
-                )
+            channel_ranks = ranks[channel] = {}
+            for rank, (atom, score) in enumerate(atoms, 1):
+                hits.append(AtomHit(atom=atom, channel=channel, rank=rank, score=score))
                 for chunk in self.store.atoms.chunks(namespace, atom):
                     expanded.setdefault(chunk.id, (chunk, score))
-                    ranks.setdefault(chunk.id, rank)
-            retrieval.channels[channel] = list(expanded.values())
-        return atom_ranks
+                    channel_ranks.setdefault(chunk.id, rank)
+            channels[channel] = list(expanded.values())
+        return hits, channels, ranks
 
-    def _cap_per_source(self, namespace: str, per_source: int, retrieval: Retrieval) -> None:
-        candidates, overflow = cap_per_source(retrieval.candidates, per_source)
+    def _cap_per_source(
+        self, namespace: str, per_source: int, candidates: list[Candidate]
+    ) -> tuple[list[Candidate], list[Candidate]]:
+        """The candidates kept under the cap, and the overflow that may fill spare budget."""
+        candidates, overflow = cap_per_source(candidates, per_source)
         # Complete each anchored message: the chunks of a long record that no channel
         # retrieved follow its anchor, placed only into unused budget, so a trajectory
         # or document is served whole when the budget allows.
@@ -456,7 +495,7 @@ class EvidenceEngine:
                 if chunk.id not in known:
                     known.add(chunk.id)
                     overflow.append(Candidate(chunk=chunk, fusion_score=0.0, channels={}))
-        retrieval.candidates, retrieval.overflow = candidates, overflow
+        return candidates, overflow
 
     def _window(
         self, namespace: str, chunk: Chunk, options: SearchOptions, sources: dict[str, Source]
