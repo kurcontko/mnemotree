@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from statistics import mean
@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import Field, field_validator, model_validator
 
-from .core.models import Message, Record, SearchOptions, digest, scope
+from .core.models import Message, Record, SearchOptions, SearchResult, digest, scope
 from .engine import EvidenceEngine
 
 
@@ -267,6 +267,177 @@ def _answer_span_coverage(
     return covered / total
 
 
+def _load_queries(queries: Path) -> list[QueryRecord]:
+    records = [QueryRecord.model_validate(value) for value in read_jsonl(queries)]
+    if not records:
+        raise ValueError("evaluation requires at least one query")
+    if not any(query.relevant_source_ids or query.answer_spans for query in records):
+        raise ValueError("evaluation requires at least one source- or span-labeled query")
+    ids = [query.id for query in records]
+    if len(set(ids)) != len(ids):
+        raise ValueError("duplicate query id")
+    return records
+
+
+def _gold_sources(memory: EvidenceEngine, query: QueryRecord) -> set[str]:
+    """Union of labeled source IDs, each checked against the stored sources."""
+    spans = query.answer_spans or []
+    gold = set(query.relevant_source_ids) | {span.source_id for span in spans}
+    for source_id in gold:
+        if memory.source(query.namespace, source_id) is None:
+            raise ValueError(f"query {query.id} references an absent source: {source_id}")
+    for span in spans:
+        source = memory.source(query.namespace, span.source_id)
+        if source is None:
+            raise ValueError(
+                f"query {query.id} answer span references an absent source: {span.source_id}"
+            )
+        if span.end > len(source.content):
+            raise ValueError(
+                f"query {query.id} answer span {span.start}:{span.end} exceeds "
+                f"source {span.source_id} bounds 0:{len(source.content)}"
+            )
+    return gold
+
+
+def _recall(gold: set[str], found: set[str]) -> float | None:
+    return len(gold & found) / len(gold) if gold else None
+
+
+def _reciprocal_rank(gold: set[str], ranked_ids: Iterable[str]) -> float | None:
+    if not gold:
+        return None
+    return next(
+        (1 / rank for rank, source_id in enumerate(ranked_ids, 1) if source_id in gold), 0.0
+    )
+
+
+def _difference(value: float | None, retained: float | None) -> float | None:
+    if value is None or retained is None:
+        return None
+    return value - retained
+
+
+def _query_metrics(
+    gold: set[str], spans: list[AnswerSpan], result: SearchResult, candidate_k: int
+) -> dict[str, Any]:
+    ranked = result.trace.candidates[:candidate_k]
+    candidates = {item.chunk.source_id for item in result.trace.candidates}
+    candidate_spans = [
+        (item.chunk.source_id, item.chunk.start, item.chunk.end) for item in result.trace.candidates
+    ]
+    anchor_order = list(
+        dict.fromkeys(member.source_id for item in result.evidence for member in item.members())
+    )
+    packed_spans = [
+        (span.source_id, span.start, span.end)
+        for item in result.evidence
+        for member in item.members()
+        for span in member.spans()
+    ]
+    packed = list(
+        dict.fromkeys(source_id for item in result.evidence for source_id in item.source_ids())
+    )
+    expanded = candidates | {span.source_id for span in result.trace.context_candidates}
+    candidate_coverage = _answer_span_coverage(spans, candidate_spans)
+    packed_coverage = _answer_span_coverage(spans, packed_spans)
+    common_spans = [
+        (source_id, max(start, pstart), min(end, pend))
+        for source_id, start, end in candidate_spans
+        for psource, pstart, pend in packed_spans
+        if source_id == psource and max(start, pstart) < min(end, pend)
+    ]
+    retained_coverage = _answer_span_coverage(spans, common_spans)
+    return {
+        "candidate_source_recall_at_k": _recall(gold, {item.chunk.source_id for item in ranked}),
+        "candidate_reciprocal_rank_at_k": _reciprocal_rank(
+            gold, (item.chunk.source_id for item in ranked)
+        ),
+        "candidate_answer_span_coverage_at_k": _answer_span_coverage(
+            spans, [(item.chunk.source_id, item.chunk.start, item.chunk.end) for item in ranked]
+        ),
+        # Fractions of labeled gold characters, not fractions of whole sources.
+        # Candidates are post-cap ranked anchors, not the full retriever pool.
+        # Expansion/completion can add gold characters even while packing loses others.
+        "packing_lost_answer_span_fraction": _difference(candidate_coverage, retained_coverage),
+        "packing_added_answer_span_fraction": _difference(packed_coverage, retained_coverage),
+        "candidate_source_recall": _recall(gold, candidates),
+        "expanded_source_recall": _recall(gold, expanded),
+        "packed_anchor_source_recall": _recall(gold, set(anchor_order)),
+        "packed_source_recall": _recall(gold, set(packed)),
+        "packed_all_sources": int(gold <= set(packed)) if gold else None,
+        "packed_reciprocal_rank": _reciprocal_rank(gold, packed),
+        # Neighbors interleave with anchors in `packed`, so arms with and without
+        # context are compared on anchors alone.
+        "packed_anchor_reciprocal_rank": _reciprocal_rank(gold, anchor_order),
+        "candidate_answer_span_coverage": candidate_coverage,
+        "packed_answer_span_coverage": packed_coverage,
+        "packed_source_ids": packed,
+    }
+
+
+async def _score_query(
+    memory: EvidenceEngine, query: QueryRecord, options: SearchOptions, candidate_k: int
+) -> dict[str, Any]:
+    gold = _gold_sources(memory, query)
+    result = await memory.search(
+        query.namespace, query.query, options=options, query_options=query.query_options
+    )
+    return {
+        "id": query.id,
+        "category": query.category,
+        "has_gold": bool(gold),
+        "has_answer_spans": bool(query.answer_spans),
+        **_query_metrics(gold, query.answer_spans or [], result, candidate_k),
+        "candidate_k": candidate_k,
+        "candidate_count": len(result.trace.candidates),
+        "atom_hit_count": len(result.trace.atom_hits),
+        "packed_context_count": sum(
+            len(member.neighbors) for item in result.evidence for member in item.members()
+        ),
+        "packed_tokens": result.trace.packed_tokens,
+        "timings_ms": result.trace.timings_ms,
+    }
+
+
+def _aggregate(items: list[dict[str, Any]]) -> dict[str, Any]:
+    answerable = [row for row in items if row["has_gold"]]
+    span_labeled = [row for row in items if row["has_answer_spans"]]
+    return {
+        "queries": len(items),
+        "gold_queries": len(answerable),
+        "no_gold_queries": len(items) - len(answerable),
+        "answer_span_queries": len(span_labeled),
+        "no_answer_span_queries": len(items) - len(span_labeled),
+        **{
+            key: mean(row[key] for row in answerable) if answerable else None
+            for key in (
+                "candidate_source_recall_at_k",
+                "candidate_reciprocal_rank_at_k",
+                "candidate_source_recall",
+                "expanded_source_recall",
+                "packed_anchor_source_recall",
+                "packed_source_recall",
+                "packed_all_sources",
+                "packed_reciprocal_rank",
+                "packed_anchor_reciprocal_rank",
+            )
+        },
+        **{
+            key: mean(row[key] for row in span_labeled) if span_labeled else None
+            for key in (
+                "candidate_answer_span_coverage",
+                "packed_answer_span_coverage",
+                "candidate_answer_span_coverage_at_k",
+                "packing_lost_answer_span_fraction",
+                "packing_added_answer_span_fraction",
+            )
+        },
+        "mean_packed_tokens": mean(row["packed_tokens"] for row in items),
+        "mean_search_ms": mean(row["timings_ms"]["total"] for row in items),
+    }
+
+
 async def score_queries(
     memory: EvidenceEngine,
     corpus: Path,
@@ -278,173 +449,8 @@ async def score_queries(
 ) -> dict[str, Any]:
     if isinstance(candidate_k, bool) or not isinstance(candidate_k, int) or candidate_k < 1:
         raise ValueError("candidate_k must be a positive integer")
-    records = [QueryRecord.model_validate(value) for value in read_jsonl(queries)]
-    if not records:
-        raise ValueError("evaluation requires at least one query")
-    if not any(query.relevant_source_ids or query.answer_spans for query in records):
-        raise ValueError("evaluation requires at least one source- or span-labeled query")
-    ids = [query.id for query in records]
-    if len(set(ids)) != len(ids):
-        raise ValueError("duplicate query id")
-    rows: list[dict[str, Any]] = []
-    for query in records:
-        gold = set(query.relevant_source_ids) | {
-            span.source_id for span in query.answer_spans or []
-        }
-        for source_id in gold:
-            if memory.source(query.namespace, source_id) is None:
-                raise ValueError(f"query {query.id} references an absent source: {source_id}")
-        for span in query.answer_spans or []:
-            source = memory.source(query.namespace, span.source_id)
-            if source is None:
-                raise ValueError(
-                    f"query {query.id} answer span references an absent source: {span.source_id}"
-                )
-            if span.end > len(source.content):
-                raise ValueError(
-                    f"query {query.id} answer span {span.start}:{span.end} exceeds "
-                    f"source {span.source_id} bounds 0:{len(source.content)}"
-                )
-        result = await memory.search(
-            query.namespace, query.query, options=options, query_options=query.query_options
-        )
-        ranked = result.trace.candidates[:candidate_k]
-        candidates_at_k = {item.chunk.source_id for item in ranked}
-        candidates = {item.chunk.source_id for item in result.trace.candidates}
-        candidate_spans = [
-            (item.chunk.source_id, item.chunk.start, item.chunk.end)
-            for item in result.trace.candidates
-        ]
-        anchor_order = list(
-            dict.fromkeys(member.source_id for item in result.evidence for member in item.members())
-        )
-        packed_anchors = set(anchor_order)
-        packed_spans = [
-            (span.source_id, span.start, span.end)
-            for item in result.evidence
-            for member in item.members()
-            for span in member.spans()
-        ]
-        packed = list(
-            dict.fromkeys(source_id for item in result.evidence for source_id in item.source_ids())
-        )
-        expanded = candidates | {span.source_id for span in result.trace.context_candidates}
-        candidate_coverage = _answer_span_coverage(query.answer_spans or [], candidate_spans)
-        packed_coverage = _answer_span_coverage(query.answer_spans or [], packed_spans)
-        common_spans = [
-            (source_id, max(start, pstart), min(end, pend))
-            for source_id, start, end in candidate_spans
-            for psource, pstart, pend in packed_spans
-            if source_id == psource and max(start, pstart) < min(end, pend)
-        ]
-        retained_coverage = _answer_span_coverage(query.answer_spans or [], common_spans)
-        metrics = {
-            "candidate_source_recall_at_k": len(gold & candidates_at_k) / len(gold)
-            if gold
-            else None,
-            "candidate_reciprocal_rank_at_k": next(
-                (1 / rank for rank, item in enumerate(ranked, 1) if item.chunk.source_id in gold),
-                0.0,
-            )
-            if gold
-            else None,
-            "candidate_answer_span_coverage_at_k": _answer_span_coverage(
-                query.answer_spans or [],
-                [(item.chunk.source_id, item.chunk.start, item.chunk.end) for item in ranked],
-            ),
-            # Fractions of labeled gold characters, not fractions of whole sources.
-            # Candidates are post-cap ranked anchors, not the full retriever pool.
-            # Expansion/completion can add gold characters even while packing loses others.
-            "packing_lost_answer_span_fraction": (
-                candidate_coverage - retained_coverage
-                if candidate_coverage is not None and retained_coverage is not None
-                else None
-            ),
-            "packing_added_answer_span_fraction": (
-                packed_coverage - retained_coverage
-                if packed_coverage is not None and retained_coverage is not None
-                else None
-            ),
-            "candidate_source_recall": len(gold & candidates) / len(gold) if gold else None,
-            "expanded_source_recall": len(gold & expanded) / len(gold) if gold else None,
-            "packed_anchor_source_recall": len(gold & packed_anchors) / len(gold) if gold else None,
-            "packed_source_recall": len(gold & set(packed)) / len(gold) if gold else None,
-            "packed_all_sources": int(gold <= set(packed)) if gold else None,
-            "packed_reciprocal_rank": next(
-                (1 / rank for rank, id in enumerate(packed, 1) if id in gold), 0.0
-            )
-            if gold
-            else None,
-            # Neighbors interleave with anchors in `packed`, so arms with and without
-            # context are compared on anchors alone.
-            "packed_anchor_reciprocal_rank": next(
-                (1 / rank for rank, id in enumerate(anchor_order, 1) if id in gold), 0.0
-            )
-            if gold
-            else None,
-            "candidate_answer_span_coverage": _answer_span_coverage(
-                query.answer_spans or [], candidate_spans
-            ),
-            "packed_answer_span_coverage": _answer_span_coverage(
-                query.answer_spans or [], packed_spans
-            ),
-        }
-        rows.append(
-            {
-                "id": query.id,
-                "category": query.category,
-                "has_gold": bool(gold),
-                "has_answer_spans": bool(query.answer_spans),
-                **metrics,
-                "packed_source_ids": packed,
-                "candidate_k": candidate_k,
-                "candidate_count": len(result.trace.candidates),
-                "atom_hit_count": len(result.trace.atom_hits),
-                "packed_context_count": sum(
-                    len(member.neighbors) for item in result.evidence for member in item.members()
-                ),
-                "packed_tokens": result.trace.packed_tokens,
-                "timings_ms": result.trace.timings_ms,
-            }
-        )
-
-    def aggregate(items: list[dict[str, Any]]) -> dict[str, Any]:
-        answerable = [row for row in items if row["has_gold"]]
-        span_labeled = [row for row in items if row["has_answer_spans"]]
-        return {
-            "queries": len(items),
-            "gold_queries": len(answerable),
-            "no_gold_queries": len(items) - len(answerable),
-            "answer_span_queries": len(span_labeled),
-            "no_answer_span_queries": len(items) - len(span_labeled),
-            **{
-                key: mean(row[key] for row in answerable) if answerable else None
-                for key in (
-                    "candidate_source_recall_at_k",
-                    "candidate_reciprocal_rank_at_k",
-                    "candidate_source_recall",
-                    "expanded_source_recall",
-                    "packed_anchor_source_recall",
-                    "packed_source_recall",
-                    "packed_all_sources",
-                    "packed_reciprocal_rank",
-                    "packed_anchor_reciprocal_rank",
-                )
-            },
-            **{
-                key: mean(row[key] for row in span_labeled) if span_labeled else None
-                for key in (
-                    "candidate_answer_span_coverage",
-                    "packed_answer_span_coverage",
-                    "candidate_answer_span_coverage_at_k",
-                    "packing_lost_answer_span_fraction",
-                    "packing_added_answer_span_fraction",
-                )
-            },
-            "mean_packed_tokens": mean(row["packed_tokens"] for row in items),
-            "mean_search_ms": mean(row["timings_ms"]["total"] for row in items),
-        }
-
+    records = _load_queries(queries)
+    rows = [await _score_query(memory, query, options, candidate_k) for query in records]
     code = {path.name: file_hash(path) for path in sorted(Path(__file__).parent.glob("*.py"))}
     return {
         "manifest": {
@@ -479,9 +485,9 @@ async def score_queries(
             },
             "reranker": None if memory.reranker is None else type(memory.reranker).__qualname__,
         },
-        "summary": aggregate(rows),
+        "summary": _aggregate(rows),
         "categories": {
-            category: aggregate([row for row in rows if row["category"] == category])
+            category: _aggregate([row for row in rows if row["category"] == category])
             for category in sorted({row["category"] for row in rows})
         },
         "queries": rows,
