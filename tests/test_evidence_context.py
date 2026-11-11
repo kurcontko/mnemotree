@@ -3,8 +3,8 @@ from datetime import UTC
 
 import pytest
 
+from mnemotree.evaluation import ablate_context
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.evidence.evaluation import ablate_context
 
 
 async def add(memory, namespace="u", request="r", session="s"):
@@ -261,7 +261,7 @@ async def test_merged_chunks_of_one_message_render_as_one_line(tmp_path):
 
 
 def test_render_marks_skipped_messages():
-    from mnemotree.evidence.models import Evidence
+    from mnemotree.core.models import Evidence
 
     def item(seq, text):
         return Evidence(
@@ -276,7 +276,7 @@ def test_render_marks_skipped_messages():
 def test_relative_dates_resolve_against_the_message_time():
     from datetime import datetime
 
-    from mnemotree.evidence.temporal import resolve
+    from mnemotree.core.temporal import resolve
 
     # Monday, 8 May 2023.
     said = datetime(2023, 5, 8, 13, 0, tzinfo=UTC)
@@ -309,7 +309,7 @@ def test_relative_dates_resolve_against_the_message_time():
 def test_every_rule_match_contains_one_of_its_keywords():
     import random
 
-    from mnemotree.evidence.temporal import KEYWORDS, RULES
+    from mnemotree.core.temporal import KEYWORDS, RULES
 
     vocabulary = ["Yesterday", "LAST", "night", "today", "Tonight", "this", "past", "morning"]
     vocabulary += ["tomorrow", "week", "weekend", "month", "year", "Next", "ago", "days", "weeks"]
@@ -339,8 +339,8 @@ def test_every_rule_match_contains_one_of_its_keywords():
 def test_dates_out_of_range_get_no_note(text):
     from datetime import datetime
 
-    from mnemotree.evidence.models import render_line
-    from mnemotree.evidence.temporal import resolve
+    from mnemotree.core.models import render_line
+    from mnemotree.core.temporal import resolve
 
     said = datetime(2023, 5, 8, 13, 0, tzinfo=UTC)
     assert resolve(text + " See you tomorrow.", said) == ["tomorrow = Tuesday, 9 May 2023"]
@@ -350,7 +350,7 @@ def test_dates_out_of_range_get_no_note(text):
 def test_render_appends_resolved_dates():
     from datetime import datetime
 
-    from mnemotree.evidence.models import render_line
+    from mnemotree.core.models import render_line
 
     said = datetime(2023, 5, 8, 13, 0, tzinfo=UTC)
     assert render_line(said, "Caroline", "I went yesterday.") == (
@@ -362,7 +362,7 @@ def test_render_appends_resolved_dates():
 def test_render_keeps_the_offset_of_each_equal_instant():
     from datetime import datetime, timedelta, timezone
 
-    from mnemotree.evidence.models import render_line
+    from mnemotree.core.models import render_line
 
     utc = datetime(2023, 5, 8, 23, 30, tzinfo=UTC)
     tokyo = utc.astimezone(timezone(timedelta(hours=9)))

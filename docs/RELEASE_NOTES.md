@@ -1,5 +1,23 @@
 # Unreleased
 
+Every 1.0 import path and class name keeps working. The one removal is payload
+sampling in the evidence HTTP service (last item).
+
+- The engine is `mnemotree.EvidenceEngine`. `mnemotree.evidence.Memory` is the same
+  class under its 1.0 name.
+- The engine's modules moved out of `mnemotree.evidence` into `mnemotree.engine`,
+  `mnemotree.core`, `.ingest`, `.retrieval`, `.storage`, `.providers`, `.service`,
+  `.cli.evidence` and `.evaluation`. Each `mnemotree.evidence.<module>` path still
+  imports the moved module itself.
+- Deliberate failures derive from `mnemotree.MnemotreeError`: `InvalidInput`,
+  `ConfigurationError` and `IngestConflict`. All of them are still `ValueError`s.
+- CLI and MCP configs are validated when they load: an unknown provider `kind`, a
+  missing `model` or `revision`, or an unrecognized key is reported before any
+  database is opened. A sentence-transformers embedding now needs `revision` there.
+- With both an embedder and an extractor, ingestion embeds chunks and extracts atoms
+  concurrently. `remember_many` reads its stored messages in one snapshot.
+- `code_identity` in evaluation reports and service startup logs now hashes every
+  module of the package, so its `source_digest` differs from 1.0's for the same code.
 - Payload sampling is removed from the evidence HTTP service: `create_app` no longer
   takes `sample_path` or `sample_limit`, and `mnemotree-evidence serve` no longer
   accepts `--sample-payloads` or `--sample-limit` (`AML_SAMPLE_PAYLOADS`,

@@ -1,28 +1,11 @@
-"""Provider boundaries; no agent framework or legacy MemoryItem dependency."""
+"""Moved to :mod:`mnemotree.core.protocols`; this 1.0 path stays importable as the same module."""
 
-from __future__ import annotations
+import sys
+from typing import TYPE_CHECKING
 
-from collections.abc import Sequence
-from typing import Protocol
+from mnemotree.core import protocols as _module
 
-from .models import EmbeddingSpec
+if TYPE_CHECKING:
+    from mnemotree.core.protocols import *  # noqa: F403
 
-
-class Embedder(Protocol):
-    @property
-    def spec(self) -> EmbeddingSpec: ...
-
-    async def embed_documents(self, texts: Sequence[str]) -> Sequence[Sequence[float]]: ...
-
-    async def embed_query(self, text: str) -> Sequence[float]: ...
-
-
-class Reranker(Protocol):
-    async def score(self, query: str, texts: Sequence[str]) -> Sequence[float]: ...
-
-
-class TokenCounter(Protocol):
-    @property
-    def signature(self) -> str: ...
-
-    def count(self, text: str) -> int: ...
+sys.modules[__name__] = _module

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from mnemotree.evidence import cli as evidence_cli
-from mnemotree.evidence.providers import (
+from mnemotree.cli import evidence as evidence_cli
+from mnemotree.providers.embeddings import (
     DEFAULT_LOCAL_EMBEDDING,
     EmbedderUnavailable,
     FastEmbedEmbedder,

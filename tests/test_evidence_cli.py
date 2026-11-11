@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from mnemotree.evidence.cli import main
+from mnemotree.cli.evidence import main
 
 
 def run_cli():

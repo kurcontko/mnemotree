@@ -1,7 +1,7 @@
 """Namespace-bound memory verbs over the Evidence engine.
 
 `Memory` binds one namespace and speaks remember/recall/get/forget. Every call
-goes through `mnemotree.evidence.Memory`, so ingestion stays transactional,
+goes through `mnemotree.EvidenceEngine`, so ingestion stays transactional,
 search stays read-only, and recall returns the engine's packed context and trace.
 """
 
@@ -13,8 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .evidence import engine
-from .evidence.models import (
+from . import engine
+from .core.models import (
     Evidence,
     Message,
     Record,
@@ -24,7 +24,7 @@ from .evidence.models import (
     digest,
     scope,
 )
-from .evidence.protocols import Embedder, Reranker, TokenCounter
+from .core.protocols import Embedder, Reranker, TokenCounter
 
 
 class MemoryItem(Record):
@@ -80,7 +80,7 @@ class Memory:
     ) -> None:
         self.namespace = scope(namespace)
         self.search = search
-        self.engine = engine.Memory(
+        self.engine = engine.EvidenceEngine(
             path,
             embedder=embedder,
             reranker=reranker,
@@ -91,7 +91,7 @@ class Memory:
 
     @classmethod
     def from_engine(
-        cls, memory: engine.Memory, *, namespace: str, search: SearchOptions | None = None
+        cls, memory: engine.EvidenceEngine, *, namespace: str, search: SearchOptions | None = None
     ) -> Memory:
         """Bind an already configured engine, such as one built from a CLI config.
 
