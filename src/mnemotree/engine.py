@@ -44,7 +44,7 @@ from .retrieval.ranking import (
     role_first,
     role_policy,
 )
-from .storage.store import SQLiteEvidenceStore, Window, now
+from .storage.store import IngestBatch, SQLiteEvidenceStore, Window, now
 from .storage.vectors import vector_blob
 
 
@@ -240,15 +240,17 @@ class EvidenceEngine:
         )
         return await asyncio.to_thread(
             self.store.ingest,
-            namespace,
-            request_id,
-            session_id,
-            body_hash,
-            sources,
-            chunks,
-            vectors,
-            atoms,
-            atom_vectors,
+            IngestBatch(
+                namespace=namespace,
+                request_id=request_id,
+                session_id=session_id,
+                body_hash=body_hash,
+                sources=sources,
+                chunks=chunks,
+                vectors=vectors,
+                atoms=atoms,
+                atom_vectors=atom_vectors,
+            ),
         )
 
     async def _embed_and_extract(
