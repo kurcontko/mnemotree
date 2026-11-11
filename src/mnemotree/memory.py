@@ -156,7 +156,7 @@ class Memory:
         """Retrieve and pack evidence for ``query``. Never changes stored state."""
         options = options or self.search
         if limit is not None:
-            base = options or SearchOptions(mode="hybrid" if self.engine.embedder else "lexical")
+            base = options or self.engine.default_options()
             deep = base.deep_candidate_limit
             options = SearchOptions.model_validate(
                 {
