@@ -161,32 +161,51 @@ class Evidence(Record):
         give the answer model nothing to reason with. Overlapping spans of one
         message are joined, and "..." marks skipped messages within a block.
         """
-        by_source: dict[str, list[Evidence | ContextSpan]] = {}
-        for member in (self, *self.merged):
-            for span in member.spans():
-                by_source.setdefault(span.source_id, []).append(span)
-        lines: list[tuple[tuple[int, int], int | None, str]] = []
-        for spans in by_source.values():
-            spans.sort(key=lambda span: (span.start, -span.end))
-            joined: list[tuple[Evidence | ContextSpan, int, int, str]] = []
-            for span in spans:
-                if joined and span.start <= joined[-1][2]:
-                    head, start, end, text = joined[-1]
-                    if span.end > end:
-                        joined[-1] = (head, start, span.end, text + span.text[end - span.start :])
-                else:
-                    joined.append((span, span.start, span.end, span.text))
-            for head, start, _, text in joined:
+        lines: list[_Line] = []
+        for spans in _spans_by_source(self).values():
+            for head, start, _, text in _join_overlaps(spans):
                 order = (head.seq if head.seq is not None else 0, start)
                 lines.append((order, head.seq, render_line(head.timestamp, head.role, text)))
         lines.sort(key=lambda line: line[0])
-        rendered: list[str] = []
-        for index, (_, seq, line) in enumerate(lines):
-            previous = lines[index - 1][1] if index else None
-            if seq is not None and previous is not None and seq - previous > 1:
-                rendered.append("...")
-            rendered.append(line)
-        return "\n".join(rendered)
+        return "\n".join(_mark_gaps(lines))
+
+
+# A rendered line: its sort key (session seq, start), its seq, and its text.
+_Line = tuple[tuple[int, int], int | None, str]
+
+
+def _spans_by_source(evidence: Evidence) -> dict[str, list[Evidence | ContextSpan]]:
+    by_source: dict[str, list[Evidence | ContextSpan]] = {}
+    for member in (evidence, *evidence.merged):
+        for span in member.spans():
+            by_source.setdefault(span.source_id, []).append(span)
+    return by_source
+
+
+def _join_overlaps(
+    spans: list[Evidence | ContextSpan],
+) -> list[tuple[Evidence | ContextSpan, int, int, str]]:
+    """Join overlapping spans of one message; each keeps its first span as head."""
+    spans.sort(key=lambda span: (span.start, -span.end))
+    joined: list[tuple[Evidence | ContextSpan, int, int, str]] = []
+    for span in spans:
+        if joined and span.start <= joined[-1][2]:
+            head, start, end, text = joined[-1]
+            if span.end > end:
+                joined[-1] = (head, start, span.end, text + span.text[end - span.start :])
+        else:
+            joined.append((span, span.start, span.end, span.text))
+    return joined
+
+
+def _mark_gaps(lines: list[_Line]) -> list[str]:
+    rendered: list[str] = []
+    for index, (_, seq, line) in enumerate(lines):
+        previous = lines[index - 1][1] if index else None
+        if seq is not None and previous is not None and seq - previous > 1:
+            rendered.append("...")
+        rendered.append(line)
+    return rendered
 
 
 def render_line(timestamp: datetime | None, role: str, text: str) -> str:
