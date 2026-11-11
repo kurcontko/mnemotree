@@ -13,11 +13,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Config, open_memory and secret moved to mnemotree.config; importing them from
-# here keeps working.
-from ..config import Config, open_memory, secret
+from ..config import Config, secret
 from ..core.models import SearchOptions
 from ..engine import EvidenceEngine
+from ..errors import ConfigurationError
 from ..evaluation import (
     CorpusRecord,
     ablate,
@@ -132,16 +131,23 @@ def main() -> None:
     )
     args = parser.parse_args()
     config = Config.model_validate_json(args.config.read_text()) if args.config else Config()
-    with open_memory(args.db, config) as memory:
-        if args.command == "serve":
+    try:
+        api_key = secret(args.key_env) if args.command == "serve" else None
+        memory = config.open(args.db)
+    except ConfigurationError as exc:
+        raise SystemExit(f"mnemotree-evidence: {exc}") from None
+    with memory:
+        if api_key is not None:
             import uvicorn
 
-            from ..service.app import BOOT, aml_options, create_app, emit, utc_now
+            from ..service.app import create_app
+            from ..service.presets import aml_options
+            from ..service.request_log import BOOT, emit, utc_now
 
             options = config.search or aml_options(memory)
             app = create_app(
                 memory,
-                api_key=secret(args.key_env),
+                api_key=api_key,
                 options=options,
                 request_log=args.request_log,
             )

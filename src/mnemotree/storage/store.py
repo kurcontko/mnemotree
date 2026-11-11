@@ -10,28 +10,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from ..core.models import Chunk, ContextSpan, EmbeddingSpec, IngestReceipt, Source, digest, scope
-from ..errors import ConfigurationError, IngestConflict
-from ..ingest.atoms import Atom
+from ..core.models import (
+    Atom,
+    Chunk,
+    ContextSpan,
+    EmbeddingSpec,
+    IngestReceipt,
+    Source,
+    digest,
+    scope,
+)
+from ..errors import ConfigurationError, IngestConflict, ProviderError
 from .atom_store import AtomStore
 from .lexical import create_fts, fts_table, index_text, match_expression
-
-# Re-exported: these lived here before schema.py and vectors.py.
-from .schema import CHUNK_FTS as CHUNK_FTS
-from .schema import SCHEMA_VERSION as SCHEMA_VERSION
-from .schema import configure, connect, create_tables, stored_embedding_spec
-from .vectors import vector_blob as vector_blob
-
-__all__ = [
-    "CHUNK_FTS",
-    "SCHEMA_VERSION",
-    "IngestBlobs",
-    "IngestConflict",
-    "SQLiteEvidenceStore",
-    "Window",
-    "now",
-    "vector_blob",
-]
+from .schema import CHUNK_FTS, configure, connect, create_tables, stored_embedding_spec
+from .vectors import vector_blob
 
 
 class Window(NamedTuple):
@@ -201,7 +194,9 @@ class SQLiteEvidenceStore:
         blobs: list[bytes] = []
         if self.embedding_spec:
             if vectors is None or len(vectors) != len(chunks):
-                raise ValueError("every chunk requires an embedding before acknowledging ingestion")
+                raise ProviderError(
+                    "every chunk requires an embedding before acknowledging ingestion"
+                )
             blobs = [vector_blob(vector, self.embedding_spec.dimensions) for vector in vectors]
         elif vectors is not None:
             raise ValueError("vectors supplied without an embedding specification")
@@ -219,7 +214,7 @@ class SQLiteEvidenceStore:
                     raise ValueError("atom evidence must belong to this ingestion request")
         if self.embedding_spec and atoms:
             if atom_vectors is None or len(atom_vectors) != len(atoms):
-                raise ValueError("every atom requires an embedding")
+                raise ProviderError("every atom requires an embedding")
             atom_blobs = [
                 vector_blob(vector, self.embedding_spec.dimensions) for vector in atom_vectors
             ]

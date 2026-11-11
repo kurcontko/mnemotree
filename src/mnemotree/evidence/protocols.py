@@ -1,11 +1,6 @@
-"""Moved to :mod:`mnemotree.core.protocols`; this 1.0 path stays importable as the same module."""
+"""The 1.0 path of :mod:`mnemotree.core.protocols`, kept importable until 2.0."""
 
-import sys
-from typing import TYPE_CHECKING
-
-from mnemotree.core import protocols as _module
-
-if TYPE_CHECKING:
-    from mnemotree.core.protocols import *  # noqa: F403
-
-sys.modules[__name__] = _module
+from mnemotree.core.models import EmbeddingSpec as EmbeddingSpec
+from mnemotree.core.protocols import Embedder as Embedder
+from mnemotree.core.protocols import Reranker as Reranker
+from mnemotree.core.protocols import TokenCounter as TokenCounter

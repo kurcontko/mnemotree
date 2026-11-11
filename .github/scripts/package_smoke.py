@@ -253,7 +253,7 @@ async def evidence_roundtrip(workdir: Path) -> None:
 
 
 def check_legacy_paths(*, bare: bool) -> None:
-    """The 1.0 mnemotree.evidence.<module> paths resolve to the moved modules."""
+    """The 1.0 mnemotree.evidence.<module> paths hand out the moved modules' objects."""
     moved = {
         "engine": "mnemotree.engine",
         "models": "mnemotree.core.models",
@@ -266,7 +266,16 @@ def check_legacy_paths(*, bare: bool) -> None:
         moved["server"] = "mnemotree.service.app"
     for old, new in moved.items():
         module = importlib.import_module(f"mnemotree.evidence.{old}")
-        assert module is importlib.import_module(new), (old, new)
+        target = importlib.import_module(new)
+        # 1.0's secret exits on a missing credential; the moved one raises.
+        kept = {"secret"} if old == "cli" else set()
+        public = [
+            name
+            for name in vars(module)
+            if not name.startswith("_") and name not in kept and hasattr(target, name)
+        ]
+        assert public, (old, new)
+        assert all(getattr(module, name) is getattr(target, name) for name in public), (old, new)
 
 
 def main() -> None:

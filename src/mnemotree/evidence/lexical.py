@@ -1,11 +1,9 @@
-"""Moved to :mod:`mnemotree.storage.lexical`; this 1.0 path stays importable as the same module."""
+"""The 1.0 path of :mod:`mnemotree.storage.lexical`, kept importable until 2.0."""
 
-import sys
-from typing import TYPE_CHECKING
-
-from mnemotree.storage import lexical as _module
-
-if TYPE_CHECKING:
-    from mnemotree.storage.lexical import *  # noqa: F403
-
-sys.modules[__name__] = _module
+from mnemotree.storage.lexical import FTS_TOKENIZER as FTS_TOKENIZER
+from mnemotree.storage.lexical import STOPWORDS as STOPWORDS
+from mnemotree.storage.lexical import create_fts as create_fts
+from mnemotree.storage.lexical import fts_table as fts_table
+from mnemotree.storage.lexical import index_text as index_text
+from mnemotree.storage.lexical import match_expression as match_expression
+from mnemotree.storage.lexical import tokens as tokens

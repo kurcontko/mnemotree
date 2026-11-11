@@ -3,10 +3,11 @@ import json
 import httpx
 import pytest
 
-from mnemotree.core.models import EmbeddingSpec
+from mnemotree import ProviderError
+from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evaluation import ablate
 from mnemotree.evidence import Memory, Message, SearchOptions
-from mnemotree.ingest.atoms import AtomDraft, Citation, ExtractorSpec, OpenAIExtractor
+from mnemotree.providers.extraction import OpenAIExtractor
 
 
 class Extractor:
@@ -110,7 +111,7 @@ async def test_invalid_citations_and_failed_atom_insert_roll_back(tmp_path):
     extractor = Extractor()
     with Memory(tmp_path / "m.db", extractor=extractor, embedder=Embedder()) as memory:
         extractor.bad_quote = True
-        with pytest.raises(ValueError, match="exact, unambiguous"):
+        with pytest.raises(ProviderError, match="exact, unambiguous"):
             await ingest(memory)
         assert memory.store.stats("u")["requests"] == 0
         extractor.bad_quote = False
@@ -245,6 +246,6 @@ async def test_citations_cannot_refer_to_another_batch(tmp_path):
             ]
 
     with Memory(tmp_path / "m.db", extractor=Invalid()) as memory:
-        with pytest.raises(ValueError, match="outside its extraction batch"):
+        with pytest.raises(ProviderError, match="outside its extraction batch"):
             await ingest(memory)
         assert memory.store.stats("u")["sources"] == 0

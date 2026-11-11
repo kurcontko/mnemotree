@@ -1,11 +1,21 @@
-"""Moved to :mod:`mnemotree.ingest.atoms`; this 1.0 path stays importable as the same module."""
+"""The 1.0 path of :mod:`mnemotree.ingest.atoms`, kept importable until 2.0.
 
-import sys
-from typing import TYPE_CHECKING
+Also re-exports the names the 1.0 module offered that now live elsewhere.
+"""
 
-from mnemotree.ingest import atoms as _module
-
-if TYPE_CHECKING:
-    from mnemotree.ingest.atoms import *  # noqa: F403
-
-sys.modules[__name__] = _module
+from mnemotree.core.models import Atom as Atom
+from mnemotree.core.models import AtomDraft as AtomDraft
+from mnemotree.core.models import AtomHit as AtomHit
+from mnemotree.core.models import Citation as Citation
+from mnemotree.core.models import ExtractorSpec as ExtractorSpec
+from mnemotree.core.models import Passage as Passage
+from mnemotree.core.models import Record as Record
+from mnemotree.core.models import Source as Source
+from mnemotree.core.models import SourceSpan as SourceSpan
+from mnemotree.core.models import digest as digest
+from mnemotree.core.protocols import Extractor as Extractor
+from mnemotree.ingest.atoms import batches as batches
+from mnemotree.ingest.atoms import extract_atoms as extract_atoms
+from mnemotree.providers.extraction import EXTRACTION_PROMPT as EXTRACTION_PROMPT
+from mnemotree.providers.extraction import ExtractionResponse as ExtractionResponse
+from mnemotree.providers.extraction import OpenAIExtractor as OpenAIExtractor

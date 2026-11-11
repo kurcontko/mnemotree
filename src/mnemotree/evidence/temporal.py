@@ -1,11 +1,9 @@
-"""Moved to :mod:`mnemotree.core.temporal`; this 1.0 path stays importable as the same module."""
+"""The 1.0 path of :mod:`mnemotree.core.temporal`, kept importable until 2.0."""
 
-import sys
-from typing import TYPE_CHECKING
-
-from mnemotree.core import temporal as _module
-
-if TYPE_CHECKING:
-    from mnemotree.core.temporal import *  # noqa: F403
-
-sys.modules[__name__] = _module
+from mnemotree.core.temporal import KEYWORDS as KEYWORDS
+from mnemotree.core.temporal import NUMBERS as NUMBERS
+from mnemotree.core.temporal import RULES as RULES
+from mnemotree.core.temporal import WEEKDAYS as WEEKDAYS
+from mnemotree.core.temporal import Rule as Rule
+from mnemotree.core.temporal import annotate as annotate
+from mnemotree.core.temporal import resolve as resolve

@@ -92,6 +92,8 @@ known-first-party = ["mnemotree"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+# The 1.0 module paths: each re-exports the 1.0 names from where they now live.
+"src/mnemotree/evidence/*.py" = ["F401"]
 # CJK and full-width punctuation in fixtures are deliberate test data.
 "tests/**" = ["RUF001"]
 

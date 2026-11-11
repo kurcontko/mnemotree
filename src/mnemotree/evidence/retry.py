@@ -1,11 +1,4 @@
-"""Moved to :mod:`mnemotree.providers.retry`; this 1.0 path stays importable as the same module."""
+"""The 1.0 path of :mod:`mnemotree.providers.retry`, kept importable until 2.0."""
 
-import sys
-from typing import TYPE_CHECKING
-
-from mnemotree.providers import retry as _module
-
-if TYPE_CHECKING:
-    from mnemotree.providers.retry import *  # noqa: F403
-
-sys.modules[__name__] = _module
+from mnemotree.providers.retry import RetryAfterOrBackoff as RetryAfterOrBackoff
+from mnemotree.providers.retry import retryable as retryable
