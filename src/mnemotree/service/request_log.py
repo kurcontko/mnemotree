@@ -5,6 +5,7 @@ Message and query text never reach these records.
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import logging
@@ -13,9 +14,15 @@ from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..core.models import Evidence
+
+if TYPE_CHECKING:
+    from starlette.requests import Request as HTTPRequest
+
+    from ..core.models import SearchOptions, SearchResult
+    from .schemas import AddRequest, SearchRequest
 
 # The 1.0 logger name: logging configuration addresses it, and the CLI
 # attaches its handler to "mnemotree.evidence".
@@ -34,6 +41,14 @@ def next_seq() -> int:
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
+
+
+def note(http: HTTPRequest, **fields: Any) -> None:
+    """Stash request-log fields for the middleware; survives a later failure."""
+    state = http.state
+    if not hasattr(state, "log"):
+        state.log = {}
+    state.log.update(fields)
 
 
 def append_jsonl(path: Path, record: dict[str, Any]) -> None:
@@ -101,3 +116,59 @@ def returned_role_chars(evidence: Sequence[Evidence]) -> dict[str, int]:
             counts[role] += max(0, stop - max(start, end))
             end = max(end, stop)
     return dict(counts)
+
+
+def add_fields(request: AddRequest) -> dict[str, Any]:
+    """What an Add request carried: its IDs and the shape of its messages."""
+    received = request.messages
+    return {
+        "user_id": request.user_id,
+        "request_id": request.request_id,
+        "session_id": request.session_id,
+        "messages": len(received),
+        "blank_skipped": sum(1 for message in received if not message.content.strip()),
+        "words": sum(len(message.content.split()) for message in received),
+        "chars": sum(len(message.content) for message in received),
+        "roles": dict(Counter(message.role for message in received)),
+        "with_timestamp": sum(1 for message in received if message.timestamp is not None),
+    }
+
+
+def query_fields(request: SearchRequest, limit: int) -> dict[str, Any]:
+    """What a Search request asked for, and the limit it is served with."""
+    return {
+        "user_id": request.user_id,
+        "query_chars": len(request.query),
+        "options": len(request.options) if request.options is not None else None,
+        "top_k": request.top_k,
+        "limit": limit,
+    }
+
+
+def result_fields(result: SearchResult, options: SearchOptions) -> dict[str, Any]:
+    """What a search returned and how; ``options`` are the service's own defaults."""
+    trace = result.trace
+    ids = [item.id for item in result.evidence]
+    return {
+        "items": len(ids),
+        "sources": len({source for item in result.evidence for source in item.source_ids()}),
+        "packed_tokens": trace.packed_tokens,
+        "evidence_tokens": trace.evidence_tokens,
+        "candidate_limit": trace.candidate_limit,
+        "chunk_density": (
+            round(trace.chunk_density, 3) if trace.chunk_density is not None else None
+        ),
+        "original_model_query_tokens": trace.original_model_query_tokens,
+        "model_query_tokens": trace.model_query_tokens,
+        "model_query_truncated": trace.model_query_truncated,
+        "tokenizer": trace.tokenizer,
+        "assistant_share": trace.assistant_share,
+        "role_first_applied": trace.role_first_applied,
+        "role_boost_applied": trace.role_boost_applied,
+        "model_query_policy": options.model_query_policy,
+        "channel_counts": trace.channel_counts,
+        "timings_ms": {key: round(value, 1) for key, value in trace.timings_ms.items()},
+        "returned_roles": dict(Counter(item.role for item in result.evidence)),
+        "returned_role_chars": returned_role_chars(result.evidence),
+        "ids_digest": hashlib.sha256(json.dumps(ids).encode()).hexdigest()[:16],
+    }

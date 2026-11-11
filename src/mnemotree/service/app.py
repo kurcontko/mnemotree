@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
 import hmac
-import json
-from collections import Counter
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from time import perf_counter
@@ -27,16 +24,47 @@ from .presets import aml_options
 from .request_log import (
     BOOT,
     MAX_LOGGED_PATH,
+    add_fields,
     auth_scheme,
     emit,
     failure,
     next_seq,
-    returned_role_chars,
+    note,
+    query_fields,
+    result_fields,
     utc_now,
 )
 from .schemas import MAX_TOP_K, AddRequest, SearchRequest
 
 MAX_DETAIL_ERRORS = 10
+
+
+def make_authorize(api_key: str) -> Callable[..., None]:
+    """A dependency that admits only requests presenting ``api_key``."""
+    expected = api_key.encode()
+
+    def authorize(
+        authorization: Annotated[str | None, Header()] = None,
+        x_api_key: Annotated[str | None, Header()] = None,
+    ) -> None:
+        # AML sends the registered scheme: Bearer, Token or an X-Api-Key header.
+        scheme, _, token = (authorization or "").partition(" ")
+        presented = token if scheme.lower() in ("bearer", "token") else x_api_key
+        if not hmac.compare_digest((presented or "").encode(), expected):
+            raise HTTPException(status_code=401, detail="invalid credentials")
+
+    return authorize
+
+
+def check_servable(memory: EvidenceEngine, options: SearchOptions) -> None:
+    """Refuse to start a service whose every Add or Search would fail."""
+    if options.mode != "lexical" and memory.embedder is None:
+        raise ValueError("dense/hybrid service requires an embedder")
+    if memory.store.embedding_spec and memory.embedder is None:
+        # Every Add would fail, and the client would be told to retry forever.
+        raise ValueError("a dense database requires its configured embedder")
+    if options.representation != "raw" and memory.store.extractor_config is None:
+        raise ConfigurationError("atom retrieval service requires an extracted corpus")
 
 
 def create_app(
@@ -54,21 +82,8 @@ def create_app(
     options = options or aml_options(memory)
     if request_log is not None:
         request_log.parent.mkdir(parents=True, exist_ok=True)
-
-    def note(http: HTTPRequest, **fields: Any) -> None:
-        """Stash request-log fields for the middleware; survives a later failure."""
-        state = http.state
-        if not hasattr(state, "log"):
-            state.log = {}
-        state.log.update(fields)
-
-    if options.mode != "lexical" and memory.embedder is None:
-        raise ValueError("dense/hybrid service requires an embedder")
-    if memory.store.embedding_spec and memory.embedder is None:
-        # Every Add would fail, and the client would be told to retry forever.
-        raise ValueError("a dense database requires its configured embedder")
-    if options.representation != "raw" and memory.store.extractor_config is None:
-        raise ConfigurationError("atom retrieval service requires an extracted corpus")
+    check_servable(memory, options)
+    authorize = make_authorize(api_key)
     app = FastAPI(
         title="Mnemotree evidence memory", docs_url=None, redoc_url=None, openapi_url=None
     )
@@ -123,18 +138,6 @@ def create_app(
         note(http, detail=exc.detail)
         return await http_exception_handler(http, exc)
 
-    expected = api_key.encode()
-
-    def authorize(
-        authorization: Annotated[str | None, Header()] = None,
-        x_api_key: Annotated[str | None, Header()] = None,
-    ) -> None:
-        # AML sends the registered scheme: Bearer, Token or an X-Api-Key header.
-        scheme, _, token = (authorization or "").partition(" ")
-        presented = token if scheme.lower() in ("bearer", "token") else x_api_key
-        if not hmac.compare_digest((presented or "").encode(), expected):
-            raise HTTPException(status_code=401, detail="invalid credentials")
-
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -148,19 +151,7 @@ def create_app(
 
     @app.post("/v1/memories/add", dependencies=[Depends(authorize)])
     async def add(request: AddRequest, http: HTTPRequest) -> dict[str, Any]:
-        received = request.messages
-        note(
-            http,
-            user_id=request.user_id,
-            request_id=request.request_id,
-            session_id=request.session_id,
-            messages=len(received),
-            blank_skipped=sum(1 for message in received if not message.content.strip()),
-            words=sum(len(message.content.split()) for message in received),
-            chars=sum(len(message.content) for message in received),
-            roles=dict(Counter(message.role for message in received)),
-            with_timestamp=sum(1 for message in received if message.timestamp is not None),
-        )
+        note(http, **add_fields(request))
         try:
             messages = [
                 message.source_message() for message in request.messages if message.content.strip()
@@ -198,14 +189,7 @@ def create_app(
     @app.post("/v1/memories/search", dependencies=[Depends(authorize)])
     async def search(request: SearchRequest, http: HTTPRequest) -> dict[str, Any]:
         limit = min(request.top_k, MAX_TOP_K)
-        note(
-            http,
-            user_id=request.user_id,
-            query_chars=len(request.query),
-            options=len(request.options) if request.options is not None else None,
-            top_k=request.top_k,
-            limit=limit,
-        )
+        note(http, **query_fields(request, limit))
         if not request.query.strip():
             raise HTTPException(status_code=422, detail="query must not be blank")
         # Keep explicit option boundaries for the bounded lexical term allocation.
@@ -226,32 +210,7 @@ def create_app(
             raise HTTPException(
                 status_code=503, detail="retrieval failed; retry this request"
             ) from exc
-        trace = result.trace
-        ids = [item.id for item in result.evidence]
-        note(
-            http,
-            items=len(ids),
-            sources=len({source for item in result.evidence for source in item.source_ids()}),
-            packed_tokens=trace.packed_tokens,
-            evidence_tokens=trace.evidence_tokens,
-            candidate_limit=trace.candidate_limit,
-            chunk_density=(
-                round(trace.chunk_density, 3) if trace.chunk_density is not None else None
-            ),
-            original_model_query_tokens=trace.original_model_query_tokens,
-            model_query_tokens=trace.model_query_tokens,
-            model_query_truncated=trace.model_query_truncated,
-            tokenizer=trace.tokenizer,
-            assistant_share=trace.assistant_share,
-            role_first_applied=trace.role_first_applied,
-            role_boost_applied=trace.role_boost_applied,
-            model_query_policy=options.model_query_policy,
-            channel_counts=trace.channel_counts,
-            timings_ms={key: round(value, 1) for key, value in trace.timings_ms.items()},
-            returned_roles=dict(Counter(item.role for item in result.evidence)),
-            returned_role_chars=returned_role_chars(result.evidence),
-            ids_digest=hashlib.sha256(json.dumps(ids).encode()).hexdigest()[:16],
-        )
+        note(http, **result_fields(result, options))
         return {"data": [response_item(item) for item in result.evidence]}
 
     return app
