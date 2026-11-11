@@ -102,29 +102,29 @@ def file_hash(path: Path) -> str:
 
 
 async def evaluate(
-    memory: EvidenceEngine,
+    engine: EvidenceEngine,
     corpus: Path,
     queries: Path,
     options: SearchOptions,
     *,
     candidate_k: int = 100,
 ) -> dict[str, Any]:
-    ingestion = await ingest_corpus(memory, corpus)
-    return await score_queries(memory, corpus, queries, options, ingestion, candidate_k=candidate_k)
+    ingestion = await ingest_corpus(engine, corpus)
+    return await score_queries(engine, corpus, queries, options, ingestion, candidate_k=candidate_k)
 
 
 async def ablate(
-    memory: EvidenceEngine, corpus: Path, queries: Path, options: SearchOptions
+    engine: EvidenceEngine, corpus: Path, queries: Path, options: SearchOptions
 ) -> dict[str, Any]:
-    if memory.extractor is None:
+    if engine.extractor is None:
         raise ValueError("atomic ablation requires an extractor")
-    ingestion = await ingest_corpus(memory, corpus)
+    ingestion = await ingest_corpus(engine, corpus)
     reports = {}
     for representation in ("raw", "atoms", "combined"):
         settings = SearchOptions.model_validate(
             {**options.model_dump(), "representation": representation}
         )
-        reports[representation] = await score_queries(memory, corpus, queries, settings, ingestion)
+        reports[representation] = await score_queries(engine, corpus, queries, settings, ingestion)
     return {
         "summary": {key: report["summary"] for key, report in reports.items()},
         "shared_ingestion": ingestion,
@@ -133,15 +133,15 @@ async def ablate(
 
 
 async def ablate_context(
-    memory: EvidenceEngine, corpus: Path, queries: Path, options: SearchOptions
+    engine: EvidenceEngine, corpus: Path, queries: Path, options: SearchOptions
 ) -> dict[str, Any]:
-    ingestion = await ingest_corpus(memory, corpus)
+    ingestion = await ingest_corpus(engine, corpus)
     reports = {}
     for name, count in (("context_off", 0), ("context_on", options.neighbor_messages or 1)):
         settings = SearchOptions.model_validate(
             {**options.model_dump(), "neighbor_messages": count}
         )
-        reports[name] = await score_queries(memory, corpus, queries, settings, ingestion)
+        reports[name] = await score_queries(engine, corpus, queries, settings, ingestion)
     return {
         "summary": {key: report["summary"] for key, report in reports.items()},
         "shared_ingestion": ingestion,
@@ -149,7 +149,7 @@ async def ablate_context(
     }
 
 
-def retrieval_variants(memory: EvidenceEngine, options: SearchOptions) -> dict[str, SearchOptions]:
+def retrieval_variants(engine: EvidenceEngine, options: SearchOptions) -> dict[str, SearchOptions]:
     """One policy dimension at a time; every arm is validated, never model_copy."""
     variants: dict[str, dict[str, Any]] = {
         "baseline": {},
@@ -166,7 +166,7 @@ def retrieval_variants(memory: EvidenceEngine, options: SearchOptions) -> dict[s
             for budget in (1000, 2000, 4000, 8000)
         },
     }
-    if memory.embedder is not None:
+    if engine.embedder is not None:
         variants.update(mode_dense={"mode": "dense"}, mode_hybrid={"mode": "hybrid"})
     elif options.mode != "lexical":
         raise ValueError("baseline dense/hybrid mode requires an embedder")
@@ -177,19 +177,19 @@ def retrieval_variants(memory: EvidenceEngine, options: SearchOptions) -> dict[s
 
 
 async def ablate_retrieval(
-    memory: EvidenceEngine,
+    engine: EvidenceEngine,
     corpus: Path,
     queries: Path,
     options: SearchOptions,
     *,
     candidate_k: int = 100,
 ) -> dict[str, Any]:
-    variants = retrieval_variants(memory, options)
-    ingestion = await ingest_corpus(memory, corpus)
+    variants = retrieval_variants(engine, options)
+    ingestion = await ingest_corpus(engine, corpus)
     reports = {}
     for name, settings in variants.items():
         reports[name] = await score_queries(
-            memory, corpus, queries, settings, ingestion, candidate_k=candidate_k
+            engine, corpus, queries, settings, ingestion, candidate_k=candidate_k
         )
     return {
         "summary": {key: report["summary"] for key, report in reports.items()},
@@ -198,18 +198,18 @@ async def ablate_retrieval(
     }
 
 
-async def ingest_corpus(memory: EvidenceEngine, corpus: Path) -> dict[str, Any]:
+async def ingest_corpus(engine: EvidenceEngine, corpus: Path) -> dict[str, Any]:
     # Reject contaminated runs, including forgotten-source receipts.
-    if memory.store.db.execute("SELECT 1 FROM evidence_requests LIMIT 1").fetchone():
+    if engine.store.db.execute("SELECT 1 FROM evidence_requests LIMIT 1").fetchone():
         raise ValueError("evaluation requires a fresh empty database")
     records = 0
     atom_count = 0
     source_count = 0
     started = perf_counter()
-    usage_before = dict(getattr(memory.extractor, "usage", {}))
+    usage_before = dict(getattr(engine.extractor, "usage", {}))
     for value in read_jsonl(corpus):
         record = CorpusRecord.model_validate(value)
-        receipt = await memory.add(
+        receipt = await engine.add(
             record.namespace,
             record.messages,
             request_id=record.request_id,
@@ -227,7 +227,7 @@ async def ingest_corpus(memory: EvidenceEngine, corpus: Path) -> dict[str, Any]:
         "elapsed_ms": (perf_counter() - started) * 1000,
         "extraction_usage": {
             key: value - usage_before.get(key, 0)
-            for key, value in getattr(memory.extractor, "usage", {}).items()
+            for key, value in getattr(engine.extractor, "usage", {}).items()
         },
     }
 
@@ -300,12 +300,12 @@ def _load_queries(queries: Path) -> list[QueryRecord]:
     return records
 
 
-def _gold_sources(memory: EvidenceEngine, query: QueryRecord) -> set[str]:
+def _gold_sources(engine: EvidenceEngine, query: QueryRecord) -> set[str]:
     """The query's gold source IDs, once every label is checked against the corpus."""
     gold = set(query.relevant_source_ids) | {span.source_id for span in query.answer_spans or []}
     lengths: dict[str, int] = {}
     for source_id in gold:
-        source = memory.source(query.namespace, source_id)
+        source = engine.source(query.namespace, source_id)
         if source is None:
             raise ValueError(f"query {query.id} references an absent source: {source_id}")
         lengths[source_id] = len(source.content)
@@ -421,7 +421,7 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _manifest(
-    memory: EvidenceEngine,
+    engine: EvidenceEngine,
     corpus: Path,
     queries: Path,
     options: SearchOptions,
@@ -436,16 +436,16 @@ def _manifest(
         "code_sha256": digest(code),
         "corpus_records": ingestion["records"],
         "ingestion": ingestion,
-        "extraction": memory.store.extractor_config,
+        "extraction": engine.store.extractor_config,
         "mnemotree": installed_version("mnemotree"),
         "sqlite": sqlite3.sqlite_version,
         "sqlite_vec": version("sqlite-vec"),
-        "tokenizer": memory.counter.signature,
-        "embedding": memory.store.embedding_spec.model_dump()
-        if memory.store.embedding_spec
+        "tokenizer": engine.counter.signature,
+        "embedding": engine.store.embedding_spec.model_dump()
+        if engine.store.embedding_spec
         else None,
-        "chunk_size": memory.chunk_size,
-        "chunk_overlap": memory.chunk_overlap,
+        "chunk_size": engine.chunk_size,
+        "chunk_overlap": engine.chunk_overlap,
         "search": options.model_dump(),
         "candidate_k": candidate_k,
         "metric_notes": {
@@ -460,12 +460,12 @@ def _manifest(
             "empty_labels": "Unknown coverage, never an unanswerable ground-truth label.",
             "source_gold": "Union of explicit relevant source IDs and answer-span source IDs.",
         },
-        "reranker": None if memory.reranker is None else type(memory.reranker).__qualname__,
+        "reranker": None if engine.reranker is None else type(engine.reranker).__qualname__,
     }
 
 
 async def score_queries(
-    memory: EvidenceEngine,
+    engine: EvidenceEngine,
     corpus: Path,
     queries: Path,
     options: SearchOptions,
@@ -477,13 +477,13 @@ async def score_queries(
         raise ValueError("candidate_k must be a positive integer")
     rows: list[dict[str, Any]] = []
     for query in _load_queries(queries):
-        gold = _gold_sources(memory, query)
-        result = await memory.search(
+        gold = _gold_sources(engine, query)
+        result = await engine.search(
             query.namespace, query.query, options=options, query_options=query.query_options
         )
         rows.append(_score(query, gold, result, candidate_k))
     return {
-        "manifest": _manifest(memory, corpus, queries, options, ingestion, candidate_k),
+        "manifest": _manifest(engine, corpus, queries, options, ingestion, candidate_k),
         "summary": _aggregate(rows),
         "categories": {
             category: _aggregate([row for row in rows if row["category"] == category])

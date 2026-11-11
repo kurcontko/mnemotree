@@ -10,10 +10,10 @@ from ..engine import EvidenceEngine
 AML_TOKEN_BUDGET = 8_000
 
 
-def aml_options(memory: EvidenceEngine) -> SearchOptions:
+def aml_options(engine: EvidenceEngine) -> SearchOptions:
     """Service defaults: adjacent turns merged into passages, within 8K tokens."""
     return SearchOptions(
-        mode="hybrid" if memory.embedder else "lexical",
+        mode="hybrid" if engine.embedder else "lexical",
         limit=100,
         token_budget=AML_TOKEN_BUDGET,
         neighbor_messages=1,

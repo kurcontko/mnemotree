@@ -179,11 +179,11 @@ def main() -> None:
             asyncio.run(run(args, engine, options))
 
 
-async def run(args: argparse.Namespace, memory: EvidenceEngine, options: SearchOptions) -> None:
+async def run(args: argparse.Namespace, engine: EvidenceEngine, options: SearchOptions) -> None:
     if args.command == "add":
         for value in read_jsonl(args.corpus):
             record = CorpusRecord.model_validate(value)
-            receipt = await memory.add(
+            receipt = await engine.add(
                 record.namespace,
                 record.messages,
                 request_id=record.request_id,
@@ -191,7 +191,7 @@ async def run(args: argparse.Namespace, memory: EvidenceEngine, options: SearchO
             )
             print(receipt.model_dump_json())
     elif args.command == "search":
-        result = await memory.search(
+        result = await engine.search(
             args.namespace, args.query, options=options, query_options=args.option
         )
         print(result.model_dump_json(indent=2))
@@ -199,11 +199,11 @@ async def run(args: argparse.Namespace, memory: EvidenceEngine, options: SearchO
         if args.command in ("evaluate", "ablate-retrieval"):
             evaluator = evaluate if args.command == "evaluate" else ablate_retrieval
             report = await evaluator(
-                memory, args.corpus, args.queries, options, candidate_k=args.candidate_k
+                engine, args.corpus, args.queries, options, candidate_k=args.candidate_k
             )
         else:
             report = await (ablate if args.command == "ablate" else ablate_context)(
-                memory, args.corpus, args.queries, options
+                engine, args.corpus, args.queries, options
             )
         report["code_identity"] = code_identity()
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -56,19 +56,19 @@ def make_authorize(api_key: str) -> Callable[..., None]:
     return authorize
 
 
-def check_servable(memory: EvidenceEngine, options: SearchOptions) -> None:
+def check_servable(engine: EvidenceEngine, options: SearchOptions) -> None:
     """Refuse to start a service whose every Add or Search would fail."""
-    if options.mode != "lexical" and memory.embedder is None:
+    if options.mode != "lexical" and engine.embedder is None:
         raise ValueError("dense/hybrid service requires an embedder")
-    if memory.store.embedding_spec and memory.embedder is None:
+    if engine.store.embedding_spec and engine.embedder is None:
         # Every Add would fail, and the client would be told to retry forever.
         raise ValueError("a dense database requires its configured embedder")
-    if options.representation != "raw" and memory.store.extractor_config is None:
+    if options.representation != "raw" and engine.store.extractor_config is None:
         raise ConfigurationError("atom retrieval service requires an extracted corpus")
 
 
 def create_app(
-    memory: EvidenceEngine,
+    engine: EvidenceEngine,
     *,
     api_key: str,
     options: SearchOptions | None = None,
@@ -79,10 +79,10 @@ def create_app(
     """
     if not api_key.strip():
         raise ValueError("a nonblank service api_key is required")
-    options = options or aml_options(memory)
+    options = options or aml_options(engine)
     if request_log is not None:
         request_log.parent.mkdir(parents=True, exist_ok=True)
-    check_servable(memory, options)
+    check_servable(engine, options)
     authorize = make_authorize(api_key)
     app = FastAPI(
         title="Mnemotree evidence memory", docs_url=None, redoc_url=None, openapi_url=None
@@ -161,7 +161,7 @@ def create_app(
         add_started = perf_counter()
         try:
             if messages:
-                receipt = await memory.add(
+                receipt = await engine.add(
                     request.user_id,
                     messages,
                     request_id=request.request_id,
@@ -199,7 +199,7 @@ def create_app(
             update={"limit": limit, "candidate_limit": max(options.candidate_limit, limit)}
         )
         try:
-            result = await memory.search(
+            result = await engine.search(
                 request.user_id,
                 request.query,
                 options=search_options,
