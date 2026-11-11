@@ -203,54 +203,54 @@ def match_expression(
     # Preserve the historical fallback only when the entire request is stopwords.
     if not any(lanes):
         lanes = raw
-    queues: list[deque[str]] = []
-    for lane in lanes:
-        # Alternating ends prevents a long transcript or option losing its tail.
-        priority = []
-        left, right = 0, len(lane) - 1
-        while left <= right:
-            priority.append(lane[left])
-            if left < right:
-                priority.append(lane[right])
-            left += 1
-            right -= 1
-        queues.append(deque(priority))
+    queues = [_priority(lane) for lane in lanes]
     chosen: set[str] = set()
-
-    def take(lane: int) -> bool:
-        while queues[lane]:
-            term = queues[lane].popleft()
-            if term not in chosen:
-                chosen.add(term)
-                return True
-        return False
-
     if len(lanes) > 1:
         for _ in range((limit + 1) // 2):
-            if not take(0):
+            if not _take(queues[0], chosen):
                 break
         # Round-robin gives every option equal opportunity, including when one
         # option repeats question terms or has fewer terms than its allocation.
-        while len(chosen) < limit:
-            added = False
-            for lane_index in range(1, len(lanes)):
-                if len(chosen) == limit:
-                    break
-                added = take(lane_index) or added
-            if not added:
-                break
+        _round_robin(queues[1:], chosen, limit)
     # Fill spare option/question capacity without repeating any selected term.
-    while len(chosen) < limit:
-        added = False
-        for lane_index in range(len(lanes)):
-            if len(chosen) == limit:
-                break
-            added = take(lane_index) or added
-        if not added:
-            break
+    _round_robin(queues, chosen, limit)
     # Restore source order within each part. OR order is immaterial to FTS5,
     # but retaining it makes ordinary short queries byte-for-byte compatible.
     terms = list(dict.fromkeys(term for lane in lanes for term in lane if term in chosen))
     if not terms:
         return None
     return " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
+
+
+def _priority(lane: list[str]) -> deque[str]:
+    # Alternating ends prevents a long transcript or option losing its tail.
+    priority = []
+    left, right = 0, len(lane) - 1
+    while left <= right:
+        priority.append(lane[left])
+        if left < right:
+            priority.append(lane[right])
+        left += 1
+        right -= 1
+    return deque(priority)
+
+
+def _take(queue: deque[str], chosen: set[str]) -> bool:
+    while queue:
+        term = queue.popleft()
+        if term not in chosen:
+            chosen.add(term)
+            return True
+    return False
+
+
+def _round_robin(queues: Sequence[deque[str]], chosen: set[str], limit: int) -> None:
+    """One term per queue per round until ``limit`` terms or every queue is spent."""
+    while len(chosen) < limit:
+        added = False
+        for queue in queues:
+            if len(chosen) == limit:
+                break
+            added = _take(queue, chosen) or added
+        if not added:
+            break
