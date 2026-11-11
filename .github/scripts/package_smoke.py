@@ -266,11 +266,11 @@ def check_legacy_paths(*, bare: bool) -> None:
         moved["server"] = "mnemotree.service.app"
     for old, new in moved.items():
         module = importlib.import_module(f"mnemotree.evidence.{old}")
-        moved = importlib.import_module(new)
+        target = importlib.import_module(new)
         # 1.0's secret exits on a missing credential; the moved one raises.
         kept = {"secret"} if old == "cli" else set()
-        public = [name for name in vars(moved) if not name.startswith("_") and name not in kept]
-        assert all(getattr(module, name) is getattr(moved, name) for name in public), (old, new)
+        public = [name for name in vars(target) if not name.startswith("_") and name not in kept]
+        assert all(getattr(module, name) is getattr(target, name) for name in public), (old, new)
 
 
 def main() -> None:
