@@ -62,6 +62,14 @@ def test_every_1_0_name_still_imports_from_its_old_path(old, new):
             assert getattr(module, name) is getattr(moved, name), name
 
 
+@pytest.mark.parametrize("old", sorted(MOVED))
+def test_the_1_0_paths_offer_only_their_1_0_names(old):
+    # Names added to the moved modules after 1.0 stay out of the frozen paths.
+    module = importlib.import_module(f"mnemotree.evidence.{old}")
+    public = {name for name in vars(module) if not name.startswith("_")}
+    assert public == set(NAMES_1_0[old]) - {name for module_, name in REMOVED if module_ == old}
+
+
 def test_the_engine_keeps_its_1_0_name():
     from mnemotree.evidence.engine import Memory as OldEngineMemory
 

@@ -9,6 +9,8 @@ sampling in the evidence HTTP service (last item).
   `mnemotree.core`, `.ingest`, `.retrieval`, `.storage`, `.providers`, `.service`,
   `.cli.evidence` and `.evaluation`. Each `mnemotree.evidence.<module>` path still
   offers every name it had in 1.0, as the same objects, and type checkers see them.
+  It offers only those: names added after 1.0, and modules such as `json` that a 1.0
+  module happened to import, are not reachable through the old paths.
   Patching a function through an old path no longer reaches the code that calls it;
   patch the new module instead.
 - Deliberate failures derive from `mnemotree.MnemotreeError`: `InvalidInput`,

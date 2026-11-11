@@ -15,7 +15,7 @@ Key locations:
 - Providers: `src/mnemotree/providers/` (`embeddings.py`, `extraction.py` with `OpenAIExtractor`, `retry.py`)
 - Add/Search HTTP service: `src/mnemotree/service/` (`app.py`, `schemas.py`, `request_log.py`, `presets.py`)
 - Evaluation and ablations: `src/mnemotree/evaluation.py`
-- 1.0 import paths: `src/mnemotree/evidence/` only re-exports the moved modules, and nothing else in the package may import it; 2.0 deletes the directory (`tests/test_compat_paths.py`, which pins every 1.0 name)
+- 1.0 import paths: `src/mnemotree/evidence/` only re-exports the 1.0 names from the moved modules, and nothing else in the package may import it; 2.0 deletes the directory (`tests/test_compat_paths.py`, which pins every 1.0 name)
 - Public API: `src/mnemotree/memory.py` (`Memory`, `MemoryItem`, `Recall`)
 - CLI/MCP JSON config, opened as an engine with `Config.open(path)`: `src/mnemotree/config.py`
 - Exceptions (`MnemotreeError`, `InvalidInput`, `ConfigurationError`, `IngestConflict`, `ProviderError`): `src/mnemotree/errors.py`

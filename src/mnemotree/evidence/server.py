@@ -3,10 +3,15 @@
 Also re-exports the names the 1.0 module offered that now live elsewhere.
 """
 
+from mnemotree.core.models import Evidence as Evidence
 from mnemotree.core.models import Message as Message
+from mnemotree.core.models import SearchOptions as SearchOptions
 from mnemotree.core.models import scope as scope
-from mnemotree.engine import EvidenceEngine
-from mnemotree.service.app import *
+from mnemotree.engine import EvidenceEngine as Memory  # the engine's 1.0 name
+from mnemotree.errors import IngestConflict as IngestConflict
+from mnemotree.service.app import MAX_DETAIL_ERRORS as MAX_DETAIL_ERRORS
+from mnemotree.service.app import create_app as create_app
+from mnemotree.service.app import response_item as response_item
 from mnemotree.service.presets import AML_TOKEN_BUDGET as AML_TOKEN_BUDGET
 from mnemotree.service.presets import aml_options as aml_options
 from mnemotree.service.request_log import BOOT as BOOT
@@ -23,6 +28,3 @@ from mnemotree.service.schemas import AddMessage as AddMessage
 from mnemotree.service.schemas import AddRequest as AddRequest
 from mnemotree.service.schemas import Request as Request
 from mnemotree.service.schemas import SearchRequest as SearchRequest
-
-# The engine's 1.0 name.
-Memory = EvidenceEngine

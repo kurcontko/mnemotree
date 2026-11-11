@@ -2,8 +2,8 @@
 
 The engine's modules moved to ``mnemotree.engine``, ``mnemotree.core``, ``.ingest``,
 ``.retrieval``, ``.storage``, ``.providers``, ``.service``, ``.cli.evidence`` and
-``.evaluation``. Each ``mnemotree.evidence.<module>`` re-exports the module that
-replaced it and is imported only when used. Nothing outside this package imports it.
+``.evaluation``. Each ``mnemotree.evidence.<module>`` re-exports the names its 1.0
+module offered and is imported only when used. Nothing outside this package imports it.
 """
 
 from ..core.models import (
