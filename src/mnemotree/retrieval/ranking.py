@@ -79,7 +79,7 @@ def fuse(
         Candidate(
             chunk=by_id[id],
             channels=contributions,
-            fusion_score=sum(
+            fusion_score=max(
                 weights[channel] / (k + value.rank) for channel, value in contributions.items()
             ),
         )
