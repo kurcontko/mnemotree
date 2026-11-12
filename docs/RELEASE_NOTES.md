@@ -12,8 +12,19 @@ caller that passes an engine by keyword:
 
 # 1.0.4 (2026-11-12)
 
-Every 1.0 import path and class name keeps working. The one removal is payload
-sampling in the evidence HTTP service (last item).
+Every 1.0 import path and class name keeps working. Three changes can break a 1.0
+caller: functions that take an engine renamed that parameter, the store's `ingest`
+takes one argument (next two items), and payload sampling is removed from the
+evidence HTTP service (last item).
+
+- Functions that take an engine call the parameter `engine`, not `memory`:
+  `create_app`, `aml_options`, `Memory.from_engine`, and in `mnemotree.evaluation`
+  `evaluate`, `ablate`, `ablate_context`, `ablate_retrieval`, `retrieval_variants`,
+  `ingest_corpus` and `score_queries`. Passing the engine positionally works as
+  before; passing it as `memory=` no longer does.
+- `SQLiteEvidenceStore.ingest` takes one `mnemotree.storage.store.IngestBatch` in
+  place of nine arguments. Only code that writes to the store directly is affected;
+  `EvidenceEngine.add` and `Memory.remember` are unchanged.
 
 - The engine is `mnemotree.EvidenceEngine`. `mnemotree.evidence.Memory` is the same
   class under its 1.0 name.

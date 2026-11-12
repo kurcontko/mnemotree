@@ -6,6 +6,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -33,6 +34,22 @@ class Window(NamedTuple):
     source: Source
     start: int
     end: int
+
+
+@dataclass(frozen=True, slots=True)
+class IngestBatch:
+    """One Add request, ready to store: its sources, chunks, atoms and their vectors."""
+
+    namespace: str
+    request_id: str
+    session_id: str
+    body_hash: str
+    sources: Sequence[Source]
+    chunks: Sequence[Chunk]
+    # One per chunk; required when the database has an embedding spec.
+    vectors: Sequence[Sequence[float]] | None = None
+    atoms: Sequence[Atom] = ()
+    atom_vectors: Sequence[Sequence[float]] | None = None
 
 
 class IngestBlobs(NamedTuple):
@@ -108,22 +125,9 @@ class SQLiteEvidenceStore:
                 )
             return receipt.model_copy(update={"replayed": True})
 
-    def ingest(
-        self,
-        namespace: str,
-        request_id: str,
-        session_id: str,
-        body_hash: str,
-        sources: Sequence[Source],
-        chunks: Sequence[Chunk],
-        vectors: Sequence[Sequence[float]] | None,
-        atoms: Sequence[Atom] = (),
-        atom_vectors: Sequence[Sequence[float]] | None = None,
-    ) -> IngestReceipt:
-        scope(namespace)
-        blobs = self._ingest_blobs(
-            namespace, request_id, session_id, sources, chunks, vectors, atoms, atom_vectors
-        )
+    def ingest(self, batch: IngestBatch) -> IngestReceipt:
+        scope(batch.namespace)
+        blobs = self._ingest_blobs(batch)
         with self.transaction():
             # Another process may have configured the file since this instance opened it.
             if (
@@ -133,50 +137,42 @@ class SQLiteEvidenceStore:
                 raise ConfigurationError(
                     "database configuration changed; reopen this Memory instance"
                 )
-            replay = self.receipt(namespace, request_id, body_hash)
+            replay = self.receipt(batch.namespace, batch.request_id, batch.body_hash)
             if replay:
                 return replay
             try:
-                self._insert(namespace, request_id, session_id, sources, chunks, blobs.chunks)
-                self.atoms.insert(namespace, atoms, blobs.atoms)
+                self._insert(batch, blobs.chunks)
+                self.atoms.insert(batch.namespace, batch.atoms, blobs.atoms)
             except sqlite3.IntegrityError as exc:
                 raise IngestConflict(
                     "source IDs must identify distinct occurrences within a namespace"
                 ) from exc
             receipt = IngestReceipt(
-                namespace=namespace,
-                request_id=request_id,
-                session_id=session_id,
-                source_ids=tuple(source.id for source in sources),
-                chunk_count=len(chunks),
-                atom_count=len(atoms),
+                namespace=batch.namespace,
+                request_id=batch.request_id,
+                session_id=batch.session_id,
+                source_ids=tuple(source.id for source in batch.sources),
+                chunk_count=len(batch.chunks),
+                atom_count=len(batch.atoms),
             )
             self.db.execute(
                 "INSERT INTO evidence_requests VALUES(?,?,?,?)",
-                (namespace, request_id, body_hash, receipt.model_dump_json()),
+                (batch.namespace, batch.request_id, batch.body_hash, receipt.model_dump_json()),
             )
             return receipt
 
-    def _ingest_blobs(
-        self,
-        namespace: str,
-        request_id: str,
-        session_id: str,
-        sources: Sequence[Source],
-        chunks: Sequence[Chunk],
-        vectors: Sequence[Sequence[float]] | None,
-        atoms: Sequence[Atom],
-        atom_vectors: Sequence[Sequence[float]] | None,
-    ) -> IngestBlobs:
+    def _ingest_blobs(self, batch: IngestBatch) -> IngestBlobs:
         """Check a request is internally consistent; encode its vectors.
 
         Runs before the write transaction, so a malformed request never holds the lock.
         """
-        by_id = _check_sources(namespace, request_id, session_id, sources)
-        _check_chunks(chunks, by_id)
-        chunk_blobs = self._encode_chunk_vectors(vectors, len(chunks))
-        self._check_atoms(atoms, by_id)
-        return IngestBlobs(chunk_blobs, self._encode_atom_vectors(atom_vectors, len(atoms)))
+        by_id = _check_sources(batch.namespace, batch.request_id, batch.session_id, batch.sources)
+        _check_chunks(batch.chunks, by_id)
+        chunk_blobs = self._encode_chunk_vectors(batch.vectors, len(batch.chunks))
+        self._check_atoms(batch.atoms, by_id)
+        return IngestBlobs(
+            chunk_blobs, self._encode_atom_vectors(batch.atom_vectors, len(batch.atoms))
+        )
 
     def _encode_chunk_vectors(
         self, vectors: Sequence[Sequence[float]] | None, chunk_count: int
@@ -212,16 +208,10 @@ class SQLiteEvidenceStore:
             raise ProviderError("every atom requires an embedding")
         return [vector_blob(vector, self.embedding_spec.dimensions) for vector in vectors]
 
-    def _insert(
-        self,
-        namespace: str,
-        request_id: str,
-        session_id: str,
-        sources: Sequence[Source],
-        chunks: Sequence[Chunk],
-        blobs: Sequence[bytes],
-    ) -> None:
+    def _insert(self, batch: IngestBatch, blobs: Sequence[bytes]) -> None:
         """Write sources, chunks and their index rows; the caller holds the transaction."""
+        namespace, request_id, session_id = batch.namespace, batch.request_id, batch.session_id
+        sources, chunks = batch.sources, batch.chunks
         next_seq = self.db.execute(
             "SELECT coalesce(max(session_seq) + 1, 0) FROM evidence_sources "
             "WHERE namespace=? AND session_id=?",
