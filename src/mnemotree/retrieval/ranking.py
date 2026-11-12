@@ -120,6 +120,9 @@ class RolePolicy(NamedTuple):
 
     boost: bool
     partition: bool
+    # The favored role, and the score added to its candidates when ``boost`` is set.
+    role: str = ""
+    boost_by: float = 0.0
 
 
 def role_policy(options: SearchOptions, assistant_share: float | None) -> RolePolicy:
@@ -130,9 +133,12 @@ def role_policy(options: SearchOptions, assistant_share: float | None) -> RolePo
             and assistant_share >= options.role_first_min_assistant_share
         )
     )
+    if not enabled or options.role_first is None:
+        return RolePolicy(boost=False, partition=False)
+    if options.role_boost is None:
+        return RolePolicy(boost=False, partition=True, role=options.role_first)
     return RolePolicy(
-        boost=enabled and options.role_boost is not None,
-        partition=enabled and options.role_boost is None,
+        boost=True, partition=False, role=options.role_first, boost_by=options.role_boost
     )
 
 
