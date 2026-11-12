@@ -1,6 +1,6 @@
 # Add/Search HTTP service (mnemotree.service). Build from the repository root:
 #   docker build -f docker/service/Dockerfile -t mnemotree-service .
-FROM python:3.12-slim-bookworm AS build
+FROM python:3.14-slim-trixie AS build
 
 COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
@@ -15,7 +15,7 @@ COPY src ./src
 RUN uv build --wheel --out-dir /tmp/dist \
     && uv pip install --python .venv --no-deps --no-build /tmp/dist/*.whl
 
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-trixie
 
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app \
     && mkdir -p /data && chown app:app /data

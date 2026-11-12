@@ -3,7 +3,7 @@
 #   docker build -f docker/mcp/Dockerfile -t mnemotree-mcp .
 # An MCP client starts one container per session and talks to it over stdin/stdout:
 #   docker run -i --rm --network none -v mnemotree-memory:/data mnemotree-mcp
-FROM python:3.12-slim-bookworm AS build
+FROM python:3.14-slim-trixie AS build
 
 COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
@@ -19,7 +19,7 @@ COPY packages/mnemotree-mcp/src packages/mnemotree-mcp/src
 RUN uv build --wheel --all-packages --out-dir /tmp/dist \
     && uv pip install --python .venv --no-deps --no-build /tmp/dist/*.whl
 
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-trixie
 
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app \
     && mkdir -p /data && chown app:app /data
