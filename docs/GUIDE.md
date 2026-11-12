@@ -119,6 +119,19 @@ the next recall in any session. Concurrent first opens of a new file retry brief
 Separate processes do not share an embedder, though: each loads its own copy of a
 local model (the default one takes about 0.3 s to load once downloaded).
 
+`docker/mcp/Dockerfile` builds the same server into an image with the model baked
+in, so a session needs no network and no Python on the host:
+
+```bash
+docker build -f docker/mcp/Dockerfile -t mnemotree-mcp .
+claude mcp add mnemotree -- docker run -i --rm --network none -v mnemotree-memory:/data mnemotree-mcp
+```
+
+The database is `/data/memory.sqlite` in the named volume. Flags go after the
+image name and settings go in with `-e`, as in `-e MNEMOTREE_NAMESPACE=work`. An
+HTTP embedder needs the network, so drop `--network none` for one. A host directory
+mounted on `/data` must be writable by uid 10001.
+
 Stored text is plain text in the database and comes back verbatim, so anything
 stored can reach the model: keep secrets out of it. Text that a model saved from
 an untrusted page can also carry instructions into later sessions. The server
@@ -339,6 +352,19 @@ message merged into each hit, one chunk per source message and at most 100 items
 channel returns 100 candidates, or 300 when a history averages more than 2 chunks per
 message. User turns rank first when assistant text is at least 65% of a history. A
 `search` block replaces these defaults rather than merging with them.
+
+`docker/service/` holds a Dockerfile and a compose file for the service alone. The
+container runs as uid 10001, keeps the database in the `/data` volume and listens
+on `127.0.0.1:8000` of the host, so put a TLS proxy in front before exposing it:
+
+```bash
+cd docker/service
+MNEMOTREE_API_KEY='replace-with-your-service-key' docker compose up -d --build
+curl -fsS http://127.0.0.1:8000/health
+```
+
+Without a config the container is lexical. For embeddings, mount a config and pass
+`--config`, as the comments in `compose.yaml` show.
 
 `docker/aml/` holds a Caddy-fronted deployment and its smoke test. Its
 `config.example.json` uses `text-embedding-v4` at 1,024 dimensions through DashScope's

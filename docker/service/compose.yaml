@@ -1,0 +1,26 @@
+# Usage, from this directory:
+#   MNEMOTREE_API_KEY=<key> docker compose up -d --build
+# The service listens on 127.0.0.1:8000. Put a TLS proxy in front before exposing it.
+services:
+  memory:
+    build:
+      context: ../..
+      dockerfile: docker/service/Dockerfile
+    image: mnemotree-service:latest
+    restart: unless-stopped
+    environment:
+      MNEMOTREE_API_KEY: ${MNEMOTREE_API_KEY:?set the key clients send as a Bearer token}
+      # The key of the embedding provider, if the config names one.
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+    volumes:
+      - memory-data:/data
+    # For embeddings, mount a config and pass it:
+    #   - ./config.json:/config/config.json:ro
+    # command: ["--db", "/data/memory.sqlite", "--config", "/config/config.json",
+    #           "serve", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    stop_grace_period: 30s
+
+volumes:
+  memory-data:
