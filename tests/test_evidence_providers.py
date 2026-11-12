@@ -5,6 +5,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from functools import partial
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -274,3 +275,40 @@ def test_providers_import_without_tenacity_for_local_embeddings():
         "from mnemotree.providers.embeddings import OpenAIEmbedder, SentenceTransformerEmbedder"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+class ModernSentenceTransformer:
+    """sentence-transformers >= 5.6: the old dimension method warns."""
+
+    def __init__(self, model, *, revision):
+        self.loaded = (model, revision)
+
+    def get_embedding_dimension(self):
+        return 3
+
+    def get_sentence_embedding_dimension(self):
+        raise AssertionError("deprecated method called")
+
+
+class LegacySentenceTransformer:
+    """sentence-transformers before 5.6: only the old dimension method exists."""
+
+    def __init__(self, model, *, revision):
+        self.loaded = (model, revision)
+
+    def get_sentence_embedding_dimension(self):
+        return 4
+
+
+@pytest.mark.parametrize(
+    ("model_class", "dimensions"),
+    [(ModernSentenceTransformer, 3), (LegacySentenceTransformer, 4)],
+)
+def test_sentence_transformer_dimensions_across_versions(monkeypatch, model_class, dimensions):
+    from mnemotree.providers.embeddings import SentenceTransformerEmbedder
+
+    module = SimpleNamespace(SentenceTransformer=model_class)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+    embedder = SentenceTransformerEmbedder("toy", revision="abc")
+    assert embedder.spec.dimensions == dimensions
+    assert embedder.model.loaded == ("toy", "abc")
