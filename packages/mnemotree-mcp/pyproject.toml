@@ -1,13 +1,13 @@
 [project]
 name = "mnemotree-mcp"
 # Released together with mnemotree, at the same version.
-version = "1.0.3"
+version = "1.0.4"
 description = "Mnemotree's MCP memory server with a local embedding model, no configuration needed"
 authors = [
     { name = "kurcontko", email = "mikeqrc@gmail.com" }
 ]
 dependencies = [
-    "mnemotree==1.0.3",
+    "mnemotree==1.0.4",
     "fastembed>=0.9.1,<0.10",
 ]
 requires-python = ">=3.11"

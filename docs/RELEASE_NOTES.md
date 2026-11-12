@@ -1,4 +1,4 @@
-# Unreleased
+# 1.0.4 (2026-11-12)
 
 Every 1.0 import path and class name keeps working. The one removal is payload
 sampling in the evidence HTTP service (last item).
