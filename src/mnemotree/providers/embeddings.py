@@ -238,16 +238,11 @@ class SentenceTransformerEmbedder:
 
         self.model = SentenceTransformer(model, revision=revision)
         self.query_prompt, self.document_prompt = query_prompt, document_prompt
-        # sentence-transformers 5.6 renamed the method and warns on the old name;
-        # earlier releases only have the old one.
-        dimension = getattr(self.model, "get_embedding_dimension", None)
-        if dimension is None:
-            dimension = self.model.get_sentence_embedding_dimension
         self.spec = EmbeddingSpec(
             provider="sentence-transformers",
             model=model,
             revision=f"{revision}|query={query_prompt}|document={document_prompt}",
-            dimensions=dimension(),
+            dimensions=self.model.get_embedding_dimension(),
         )
 
     async def _encode(self, texts: Sequence[str], prompt: str) -> list[list[float]]:

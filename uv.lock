@@ -1058,7 +1058,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.10" },
-    { name = "sentence-transformers", marker = "extra == 'lite'", specifier = ">=2.7.0" },
+    { name = "sentence-transformers", marker = "extra == 'lite'", specifier = ">=5.4" },
     { name = "sqlite-vec", specifier = ">=0.1.9,<0.2.0" },
     { name = "tenacity", marker = "extra == 'dev'", specifier = ">=9.2.1,<10" },
     { name = "tenacity", marker = "extra == 'embeddings'", specifier = ">=9.2.1,<10" },

@@ -277,8 +277,8 @@ def test_providers_import_without_tenacity_for_local_embeddings():
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-class ModernSentenceTransformer:
-    """sentence-transformers >= 5.6: the old dimension method warns."""
+class FakeSentenceTransformer:
+    """sentence-transformers >= 5.4: the old dimension method warns."""
 
     def __init__(self, model, *, revision):
         self.loaded = (model, revision)
@@ -290,25 +290,11 @@ class ModernSentenceTransformer:
         raise AssertionError("deprecated method called")
 
 
-class LegacySentenceTransformer:
-    """sentence-transformers before 5.6: only the old dimension method exists."""
-
-    def __init__(self, model, *, revision):
-        self.loaded = (model, revision)
-
-    def get_sentence_embedding_dimension(self):
-        return 4
-
-
-@pytest.mark.parametrize(
-    ("model_class", "dimensions"),
-    [(ModernSentenceTransformer, 3), (LegacySentenceTransformer, 4)],
-)
-def test_sentence_transformer_dimensions_across_versions(monkeypatch, model_class, dimensions):
+def test_sentence_transformer_reads_the_dimension_without_the_deprecated_method(monkeypatch):
     from mnemotree.providers.embeddings import SentenceTransformerEmbedder
 
-    module = SimpleNamespace(SentenceTransformer=model_class)
+    module = SimpleNamespace(SentenceTransformer=FakeSentenceTransformer)
     monkeypatch.setitem(sys.modules, "sentence_transformers", module)
     embedder = SentenceTransformerEmbedder("toy", revision="abc")
-    assert embedder.spec.dimensions == dimensions
+    assert embedder.spec.dimensions == 3
     assert embedder.model.loaded == ("toy", "abc")
