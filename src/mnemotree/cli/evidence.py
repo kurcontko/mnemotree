@@ -133,10 +133,10 @@ def main() -> None:
     config = Config.model_validate_json(args.config.read_text()) if args.config else Config()
     try:
         api_key = secret(args.key_env) if args.command == "serve" else None
-        memory = config.open(args.db)
+        engine = config.open(args.db)
     except ConfigurationError as exc:
         raise SystemExit(f"mnemotree-evidence: {exc}") from None
-    with memory:
+    with engine:
         if api_key is not None:
             import uvicorn
 
@@ -144,15 +144,15 @@ def main() -> None:
             from ..service.presets import aml_options
             from ..service.request_log import BOOT, emit, utc_now
 
-            options = config.search or aml_options(memory)
+            options = config.search or aml_options(engine)
             app = create_app(
-                memory,
+                engine,
                 api_key=api_key,
                 options=options,
                 request_log=args.request_log,
             )
             configure_logging()
-            spec = memory.embedder.spec if memory.embedder is not None else None
+            spec = engine.embedder.spec if engine.embedder is not None else None
             emit(
                 {
                     "event": "startup",
@@ -175,10 +175,8 @@ def main() -> None:
                 access_log=False,
             )
         else:
-            options = config.search or SearchOptions(
-                mode="hybrid" if memory.embedder else "lexical"
-            )
-            asyncio.run(run(args, memory, options))
+            options = config.search or engine.default_options()
+            asyncio.run(run(args, engine, options))
 
 
 async def run(args: argparse.Namespace, memory: EvidenceEngine, options: SearchOptions) -> None:

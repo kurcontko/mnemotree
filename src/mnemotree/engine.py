@@ -293,7 +293,7 @@ class EvidenceEngine:
         scope(namespace)
         if not isinstance(query, str) or not query.strip():
             raise InvalidInput("query must not be blank")
-        options = options or SearchOptions(mode="hybrid" if self.embedder else "lexical")
+        options = options or self.default_options()
         if options.representation != "raw" and self.store.extractor_config is None:
             raise ConfigurationError("atom retrieval requires an extracted corpus")
         watch = Stopwatch()
@@ -350,6 +350,10 @@ class EvidenceEngine:
             # Stopped last, so the total includes building the trace.
             trace=trace.model_copy(update={"timings_ms": watch.stop()}),
         )
+
+    def default_options(self) -> SearchOptions:
+        """Hybrid retrieval when an embedder is configured, lexical otherwise."""
+        return SearchOptions(mode="hybrid" if self.embedder else "lexical")
 
     async def _plan_query(
         self, query: str, query_options: Sequence[str] | None, options: SearchOptions

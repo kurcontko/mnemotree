@@ -777,3 +777,10 @@ async def test_packaging_does_not_decide_what_survives(tmp_path):
         )
         result = await memory.search("tail", "pressure valve failed", options=service_like())
         assert "03:14" in result.context
+
+
+def test_default_options_follow_the_embedder(tmp_path):
+    with Memory(tmp_path / "lexical.db") as memory:
+        assert memory.default_options() == SearchOptions(mode="lexical")
+    with Memory(tmp_path / "dense.db", embedder=ToyEmbedder()) as memory:
+        assert memory.default_options() == SearchOptions(mode="hybrid")
