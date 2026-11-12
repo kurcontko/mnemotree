@@ -22,12 +22,11 @@ from typing import Any
 
 import pytest
 
-from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
+from support import HashEmbedder, OneAtomPerPassage, OverlapReranker, WordCounter
 
 GOLDEN = Path(__file__).parent / "golden" / "retrieval"
 UPDATE = os.environ.get("MNEMOTREE_UPDATE_GOLDEN") == "1"
-WORD = re.compile(r"\w+|[^\w\s]")
 HEX_ID = re.compile(r"\b([0-9a-f]{12})[0-9a-f]{52}\b")
 START = datetime(2026, 3, 2, 9, 0, tzinfo=UTC)
 
@@ -72,49 +71,6 @@ QUERIES: list[tuple[str, list[str] | None]] = [
     ("Which city is the conference in?", ["A. Lisbon", "B. Porto"]),
     ("deployment migration warnings for shard 7", None),
 ]
-
-
-class WordCounter:
-    signature = "golden-words"
-
-    def count(self, text: str) -> int:
-        return len(WORD.findall(text))
-
-
-class HashEmbedder:
-    spec = EmbeddingSpec(provider="test", model="golden-hash", revision="1", dimensions=16)
-
-    def vector(self, text: str) -> list[float]:
-        vector = [0.0] * self.spec.dimensions
-        for word in re.findall(r"\w+", text.lower()):
-            digest = hashlib.sha256(word.encode()).digest()
-            vector[digest[0] % len(vector)] += 1.0 if digest[1] & 1 else -1.0
-        return vector if any(vector) else [1.0] + [0.0] * (len(vector) - 1)
-
-    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return [self.vector(text) for text in texts]
-
-    async def embed_query(self, text: str) -> list[float]:
-        return self.vector(text)
-
-
-class OverlapReranker:
-    async def score(self, query: str, texts: list[str]) -> list[float]:
-        terms = set(re.findall(r"\w+", query.lower()))
-        return [
-            len(terms & set(re.findall(r"\w+", text.lower()))) + 1 / (1 + len(text))
-            for text in texts
-        ]
-
-
-class OneAtomPerPassage:
-    spec = ExtractorSpec(provider="test", model="golden", revision="1", prompt_hash="golden")
-
-    async def extract(self, passages: Any) -> list[AtomDraft]:
-        return [
-            AtomDraft(text=p.text, citations=(Citation(passage_id=p.id, quote=p.text),))
-            for p in passages
-        ]
 
 
 def aml_preset() -> dict[str, Any]:
@@ -207,9 +163,9 @@ def snapshot(dump: dict[str, Any]) -> dict[str, Any]:
 async def run_case(tmp_path: Path, kind: str, options: dict[str, Any]) -> list[Any]:
     memory = Memory(
         tmp_path / "golden.db",
-        embedder=HashEmbedder() if kind != "lexical" else None,
+        embedder=HashEmbedder("golden-hash", 16) if kind != "lexical" else None,
         reranker=OverlapReranker() if kind == "reranked" else None,
-        extractor=OneAtomPerPassage() if kind == "atoms" else None,
+        extractor=OneAtomPerPassage("golden", "golden") if kind == "atoms" else None,
         token_counter=WordCounter(),
         chunk_size=200,
         chunk_overlap=40,

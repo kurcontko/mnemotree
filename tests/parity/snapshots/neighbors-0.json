@@ -1,0 +1,1915 @@
+{
+ "search_options": {
+  "representation": "raw",
+  "atom_weight": 1.0,
+  "mode": "hybrid",
+  "limit": 100,
+  "candidate_limit": 100,
+  "token_budget": 8000,
+  "neighbor_chunks": 0,
+  "neighbor_messages": 0,
+  "neighbor_chars": 1200,
+  "merge_blocks": true,
+  "order": "rank",
+  "rrf_k": 60,
+  "lexical_weight": 1.0,
+  "dense_weight": 1.0,
+  "chunks_per_source": 1,
+  "role_first": "user",
+  "role_boost": null,
+  "role_first_min_assistant_share": 0.65,
+  "model_query_policy": "combined",
+  "deep_candidate_limit": 300,
+  "deep_history_density": 2.0
+ },
+ "results": [
+  {
+   "user_id": "pair-chat",
+   "query": "When did Maya adopt Pepper?",
+   "options": null,
+   "context": "sha256:549a55e70cb2 len=4024",
+   "evidence": [
+    {
+     "id": "c23de1ea4f37",
+     "source_id": "c6f25bb8bd17",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.030798,
+     "rerank_score": null,
+     "merged": [
+      "57c683c6e391",
+      "5df069668a14",
+      "5c1db755f011",
+      "28f98a03651a",
+      "b781a5dc7297",
+      "47747051adc6",
+      "45f2edadb5da"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "8cf50a0a445d",
+     "source_id": "a38f6d44369e",
+     "span": [
+      0,
+      106
+     ],
+     "score": 0.029877,
+     "rerank_score": null,
+     "merged": [
+      "2160af7d50cb",
+      "6bcd74c4507a",
+      "d63056cf78b6",
+      "a58104513042",
+      "f96f55c22443",
+      "6f71964d45f2",
+      "e29fd4b9c2c7"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "92da073507a6",
+     "source_id": "89abc173903a",
+     "span": [
+      0,
+      100
+     ],
+     "score": 0.028787,
+     "rerank_score": null,
+     "merged": [
+      "4d65430afd9f",
+      "e0e9f9329c2a",
+      "3988d650fe5e",
+      "0eb8da90f6dd",
+      "2626cd505ca3",
+      "bb06c573ac1d",
+      "507b373a8fea"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "b6f14ac4122c",
+     "source_id": "91485691afcd",
+     "span": [
+      0,
+      98
+     ],
+     "score": 0.027971,
+     "rerank_score": null,
+     "merged": [
+      "e4465ab9cbe1",
+      "bb09ea5ae4fd",
+      "b35482ea9051",
+      "a8b8aff9895a",
+      "614b638ee0f5",
+      "6a5d33a9cc94",
+      "0c66749d81ef"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    }
+   ],
+   "candidates": "sha256:de16f5a37f45 len=1032",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 5,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 6,
+    "model_query_tokens": 6,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "What breed is Maya's dog?",
+   "options": null,
+   "context": "sha256:63812e094955 len=4024",
+   "evidence": [
+    {
+     "id": "92da073507a6",
+     "source_id": "89abc173903a",
+     "span": [
+      0,
+      100
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "4d65430afd9f",
+      "e0e9f9329c2a",
+      "3988d650fe5e",
+      "0eb8da90f6dd",
+      "2626cd505ca3",
+      "bb06c573ac1d",
+      "507b373a8fea"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "6a5d33a9cc94",
+     "source_id": "7cdd108bf3a9",
+     "span": [
+      0,
+      75
+     ],
+     "score": 0.031514,
+     "rerank_score": null,
+     "merged": [
+      "0c66749d81ef",
+      "614b638ee0f5",
+      "b35482ea9051",
+      "a8b8aff9895a",
+      "bb09ea5ae4fd",
+      "b6f14ac4122c",
+      "e4465ab9cbe1"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "c23de1ea4f37",
+     "source_id": "c6f25bb8bd17",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.030331,
+     "rerank_score": null,
+     "merged": [
+      "57c683c6e391",
+      "5df069668a14",
+      "5c1db755f011",
+      "28f98a03651a",
+      "b781a5dc7297",
+      "45f2edadb5da",
+      "47747051adc6"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "2160af7d50cb",
+     "source_id": "b7e53337f638",
+     "span": [
+      0,
+      50
+     ],
+     "score": 0.029762,
+     "rerank_score": null,
+     "merged": [
+      "8cf50a0a445d",
+      "6bcd74c4507a",
+      "a58104513042",
+      "f96f55c22443",
+      "6f71964d45f2",
+      "d63056cf78b6",
+      "e29fd4b9c2c7"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    }
+   ],
+   "candidates": "sha256:5bf5024080c7 len=1032",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 5,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 8,
+    "model_query_tokens": 8,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "How long did Tom take to finish the half marathon?",
+   "options": null,
+   "context": "sha256:c4678219d527 len=4024",
+   "evidence": [
+    {
+     "id": "6f71964d45f2",
+     "source_id": "8cf8d781049a",
+     "span": [
+      0,
+      55
+     ],
+     "score": 0.03101,
+     "rerank_score": null,
+     "merged": [
+      "e29fd4b9c2c7",
+      "f96f55c22443",
+      "a58104513042",
+      "d63056cf78b6",
+      "6bcd74c4507a",
+      "8cf50a0a445d",
+      "2160af7d50cb"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "5c1db755f011",
+     "source_id": "c0136c41d15b",
+     "span": [
+      0,
+      49
+     ],
+     "score": 0.03031,
+     "rerank_score": null,
+     "merged": [
+      "47747051adc6",
+      "5df069668a14",
+      "b781a5dc7297",
+      "28f98a03651a",
+      "45f2edadb5da",
+      "c23de1ea4f37",
+      "57c683c6e391"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "4d65430afd9f",
+     "source_id": "1b681ad05131",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.029116,
+     "rerank_score": null,
+     "merged": [
+      "92da073507a6",
+      "e0e9f9329c2a",
+      "3988d650fe5e",
+      "0eb8da90f6dd",
+      "2626cd505ca3",
+      "bb06c573ac1d",
+      "507b373a8fea"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "bb09ea5ae4fd",
+     "source_id": "076940d50fbd",
+     "span": [
+      0,
+      51
+     ],
+     "score": 0.016393,
+     "rerank_score": null,
+     "merged": [
+      "b35482ea9051",
+      "e4465ab9cbe1",
+      "a8b8aff9895a",
+      "614b638ee0f5",
+      "b6f14ac4122c",
+      "6a5d33a9cc94",
+      "0c66749d81ef"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    }
+   ],
+   "candidates": "sha256:f8366ea98a3f len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 11,
+    "model_query_tokens": 11,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "Where is Tom's sister moving and why?",
+   "options": null,
+   "context": "sha256:de1f05dfa9e0 len=4024",
+   "evidence": [
+    {
+     "id": "6a5d33a9cc94",
+     "source_id": "7cdd108bf3a9",
+     "span": [
+      0,
+      75
+     ],
+     "score": 0.031778,
+     "rerank_score": null,
+     "merged": [
+      "0c66749d81ef",
+      "614b638ee0f5",
+      "a8b8aff9895a",
+      "b6f14ac4122c",
+      "e4465ab9cbe1",
+      "bb09ea5ae4fd",
+      "b35482ea9051"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "2160af7d50cb",
+     "source_id": "b7e53337f638",
+     "span": [
+      0,
+      50
+     ],
+     "score": 0.03101,
+     "rerank_score": null,
+     "merged": [
+      "8cf50a0a445d",
+      "6bcd74c4507a",
+      "6f71964d45f2",
+      "f96f55c22443",
+      "e29fd4b9c2c7",
+      "d63056cf78b6",
+      "a58104513042"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "4d65430afd9f",
+     "source_id": "1b681ad05131",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.030366,
+     "rerank_score": null,
+     "merged": [
+      "92da073507a6",
+      "e0e9f9329c2a",
+      "507b373a8fea",
+      "bb06c573ac1d",
+      "2626cd505ca3",
+      "0eb8da90f6dd",
+      "3988d650fe5e"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "45f2edadb5da",
+     "source_id": "1dd529c66973",
+     "span": [
+      0,
+      70
+     ],
+     "score": 0.013699,
+     "rerank_score": null,
+     "merged": [
+      "28f98a03651a",
+      "b781a5dc7297",
+      "47747051adc6",
+      "57c683c6e391",
+      "c23de1ea4f37",
+      "5c1db755f011",
+      "5df069668a14"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    }
+   ],
+   "candidates": "sha256:be632928f7b7 len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "What did Maya make for her mother's birthday, and what went wrong?",
+   "options": null,
+   "context": "sha256:9db049f71679 len=4024",
+   "evidence": [
+    {
+     "id": "2160af7d50cb",
+     "source_id": "b7e53337f638",
+     "span": [
+      0,
+      50
+     ],
+     "score": 0.032787,
+     "rerank_score": null,
+     "merged": [
+      "8cf50a0a445d",
+      "6bcd74c4507a",
+      "f96f55c22443",
+      "d63056cf78b6",
+      "6f71964d45f2",
+      "a58104513042",
+      "e29fd4b9c2c7"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "6a5d33a9cc94",
+     "source_id": "7cdd108bf3a9",
+     "span": [
+      0,
+      75
+     ],
+     "score": 0.032002,
+     "rerank_score": null,
+     "merged": [
+      "614b638ee0f5",
+      "0c66749d81ef",
+      "a8b8aff9895a",
+      "b35482ea9051",
+      "bb09ea5ae4fd",
+      "b6f14ac4122c",
+      "e4465ab9cbe1"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "92da073507a6",
+     "source_id": "89abc173903a",
+     "span": [
+      0,
+      100
+     ],
+     "score": 0.031754,
+     "rerank_score": null,
+     "merged": [
+      "4d65430afd9f",
+      "e0e9f9329c2a",
+      "bb06c573ac1d",
+      "2626cd505ca3",
+      "3988d650fe5e",
+      "0eb8da90f6dd",
+      "507b373a8fea"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "28f98a03651a",
+     "source_id": "aa8eda68aba7",
+     "span": [
+      0,
+      54
+     ],
+     "score": 0.013889,
+     "rerank_score": null,
+     "merged": [
+      "45f2edadb5da",
+      "b781a5dc7297",
+      "c23de1ea4f37",
+      "5df069668a14",
+      "5c1db755f011",
+      "57c683c6e391",
+      "47747051adc6"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    }
+   ],
+   "candidates": "sha256:b935dbe93405 len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 16,
+    "model_query_tokens": 16,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "Which race is Tom planning to run in December?",
+   "options": null,
+   "context": "sha256:63812e094955 len=4024",
+   "evidence": [
+    {
+     "id": "4d65430afd9f",
+     "source_id": "1b681ad05131",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.030579,
+     "rerank_score": null,
+     "merged": [
+      "92da073507a6",
+      "e0e9f9329c2a",
+      "3988d650fe5e",
+      "0eb8da90f6dd",
+      "2626cd505ca3",
+      "bb06c573ac1d",
+      "507b373a8fea"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "e4465ab9cbe1",
+     "source_id": "95a25512d37b",
+     "span": [
+      0,
+      93
+     ],
+     "score": 0.030303,
+     "rerank_score": null,
+     "merged": [
+      "bb09ea5ae4fd",
+      "b6f14ac4122c",
+      "b35482ea9051",
+      "0c66749d81ef",
+      "6a5d33a9cc94",
+      "614b638ee0f5",
+      "a8b8aff9895a"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "47747051adc6",
+     "source_id": "1b12ff900cad",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.02895,
+     "rerank_score": null,
+     "merged": [
+      "5c1db755f011",
+      "b781a5dc7297",
+      "28f98a03651a",
+      "45f2edadb5da",
+      "5df069668a14",
+      "c23de1ea4f37",
+      "57c683c6e391"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "6f71964d45f2",
+     "source_id": "8cf8d781049a",
+     "span": [
+      0,
+      55
+     ],
+     "score": 0.028739,
+     "rerank_score": null,
+     "merged": [
+      "e29fd4b9c2c7",
+      "f96f55c22443",
+      "d63056cf78b6",
+      "a58104513042",
+      "6bcd74c4507a",
+      "2160af7d50cb",
+      "8cf50a0a445d"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    }
+   ],
+   "candidates": "sha256:f1f74dcef54b len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "What size is the Dutch oven I bought?",
+   "options": null,
+   "context": "sha256:92e8a0e65377 len=13669",
+   "evidence": [
+    {
+     "id": "5c82285a6551",
+     "source_id": "c46dd5b254d9",
+     "span": [
+      0,
+      80
+     ],
+     "score": 0.032787,
+     "rerank_score": null,
+     "merged": [
+      "de2c92463b8e",
+      "feafe93c5eff",
+      "9b1c65ccfeb8",
+      "d3a741238a6b",
+      "e6f69dbefe8f",
+      "79b5380238ec",
+      "b508fd079632",
+      "81d741fe99a3"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "2bd7f9575640",
+     "source_id": "d277c1d072b4",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.016129,
+     "rerank_score": null,
+     "merged": [
+      "7a6f91196bfa",
+      "bc3fed4347f1",
+      "39c72619e7be",
+      "22a2eeb70f9b",
+      "02fbc0d6585b"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.015873,
+     "rerank_score": null,
+     "merged": [
+      "a71a04a66c35",
+      "19c802fb98bd",
+      "26b7e348ee57",
+      "f5f9af20ef13",
+      "a5b276f92a14",
+      "240b829600b7"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "2856890b7956",
+     "source_id": "23ba8a59927b",
+     "span": [
+      0,
+      87
+     ],
+     "score": 0.013158,
+     "rerank_score": null,
+     "merged": [
+      "79f71b4b281e",
+      "beddacc427ba",
+      "73102361ebc4",
+      "0f1f7cb52765",
+      "7ace4f9d091c",
+      "c116893c88ee",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:96f531f9c874 len=795",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 9,
+    "model_query_tokens": 9,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "How much is my rent now?",
+   "options": [
+    "A. 1,150 euros",
+    "B. 1,240 euros",
+    "C. 1,350 euros",
+    "D. 1,800 euros"
+   ],
+   "context": "sha256:6e6d533d8f6b len=13669",
+   "evidence": [
+    {
+     "id": "02fbc0d6585b",
+     "source_id": "9b3a4c27b50a",
+     "span": [
+      0,
+      131
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "22a2eeb70f9b",
+      "2bd7f9575640",
+      "7a6f91196bfa",
+      "bc3fed4347f1",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "a5b276f92a14",
+     "source_id": "d62ac543d888",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "f5f9af20ef13",
+      "26b7e348ee57",
+      "19c802fb98bd",
+      "78f541cd97d5",
+      "a71a04a66c35",
+      "240b829600b7"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "81d741fe99a3",
+      "5c82285a6551",
+      "de2c92463b8e",
+      "feafe93c5eff",
+      "e6f69dbefe8f",
+      "79b5380238ec",
+      "b508fd079632",
+      "9b1c65ccfeb8"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.013514,
+     "rerank_score": null,
+     "merged": [
+      "7ace4f9d091c",
+      "73102361ebc4",
+      "beddacc427ba",
+      "79f71b4b281e",
+      "2856890b7956",
+      "c116893c88ee",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:7cf1fe4570f6 len=836",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 12,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 31,
+    "model_query_tokens": 31,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "At what temperature should the sourdough bake after the lid comes off?",
+   "options": null,
+   "context": "sha256:6e6d533d8f6b len=13669",
+   "evidence": [
+    {
+     "id": "2bd7f9575640",
+     "source_id": "d277c1d072b4",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.032522,
+     "rerank_score": null,
+     "merged": [
+      "7a6f91196bfa",
+      "bc3fed4347f1",
+      "22a2eeb70f9b",
+      "02fbc0d6585b",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.032002,
+     "rerank_score": null,
+     "merged": [
+      "a71a04a66c35",
+      "19c802fb98bd",
+      "26b7e348ee57",
+      "f5f9af20ef13",
+      "a5b276f92a14",
+      "240b829600b7"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.027253,
+     "rerank_score": null,
+     "merged": [
+      "b508fd079632",
+      "feafe93c5eff",
+      "de2c92463b8e",
+      "5c82285a6551",
+      "e6f69dbefe8f",
+      "9b1c65ccfeb8",
+      "81d741fe99a3",
+      "79b5380238ec"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "beddacc427ba",
+     "source_id": "4bafdaafc99b",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "79f71b4b281e",
+      "2856890b7956",
+      "73102361ebc4",
+      "0f1f7cb52765",
+      "7ace4f9d091c",
+      "c116893c88ee",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:857133db19eb len=827",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 11,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 13,
+    "model_query_tokens": 13,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "How much did I end up paying for the gravel bike compared with the original price?",
+   "options": null,
+   "context": "sha256:1f4677a12786 len=13669",
+   "evidence": [
+    {
+     "id": "02fbc0d6585b",
+     "source_id": "9b3a4c27b50a",
+     "span": [
+      0,
+      131
+     ],
+     "score": 0.031025,
+     "rerank_score": null,
+     "merged": [
+      "22a2eeb70f9b",
+      "2bd7f9575640",
+      "7a6f91196bfa",
+      "bc3fed4347f1",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "feafe93c5eff",
+     "source_id": "8c20b65ad683",
+     "span": [
+      0,
+      57
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "79b5380238ec",
+      "5c82285a6551",
+      "9b1c65ccfeb8",
+      "d3a741238a6b",
+      "e6f69dbefe8f",
+      "81d741fe99a3",
+      "de2c92463b8e",
+      "b508fd079632"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "a5b276f92a14",
+     "source_id": "d62ac543d888",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.0125,
+     "rerank_score": null,
+     "merged": [
+      "240b829600b7",
+      "26b7e348ee57",
+      "19c802fb98bd",
+      "78f541cd97d5",
+      "a71a04a66c35",
+      "f5f9af20ef13"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "2856890b7956",
+     "source_id": "23ba8a59927b",
+     "span": [
+      0,
+      87
+     ],
+     "score": 0.012346,
+     "rerank_score": null,
+     "merged": [
+      "79f71b4b281e",
+      "beddacc427ba",
+      "73102361ebc4",
+      "0f1f7cb52765",
+      "e6f0a8b7a2be",
+      "7ace4f9d091c",
+      "c116893c88ee"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:6e6cb33450b3 len=776",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 17,
+    "model_query_tokens": 17,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "Which day of the week should the database cutover happen?",
+   "options": [
+    "A. Monday",
+    "B. Tuesday",
+    "C. Friday",
+    "D. Sunday"
+   ],
+   "context": "sha256:6b5aa3fe5209 len=13669",
+   "evidence": [
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.030159,
+     "rerank_score": null,
+     "merged": [
+      "7ace4f9d091c",
+      "73102361ebc4",
+      "2856890b7956",
+      "79f71b4b281e",
+      "beddacc427ba",
+      "e6f0a8b7a2be",
+      "c116893c88ee"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    },
+    {
+     "id": "bc3fed4347f1",
+     "source_id": "dfe72a8667a9",
+     "span": [
+      0,
+      90
+     ],
+     "score": 0.027056,
+     "rerank_score": null,
+     "merged": [
+      "39c72619e7be",
+      "7a6f91196bfa",
+      "02fbc0d6585b",
+      "22a2eeb70f9b",
+      "2bd7f9575640"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "feafe93c5eff",
+     "source_id": "8c20b65ad683",
+     "span": [
+      0,
+      57
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "79b5380238ec",
+      "5c82285a6551",
+      "81d741fe99a3",
+      "d3a741238a6b",
+      "e6f69dbefe8f",
+      "de2c92463b8e",
+      "9b1c65ccfeb8",
+      "b508fd079632"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "26b7e348ee57",
+     "source_id": "39893a3867d2",
+     "span": [
+      0,
+      97
+     ],
+     "score": 0.012987,
+     "rerank_score": null,
+     "merged": [
+      "f5f9af20ef13",
+      "a5b276f92a14",
+      "19c802fb98bd",
+      "78f541cd97d5",
+      "a71a04a66c35",
+      "240b829600b7"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    }
+   ],
+   "candidates": "sha256:7fa4d719ec6f len=829",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 12,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 23,
+    "model_query_tokens": 23,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "How many loaves had I baked by late September, and at what hydration?",
+   "options": null,
+   "context": "sha256:1f4677a12786 len=13669",
+   "evidence": [
+    {
+     "id": "bc3fed4347f1",
+     "source_id": "dfe72a8667a9",
+     "span": [
+      0,
+      90
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "39c72619e7be",
+      "7a6f91196bfa",
+      "2bd7f9575640",
+      "22a2eeb70f9b",
+      "02fbc0d6585b"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.029857,
+     "rerank_score": null,
+     "merged": [
+      "b508fd079632",
+      "5c82285a6551",
+      "79b5380238ec",
+      "feafe93c5eff",
+      "e6f69dbefe8f",
+      "de2c92463b8e",
+      "9b1c65ccfeb8",
+      "81d741fe99a3"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.029644,
+     "rerank_score": null,
+     "merged": [
+      "a71a04a66c35",
+      "19c802fb98bd",
+      "a5b276f92a14",
+      "f5f9af20ef13",
+      "26b7e348ee57",
+      "240b829600b7"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.0125,
+     "rerank_score": null,
+     "merged": [
+      "73102361ebc4",
+      "2856890b7956",
+      "c116893c88ee",
+      "beddacc427ba",
+      "7ace4f9d091c",
+      "79f71b4b281e",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:7126cc2111d1 len=826",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 12,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 15,
+    "model_query_tokens": 15,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "What did you recommend for the first morning in Lisbon?",
+   "options": null,
+   "context": "sha256:273f57c77b18 len=13669",
+   "evidence": [
+    {
+     "id": "2856890b7956",
+     "source_id": "23ba8a59927b",
+     "span": [
+      0,
+      87
+     ],
+     "score": 0.028442,
+     "rerank_score": null,
+     "merged": [
+      "79f71b4b281e",
+      "beddacc427ba",
+      "73102361ebc4",
+      "0f1f7cb52765",
+      "e6f0a8b7a2be",
+      "c116893c88ee",
+      "7ace4f9d091c"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    },
+    {
+     "id": "feafe93c5eff",
+     "source_id": "8c20b65ad683",
+     "span": [
+      0,
+      57
+     ],
+     "score": 0.013514,
+     "rerank_score": null,
+     "merged": [
+      "9b1c65ccfeb8",
+      "d3a741238a6b",
+      "79b5380238ec",
+      "5c82285a6551",
+      "e6f69dbefe8f",
+      "81d741fe99a3",
+      "b508fd079632",
+      "de2c92463b8e"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "2bd7f9575640",
+     "source_id": "d277c1d072b4",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.012987,
+     "rerank_score": null,
+     "merged": [
+      "22a2eeb70f9b",
+      "02fbc0d6585b",
+      "7a6f91196bfa",
+      "bc3fed4347f1",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.012821,
+     "rerank_score": null,
+     "merged": [
+      "19c802fb98bd",
+      "a5b276f92a14",
+      "240b829600b7",
+      "26b7e348ee57",
+      "a71a04a66c35",
+      "f5f9af20ef13"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    }
+   ],
+   "candidates": "sha256:2dc6de085ebe len=799",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 10,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 11,
+    "model_query_tokens": 11,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "数据库迁移 backfill 需要多久?",
+   "options": null,
+   "context": "sha256:6b5aa3fe5209 len=13669",
+   "evidence": [
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.013889,
+     "rerank_score": null,
+     "merged": [
+      "e6f0a8b7a2be",
+      "73102361ebc4",
+      "beddacc427ba",
+      "79f71b4b281e",
+      "2856890b7956",
+      "7ace4f9d091c",
+      "c116893c88ee"
+     ],
+     "neighbors": [],
+     "content": "sha256:8d2472b6148f len=4106"
+    },
+    {
+     "id": "02fbc0d6585b",
+     "source_id": "9b3a4c27b50a",
+     "span": [
+      0,
+      131
+     ],
+     "score": 0.012987,
+     "rerank_score": null,
+     "merged": [
+      "22a2eeb70f9b",
+      "2bd7f9575640",
+      "7a6f91196bfa",
+      "bc3fed4347f1",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.012821,
+     "rerank_score": null,
+     "merged": [
+      "b508fd079632",
+      "feafe93c5eff",
+      "79b5380238ec",
+      "5c82285a6551",
+      "e6f69dbefe8f",
+      "81d741fe99a3",
+      "9b1c65ccfeb8",
+      "de2c92463b8e"
+     ],
+     "neighbors": [],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "26b7e348ee57",
+     "source_id": "39893a3867d2",
+     "span": [
+      0,
+      97
+     ],
+     "score": 0.012658,
+     "rerank_score": null,
+     "merged": [
+      "240b829600b7",
+      "a5b276f92a14",
+      "19c802fb98bd",
+      "78f541cd97d5",
+      "a71a04a66c35",
+      "f5f9af20ef13"
+     ],
+     "neighbors": [],
+     "content": "sha256:b6b579aae2ae len=2734"
+    }
+   ],
+   "candidates": "sha256:bbebbd331184 len=745",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 2,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 4,
+    "model_query_tokens": 4,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "long-turns",
+   "query": "Which version does service checkout-20 run now?",
+   "options": null,
+   "context": "sha256:8ab35eb9b5ee len=29964",
+   "evidence": [
+    {
+     "id": "6954144581e6",
+     "source_id": "751667bbd082",
+     "span": [
+      0,
+      95
+     ],
+     "score": 0.032258,
+     "rerank_score": null,
+     "merged": [
+      "5ba61c0605c2"
+     ],
+     "neighbors": [],
+     "content": "sha256:bcc2e106aa2c len=319"
+    },
+    {
+     "id": "29e879e64666",
+     "source_id": "77e68723a5e6",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.022266,
+     "rerank_score": null,
+     "merged": [
+      "74a565accf94",
+      "4258b5043dfd",
+      "16513f5b433c",
+      "d9458798bcc3",
+      "c290a35fe059",
+      "27509f8ea505",
+      "3af31600b3f3",
+      "7060853cb5a4",
+      "8bdb3d2999a6",
+      "55a435f65791",
+      "779c0b681c75",
+      "0f1db5275e97",
+      "ecb6d5d6d8c7",
+      "94cd0866fe72",
+      "50bba1994ce5",
+      "35c1074c8dc9",
+      "28efa605054d",
+      "20ab7a46d38a",
+      "56c31ecb5392",
+      "d9cf4135d011",
+      "dfa517e27166",
+      "2673676e5b56",
+      "fa6906f31e83",
+      "193795830ae6",
+      "53342582a61d",
+      "404d55df5a02",
+      "fb50c555e175",
+      "46b4d341bbe9",
+      "82b95ec9a0da"
+     ],
+     "neighbors": [],
+     "content": "sha256:c752518d39f0 len=29643"
+    }
+   ],
+   "candidates": "sha256:c4a254fbb223 len=245",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 35,
+     "dense": 35
+    },
+    "packed_tokens": 7761,
+    "evidence_tokens": 7761,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "c89f8d25adab",
+     "c5ec558e4e83",
+     "6bad969d80df"
+    ],
+    "candidate_limit": 300,
+    "chunk_density": 5.833333,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.991815,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "long-turns",
+   "query": "How many open alerts does inventory-30 have?",
+   "options": null,
+   "context": "sha256:6dbe56a07f60 len=30465",
+   "evidence": [
+    {
+     "id": "4258b5043dfd",
+     "source_id": "eee61236d5b0",
+     "span": [
+      0,
+      70
+     ],
+     "score": 0.016393,
+     "rerank_score": null,
+     "merged": [
+      "27509f8ea505",
+      "29e879e64666",
+      "16513f5b433c",
+      "94cd0866fe72",
+      "8bdb3d2999a6",
+      "7060853cb5a4",
+      "82b95ec9a0da",
+      "c5ec558e4e83",
+      "404d55df5a02",
+      "0f1db5275e97",
+      "50bba1994ce5",
+      "46b4d341bbe9",
+      "3af31600b3f3",
+      "fa6906f31e83",
+      "35c1074c8dc9",
+      "ecb6d5d6d8c7",
+      "d9458798bcc3",
+      "dfa517e27166",
+      "74a565accf94",
+      "2673676e5b56",
+      "fb50c555e175",
+      "20ab7a46d38a",
+      "779c0b681c75",
+      "28efa605054d",
+      "6bad969d80df",
+      "c290a35fe059",
+      "53342582a61d",
+      "193795830ae6",
+      "d9cf4135d011"
+     ],
+     "neighbors": [],
+     "content": "sha256:f46d91464bbd len=30144"
+    },
+    {
+     "id": "6954144581e6",
+     "source_id": "751667bbd082",
+     "span": [
+      0,
+      95
+     ],
+     "score": 0.010638,
+     "rerank_score": null,
+     "merged": [
+      "5ba61c0605c2"
+     ],
+     "neighbors": [],
+     "content": "sha256:bcc2e106aa2c len=319"
+    }
+   ],
+   "candidates": "sha256:64809bae9795 len=193",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 30,
+     "dense": 35
+    },
+    "packed_tokens": 7902,
+    "evidence_tokens": 7902,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "55a435f65791",
+     "c89f8d25adab",
+     "56c31ecb5392"
+    ],
+    "candidate_limit": 300,
+    "chunk_density": 5.833333,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.991815,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  },
+  {
+   "user_id": "long-turns",
+   "query": "Which region is service auth-05 in?",
+   "options": [
+    "A. Frankfurt",
+    "B. Dublin",
+    "C. Virginia",
+    "D. Singapore"
+   ],
+   "context": "sha256:c9496bb85c9b len=30438",
+   "evidence": [
+    {
+     "id": "29e879e64666",
+     "source_id": "77e68723a5e6",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.026378,
+     "rerank_score": null,
+     "merged": [
+      "779c0b681c75",
+      "4258b5043dfd",
+      "16513f5b433c",
+      "d9458798bcc3",
+      "193795830ae6",
+      "8bdb3d2999a6",
+      "20ab7a46d38a",
+      "82b95ec9a0da",
+      "35c1074c8dc9",
+      "94cd0866fe72",
+      "c89f8d25adab",
+      "56c31ecb5392",
+      "fb50c555e175",
+      "ecb6d5d6d8c7",
+      "c5ec558e4e83",
+      "27509f8ea505",
+      "7060853cb5a4",
+      "c290a35fe059",
+      "50bba1994ce5",
+      "6bad969d80df",
+      "55a435f65791",
+      "0f1db5275e97",
+      "53342582a61d",
+      "74a565accf94",
+      "d9cf4135d011",
+      "dfa517e27166",
+      "3af31600b3f3",
+      "46b4d341bbe9",
+      "2673676e5b56",
+      "404d55df5a02"
+     ],
+     "neighbors": [],
+     "content": "sha256:8b830023c56d len=30117"
+    },
+    {
+     "id": "6954144581e6",
+     "source_id": "751667bbd082",
+     "span": [
+      0,
+      95
+     ],
+     "score": 0.024503,
+     "rerank_score": null,
+     "merged": [
+      "5ba61c0605c2"
+     ],
+     "neighbors": [],
+     "content": "sha256:bcc2e106aa2c len=319"
+    }
+   ],
+   "candidates": "sha256:612bc4eead92 len=248",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [],
+    "channel_counts": {
+     "lexical": 35,
+     "dense": 35
+    },
+    "packed_tokens": 7865,
+    "evidence_tokens": 7865,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "28efa605054d",
+     "fa6906f31e83"
+    ],
+    "candidate_limit": 300,
+    "chunk_density": 5.833333,
+    "original_model_query_tokens": 21,
+    "model_query_tokens": 21,
+    "model_query_truncated": false,
+    "assistant_share": 0.991815,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": []
+   }
+  }
+ ]
+}

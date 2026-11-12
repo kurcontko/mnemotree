@@ -1,0 +1,477 @@
+{
+ "about": "Synthetic histories shaped like LoCoMo and LongMemEval v1 (the public sets are not redistributable under their licences). Timestamps are epoch milliseconds, as the AML service receives them; a message without one was sent undated, and an empty message is one the service skips.",
+ "users": [
+  {
+   "user_id": "pair-chat",
+   "shape": "LoCoMo: two speakers in user/assistant roles, balanced turns, relative dates",
+   "sessions": [
+    {
+     "session_id": "pair-1",
+     "messages": [
+      {
+       "role": "user",
+       "content": "Hey Tom! Long time no see. I finally adopted a dog yesterday, a beagle called Pepper.",
+       "timestamp": 1683554160000
+      },
+      {
+       "role": "assistant",
+       "content": "Maya, that's great news! I remember you talking about a beagle for years. How is Pepper settling in?",
+       "timestamp": 1683554340000
+      },
+      {
+       "role": "user",
+       "content": "She chewed one of my running shoes within the first hour, so pretty well I think.",
+       "timestamp": 1683554520000
+      },
+      {
+       "role": "assistant",
+       "content": "Ha. Speaking of running, I signed up for the Riverside half marathon next month.",
+       "timestamp": 1683554700000
+      },
+      {
+       "role": "user",
+       "content": "Wow, your first one? I ran it two years ago, the hill at kilometre 15 is brutal.",
+       "timestamp": 1683554880000
+      },
+      {
+       "role": "assistant",
+       "content": "First one, yes. I started training last Monday and my knees already hate me.",
+       "timestamp": 1683555060000
+      },
+      {
+       "role": "user",
+       "content": "Get proper shoes fitted. I went to the shop on Canal Street and it changed everything.",
+       "timestamp": 1683555240000
+      },
+      {
+       "role": "assistant",
+       "content": "Will do. By the way, my sister Ines is moving to Rotterdam in the autumn for a job at the port.",
+       "timestamp": 1683555420000
+      }
+     ]
+    },
+    {
+     "session_id": "pair-2",
+     "messages": [
+      {
+       "role": "user",
+       "content": "Pepper had her first vet visit last Friday. She weighs 9 kilos and needs a dental check next year.",
+       "timestamp": 1685041920000
+      },
+      {
+       "role": "assistant",
+       "content": "Glad she is healthy. I did my longest run so far this morning, 14 kilometres along the river.",
+       "timestamp": 1685042100000
+      },
+      {
+       "role": "user",
+       "content": "Nice! Did you get the shoes fitted on Canal Street?",
+       "timestamp": 1685042280000
+      },
+      {
+       "role": "assistant",
+       "content": "I did, two days ago. They put me in a wider pair and the knee pain is mostly gone.",
+       "timestamp": 1685042460000
+      },
+      {
+       "role": "user",
+       "content": "Told you. I'm also starting a pottery class next week, Thursdays at the community centre.",
+       "timestamp": 1685042640000
+      },
+      {
+       "role": "assistant",
+       "content": "Pottery! You always said you wanted to make your own mugs.",
+       "timestamp": 1685042820000
+      },
+      {
+       "role": "user",
+       "content": "Exactly. First project is a set of four mugs for my mum's birthday in July.",
+       "timestamp": 1685043000000
+      },
+      {
+       "role": "assistant",
+       "content": "Lovely idea. Ines sends her regards, she found a flat near the Markthal already.",
+       "timestamp": 1685043180000
+      }
+     ]
+    },
+    {
+     "session_id": "pair-3",
+     "messages": [
+      {
+       "role": "assistant",
+       "content": "I finished the Riverside half marathon yesterday! Two hours and four minutes.",
+       "timestamp": 1687164000000
+      },
+      {
+       "role": "user",
+       "content": "Congratulations Tom!! How was the hill at kilometre 15?",
+       "timestamp": 1687164180000
+      },
+      {
+       "role": "assistant",
+       "content": "Brutal, exactly like you said. I walked about two hundred metres of it.",
+       "timestamp": 1687164360000
+      },
+      {
+       "role": "user",
+       "content": "Everyone does. I ran it in 1:58 two years ago and I walked there too.",
+       "timestamp": 1687164540000
+      },
+      {
+       "role": "assistant",
+       "content": "How are the mugs coming along?",
+       "timestamp": 1687164720000
+      },
+      {
+       "role": "user",
+       "content": "Two cracked in the kiln last week, so I am remaking them this Thursday.",
+       "timestamp": 1687164900000
+      },
+      {
+       "role": "assistant",
+       "content": "Oh no. Will they be ready for your mum's birthday?",
+       "timestamp": 1687165080000
+      },
+      {
+       "role": "user",
+       "content": "Just about, her birthday is on the 14th of July. Pepper is banned from the studio after she ate some clay.",
+       "timestamp": 1687165260000
+      }
+     ]
+    },
+    {
+     "session_id": "pair-4",
+     "messages": [
+      {
+       "role": "user",
+       "content": "Mum loved the mugs! She cried a little when she opened them on Friday.",
+       "timestamp": 1689541500000
+      },
+      {
+       "role": "assistant",
+       "content": "That is so sweet. Which glaze did you pick in the end?",
+       "timestamp": 1689541680000
+      },
+      {
+       "role": "user",
+       "content": "A speckled blue one. The teacher wants me to sell a few at the craft market in September.",
+       "timestamp": 1689541860000
+      },
+      {
+       "role": "assistant",
+       "content": "You should! I am thinking of the full marathon in Valencia this December, by the way.",
+       "timestamp": 1689542040000
+      },
+      {
+       "role": "user",
+       "content": "Already? You only ran your first half last month.",
+       "timestamp": 1689542220000
+      },
+      {
+       "role": "assistant",
+       "content": "I know, but Ines promised to come down from Rotterdam and cheer if I do it.",
+       "timestamp": 1689542400000
+      },
+      {
+       "role": "user",
+       "content": "Then you have no choice. Pepper and I will come too if I can find a dog sitter.",
+       "timestamp": 1689542580000
+      },
+      {
+       "role": "assistant",
+       "content": "Deal. I will book the flights next weekend.",
+       "timestamp": 1689542760000
+      }
+     ]
+    }
+   ],
+   "questions": [
+    {
+     "query": "When did Maya adopt Pepper?",
+     "top_k": 100
+    },
+    {
+     "query": "What breed is Maya's dog?",
+     "top_k": 100
+    },
+    {
+     "query": "How long did Tom take to finish the half marathon?",
+     "top_k": 100
+    },
+    {
+     "query": "Where is Tom's sister moving and why?",
+     "top_k": 100
+    },
+    {
+     "query": "What did Maya make for her mother's birthday, and what went wrong?",
+     "top_k": 5
+    },
+    {
+     "query": "Which race is Tom planning to run in December?",
+     "top_k": 100
+    }
+   ]
+  },
+  {
+   "user_id": "assistant-heavy",
+   "shape": "LongMemEval: short user turns, long assistant turns, repeats, updates, options",
+   "sessions": [
+    {
+     "session_id": "heavy-baking",
+     "messages": [
+      {
+       "role": "user",
+       "content": "I want to start baking sourdough. Can you give me a full schedule for one loaf?",
+       "timestamp": 1706955300000
+      },
+      {
+       "role": "assistant",
+       "content": "Happy to help you get a reliable sourdough routine going. Here is a full schedule for a 75% hydration country loaf, written for a kitchen at about 22 degrees:\n\n1. **Feed the starter**: The night before, mix 20 g of mature starter with 100 g of flour and 100 g of water. It should double within eight to ten hours and smell pleasantly sour, not sharp like nail polish remover.\n2. **Autolyse**: Combine 450 g of bread flour, 50 g of wholemeal flour and 375 g of water. Mix until no dry flour remains and rest the dough for forty-five minutes so the gluten begins to form without kneading.\n3. **Add starter and salt**: Work in 100 g of the ripe starter, wait twenty minutes, then add 10 g of salt dissolved in a spoonful of water. Squeeze the dough through your fingers until it feels uniform again.\n4. **Bulk fermentation**: Leave the dough covered for four to five hours. During the first two hours give it a set of stretch and folds every thirty minutes, four sets in total, then let it rest undisturbed.\n5. **Judge the bulk**: The dough is ready when it has grown by roughly half, the surface is domed and you can see bubbles along the edge of the bowl. Going by volume is more reliable than going by the clock.\n6. **Pre-shape**: Tip the dough onto an unfloured counter, fold it into a loose round with a bench scraper and leave it uncovered for twenty-five minutes. This relaxes the gluten before the final shape.\n7. **Final shape**: Flour the top lightly, flip the round, and fold it like a letter before rolling it into a tight batard. Place it seam side up in a banneton dusted with rice flour so it does not stick.\n8. **Cold proof**: Cover the banneton and refrigerate it for twelve to sixteen hours. The cold slows fermentation, deepens the flavour and makes the loaf far easier to score in the morning.\n9. **Preheat**: Put a Dutch oven in the oven and heat it to 250 degrees for a full forty-five minutes. A properly heated pot is the single biggest factor in getting a good oven spring at home.\n10. **Score and bake**: Turn the loaf onto baking paper, score it with one confident slash at a shallow angle, and bake it covered for twenty minutes. Remove the lid, lower the heat to 230 degrees and bake for another twenty to twenty-five minutes.\n11. **Cool**: Rest the loaf on a wire rack for at least two hours before slicing. Cutting it early releases steam and leaves the crumb gummy, however good it smells.\n12. **Troubleshooting**: A flat loaf usually means the bulk went too long; a dense, tight crumb with a few large holes usually means it was too short. Change one variable at a time and write down the room temperature.\n\nIf your kitchen is colder than 20 degrees, extend the bulk fermentation by an hour or use slightly warmer water. Would you like a version of this schedule that fits around a nine-to-five workday?",
+       "timestamp": 1706955480000
+      },
+      {
+       "role": "user",
+       "content": "Yes please, I work nine to five and leave the house at 8.",
+       "timestamp": 1706955660000
+      },
+      {
+       "role": "assistant",
+       "content": "Of course. Here is the same loaf rearranged so that nothing needs your attention during office hours:\n\n1. **Thursday 21:00**: Feed the starter at a 1:5:5 ratio and leave it on the counter overnight. The larger feed slows it down so it peaks around breakfast time rather than in the middle of the night.\n2. **Friday 07:00**: Mix flour and water for the autolyse before your shower. Add the starter and the salt at 07:45, just before you leave, and put the bowl straight into the fridge.\n3. **Friday 18:00**: Take the dough out when you get home. It will have fermented slowly all day; give it two sets of stretch and folds, thirty minutes apart, while it comes back to room temperature.\n4. **Friday 20:30**: Pre-shape, rest for twenty-five minutes, then do the final shape and move the banneton back into the fridge for the overnight cold proof.\n5. **Saturday 08:00**: Preheat the Dutch oven for forty-five minutes at 250 degrees, score the cold loaf and bake it exactly as in the standard schedule: twenty minutes covered, then twenty to twenty-five uncovered at 230 degrees.\n6. **Saturday 11:00**: Slice it for a late breakfast. The crust stays crisp for most of the day if you store the loaf cut side down on a wooden board instead of in a plastic bag.\n\nThis version spends about ten hours in the fridge during the bulk, so expect a tangier loaf than the same-day schedule. Shall I also scale the recipe for two loaves?",
+       "timestamp": 1706955840000
+      },
+      {
+       "role": "user",
+       "content": "",
+       "timestamp": 1706956020000
+      },
+      {
+       "role": "user",
+       "content": "Great. I just bought a 26 cm cast iron Dutch oven for this, it arrives tomorrow.",
+       "timestamp": 1706956200000
+      },
+      {
+       "role": "assistant",
+       "content": "A 26 cm pot is ideal for a loaf of this size. Season it lightly and it will last for decades.",
+       "timestamp": 1706956380000
+      }
+     ]
+    },
+    {
+     "session_id": "heavy-budget",
+     "messages": [
+      {
+       "role": "user",
+       "content": "Help me set up a monthly budget. I earn 3,400 euros net and my rent is 1,150 euros.",
+       "timestamp": 1707676200000
+      },
+      {
+       "role": "assistant",
+       "content": "Here is a first draft of a monthly budget based on the numbers you gave me, a net income of 3,400 euros and rent of 1,150 euros:\n\n1. **Housing**: 1,150 euros of rent plus about 140 euros for electricity, heating and internet. That is 38% of your income, slightly above the usual one-third guideline but normal for the city centre.\n2. **Groceries**: Plan 320 euros. You mentioned cooking most evenings, so this is realistic if you keep the two weekly shops and avoid top-up trips, which is where most people overspend.\n3. **Transport**: A monthly transit pass is 49 euros. Add 30 euros for the occasional shared car and bike maintenance, for a total of roughly 80 euros.\n4. **Insurance and phone**: Health and liability insurance come to about 210 euros and your phone contract is 25 euros. These are fixed, so set them up as standing orders on the day after payday.\n5. **Savings**: Move 500 euros to the savings account automatically on the first of the month. At that rate the 6,000 euro emergency fund you asked about is complete in twelve months.\n6. **Bike fund**: You said you want the gravel bike that costs 1,800 euros by next spring. Setting aside 200 euros a month gets you there in nine months without touching the emergency fund.\n7. **Eating out and leisure**: Keep 300 euros for restaurants, concerts and the climbing gym membership. Treat it as a hard limit and use a separate card so you always see what is left.\n8. **Subscriptions**: Streaming, cloud storage and the newspaper add up to 45 euros. Review these every three months; unused subscriptions are the easiest saving there is.\n9. **Buffer**: The remaining 430 euros or so covers clothes, gifts, repairs and travel. Anything unspent at the end of the month can be split between the bike fund and the emergency fund.\n\nOverall you are saving a little over 20% of your income, which is a healthy rate. If the rent increase you mentioned goes through, we should revisit the leisure and buffer lines first.",
+       "timestamp": 1707676380000
+      },
+      {
+       "role": "user",
+       "content": "That looks good. My climbing gym membership is 55 euros a month, is that inside the leisure line?",
+       "timestamp": 1707676560000
+      },
+      {
+       "role": "assistant",
+       "content": "Yes, the 55 euro climbing membership is part of the 300 euros for eating out and leisure, which leaves 245 euros for everything else in that line.",
+       "timestamp": 1707676740000
+      },
+      {
+       "role": "user",
+       "content": "Can you remind me what temperature I should bake the sourdough at?",
+       "timestamp": 1707676920000
+      },
+      {
+       "role": "assistant",
+       "content": "Preheat the Dutch oven to 250 degrees, bake covered for twenty minutes, then uncover and finish at 230 degrees for another twenty to twenty-five minutes.",
+       "timestamp": 1707677100000
+      }
+     ]
+    },
+    {
+     "session_id": "heavy-travel",
+     "messages": [
+      {
+       "role": "user",
+       "content": "I'm going to Lisbon for three days in April with my parents. Can you plan an itinerary?",
+       "timestamp": 1709370300000
+      },
+      {
+       "role": "assistant",
+       "content": "Three days is a good amount of time for Lisbon. Here is a relaxed itinerary that keeps the walking uphill to a minimum:\n\n1. **Day one, morning**: Start in Alfama. Take tram 28 early, before nine, to avoid the queues, and get off at the Portas do Sol viewpoint. Walk down through the lanes to the cathedral rather than up.\n2. **Day one, afternoon**: Have lunch at a tasca near the Feira da Ladra flea market, which runs on Tuesdays and Saturdays, then visit the National Tile Museum. It is a short taxi ride and rarely crowded.\n3. **Day one, evening**: Book a fado house in Alfama for dinner. The smaller ones seat about thirty people and expect silence during the songs, so arrive on time.\n4. **Day two, morning**: Take the train from Cais do Sodre to Belem. Visit the Jeronimos Monastery when it opens at half past nine and buy the combined ticket for the tower online beforehand.\n5. **Day two, afternoon**: Eat pasteis de nata at the bakery next to the monastery, then walk along the river to the MAAT museum. The roof is free to walk on and has the best view of the bridge.\n6. **Day two, evening**: Return to the centre and have dinner at the Time Out Market. It is busy, but everyone can choose a different stall, which works well for a group.\n7. **Day three, morning**: Take the forty-minute train to Sintra from Rossio station. Go straight to the Pena Palace by the 434 bus and leave the old town for after lunch.\n8. **Day three, afternoon**: Visit Quinta da Regaleira and its spiral well, then catch a train back by five. Trains run every twenty minutes, so there is no need to book a return time.\n9. **Day three, evening**: Finish with sunset drinks at the Miradouro da Senhora do Monte, the highest viewpoint in the city, and a last dinner in the Graca neighbourhood.\n\nA 72-hour Lisboa Card costs about 46 euros and covers the trams, the trains to Belem and Sintra and most of these museums. Shall I add restaurant suggestions for each evening?",
+       "timestamp": 1709370480000
+      },
+      {
+       "role": "user",
+       "content": "My dad has a bad knee, so please keep that in mind. We fly in on Thursday the 18th.",
+       "timestamp": 1709370660000
+      },
+      {
+       "role": "assistant",
+       "content": "Understood. The itinerary already avoids the steepest climbs; on day one take a taxi up to Portas do Sol instead of the tram if the queue is long, and skip the walk to the Senhora do Monte viewpoint by taking a tuk-tuk."
+      },
+      {
+       "role": "user",
+       "content": "Perfect. Also, the team asked me to summarise the database migration plan from this week's standup."
+      },
+      {
+       "role": "assistant",
+       "content": "Here is a summary of the migration plan we discussed, in the order the steps need to happen:\n\n1. **Freeze the schema**: No new columns on the orders table from Monday. Feature teams that need one must wait for the new cluster or use the JSON metadata field in the meantime.\n2. **Provision the replicas**: Three read replicas in the Frankfurt region, each with 64 GB of memory. Priya owns this step and expects it to take two working days.\n3. **Dual writes**: Enable dual writes behind the orders_v2 flag for 5% of traffic, then 25%, then 100%, holding each stage for twenty-four hours while comparing row counts.\n4. **Backfill**: Run the backfill job in batches of 10,000 rows with a 200 millisecond pause between batches. At that rate the 480 million rows take roughly four days.\n5. **Verification**: Compare checksums per customer shard. Any shard with more than 0.01% mismatched rows blocks the cutover and is investigated by the on-call engineer.\n6. **Cutover**: Switch reads to the new cluster on a Tuesday morning at 10:00, never on a Friday. Keep the old cluster in read-only mode for two weeks as a rollback path.\n7. **Cleanup**: Remove the dual-write code and the orders_v2 flag in the sprint after cutover, and delete the old cluster only once finance has signed off the monthly report.\n\nThe main risk is the backfill overlapping with the end-of-quarter reporting load, so the backfill should start no later than the 9th. Do you want this as a checklist for the team channel?"
+      }
+     ]
+    },
+    {
+     "session_id": "heavy-update",
+     "messages": [
+      {
+       "role": "user",
+       "content": "Bad news, my landlord is raising the rent to 1,240 euros from next month. Also I found the gravel bike second-hand for 1,350 euros.",
+       "timestamp": 1726865100000
+      },
+      {
+       "role": "assistant",
+       "content": "Thanks for the update. With the rent now at 1,240 euros from the first of October, here is what changes and what stays the same:\n\n1. **Housing**: 1,240 euros of rent plus the same 140 euros of utilities. Housing is now 41% of your net income, so the other lines need to absorb 90 euros a month.\n2. **Leisure**: Reduce the eating out and leisure line from 300 to 250 euros. Cancelling the second streaming service you mentioned covers another 12 euros.\n3. **Buffer**: Take the remaining 28 euros from the buffer, which leaves roughly 400 euros for irregular costs.\n4. **Savings**: Keep the 500 euro transfer exactly as it is. You have already built 2,000 euros of the emergency fund and the habit matters more than the amount.\n5. **Bike fund**: Keep the 200 euros as well. Since you found the gravel bike second-hand for 1,350 euros, you will reach the target about two months sooner than planned.\n\nThe emergency fund still completes on the original timeline. Do you want me to draft a short message to the landlord asking for the increase to be confirmed in writing?",
+       "timestamp": 1726865280000
+      },
+      {
+       "role": "user",
+       "content": "Can you remind me what temperature I should bake the sourdough at?",
+       "timestamp": 1726865460000
+      },
+      {
+       "role": "assistant",
+       "content": "Preheat the Dutch oven to 250 degrees, bake covered for twenty minutes, then uncover and finish at 230 degrees for another twenty to twenty-five minutes.",
+       "timestamp": 1726865640000
+      },
+      {
+       "role": "user",
+       "content": "Thanks. Last weekend I baked my tenth loaf, and I switched to 80% hydration two weeks ago.",
+       "timestamp": 1726865820000
+      },
+      {
+       "role": "assistant",
+       "content": "Ten loaves is a real milestone. At 80% hydration, shorten the bulk by about half an hour and wet your hands for shaping, because the dough will feel noticeably stickier.",
+       "timestamp": 1726866000000
+      }
+     ]
+    }
+   ],
+   "questions": [
+    {
+     "query": "What size is the Dutch oven I bought?",
+     "top_k": 100
+    },
+    {
+     "query": "How much is my rent now?",
+     "options": [
+      "A. 1,150 euros",
+      "B. 1,240 euros",
+      "C. 1,350 euros",
+      "D. 1,800 euros"
+     ],
+     "top_k": 100
+    },
+    {
+     "query": "At what temperature should the sourdough bake after the lid comes off?",
+     "top_k": 100
+    },
+    {
+     "query": "How much did I end up paying for the gravel bike compared with the original price?",
+     "top_k": 100
+    },
+    {
+     "query": "Which day of the week should the database cutover happen?",
+     "options": [
+      "A. Monday",
+      "B. Tuesday",
+      "C. Friday",
+      "D. Sunday"
+     ],
+     "top_k": 100
+    },
+    {
+     "query": "How many loaves had I baked by late September, and at what hydration?",
+     "top_k": 100
+    },
+    {
+     "query": "What did you recommend for the first morning in Lisbon?",
+     "top_k": 3
+    },
+    {
+     "query": "数据库迁移 backfill 需要多久?",
+     "top_k": 100
+    }
+   ]
+  },
+  {
+   "user_id": "long-turns",
+   "shape": "LongMemEval: pasted reports several chunks long (history density above 2 chunks per message)",
+   "sessions": [
+    {
+     "session_id": "deep-audit",
+     "messages": [
+      {
+       "role": "user",
+       "content": "Paste the full service audit from this morning so I have it on record.",
+       "timestamp": 1717509600000
+      },
+      {
+       "role": "assistant",
+       "content": "Here is the audit of all 170 services:\n\n1. Service search-01 in Dublin runs version 4.1.3, last deployed 2 days ago by team B; it has 7 open alerts, p95 latency of 137 ms and an error budget of 94% remaining.\n2. Service checkout-02 in Virginia runs version 4.2.6, last deployed 3 days ago by team C; it has 1 open alerts, p95 latency of 154 ms and an error budget of 89% remaining.\n3. Service inventory-03 in Singapore runs version 4.3.9, last deployed 4 days ago by team D; it has 8 open alerts, p95 latency of 171 ms and an error budget of 84% remaining.\n4. Service notifications-04 in Frankfurt runs version 4.4.2, last deployed 5 days ago by team E; it has 2 open alerts, p95 latency of 188 ms and an error budget of 79% remaining.\n5. Service auth-05 in Dublin runs version 4.5.5, last deployed 6 days ago by team F; it has 9 open alerts, p95 latency of 205 ms and an error budget of 74% remaining.\n6. Service catalog-06 in Virginia runs version 4.6.8, last deployed 7 days ago by team A; it has 3 open alerts, p95 latency of 222 ms and an error budget of 69% remaining.\n7. Service shipping-07 in Singapore runs version 4.0.1, last deployed 8 days ago by team B; it has 10 open alerts, p95 latency of 239 ms and an error budget of 64% remaining.\n8. Service reviews-08 in Frankfurt runs version 4.1.4, last deployed 9 days ago by team C; it has 4 open alerts, p95 latency of 256 ms and an error budget of 99% remaining.\n9. Service billing-09 in Dublin runs version 4.2.7, last deployed 10 days ago by team D; it has 11 open alerts, p95 latency of 273 ms and an error budget of 94% remaining.\n10. Service search-10 in Virginia runs version 4.3.0, last deployed 11 days ago by team E; it has 5 open alerts, p95 latency of 290 ms and an error budget of 89% remaining.\n11. Service checkout-11 in Singapore runs version 4.4.3, last deployed 12 days ago by team F; it has 12 open alerts, p95 latency of 307 ms and an error budget of 84% remaining.\n12. Service inventory-12 in Frankfurt runs version 4.5.6, last deployed 13 days ago by team A; it has 6 open alerts, p95 latency of 324 ms and an error budget of 79% remaining.\n13. Service notifications-13 in Dublin runs version 4.6.9, last deployed 14 days ago by team B; it has 0 open alerts, p95 latency of 341 ms and an error budget of 74% remaining.\n14. Service auth-14 in Virginia runs version 4.0.2, last deployed 15 days ago by team C; it has 7 open alerts, p95 latency of 358 ms and an error budget of 69% remaining.\n15. Service catalog-15 in Singapore runs version 4.1.5, last deployed 16 days ago by team D; it has 1 open alerts, p95 latency of 135 ms and an error budget of 64% remaining.\n16. Service shipping-16 in Frankfurt runs version 4.2.8, last deployed 17 days ago by team E; it has 8 open alerts, p95 latency of 152 ms and an error budget of 99% remaining.\n17. Service reviews-17 in Dublin runs version 4.3.1, last deployed 18 days ago by team F; it has 2 open alerts, p95 latency of 169 ms and an error budget of 94% remaining.\n18. Service billing-18 in Virginia runs version 4.4.4, last deployed 19 days ago by team A; it has 9 open alerts, p95 latency of 186 ms and an error budget of 89% remaining.\n19. Service search-19 in Singapore runs version 4.5.7, last deployed 20 days ago by team B; it has 3 open alerts, p95 latency of 203 ms and an error budget of 84% remaining.\n20. Service checkout-20 in Frankfurt runs version 4.6.0, last deployed 21 days ago by team C; it has 10 open alerts, p95 latency of 220 ms and an error budget of 79% remaining.\n21. Service inventory-21 in Dublin runs version 4.0.3, last deployed 22 days ago by team D; it has 4 open alerts, p95 latency of 237 ms and an error budget of 74% remaining.\n22. Service notifications-22 in Virginia runs version 4.1.6, last deployed 23 days ago by team E; it has 11 open alerts, p95 latency of 254 ms and an error budget of 69% remaining.\n23. Service auth-23 in Singapore runs version 4.2.9, last deployed 24 days ago by team F; it has 5 open alerts, p95 latency of 271 ms and an error budget of 64% remaining.\n24. Service catalog-24 in Frankfurt runs version 4.3.2, last deployed 25 days ago by team A; it has 12 open alerts, p95 latency of 288 ms and an error budget of 99% remaining.\n25. Service shipping-25 in Dublin runs version 4.4.5, last deployed 26 days ago by team B; it has 6 open alerts, p95 latency of 305 ms and an error budget of 94% remaining.\n26. Service reviews-26 in Virginia runs version 4.5.8, last deployed 27 days ago by team C; it has 0 open alerts, p95 latency of 322 ms and an error budget of 89% remaining.\n27. Service billing-27 in Singapore runs version 4.6.1, last deployed 1 days ago by team D; it has 7 open alerts, p95 latency of 339 ms and an error budget of 84% remaining.\n28. Service search-28 in Frankfurt runs version 4.0.4, last deployed 2 days ago by team E; it has 1 open alerts, p95 latency of 356 ms and an error budget of 79% remaining.\n29. Service checkout-29 in Dublin runs version 4.1.7, last deployed 3 days ago by team F; it has 8 open alerts, p95 latency of 133 ms and an error budget of 74% remaining.\n30. Service inventory-30 in Virginia runs version 4.2.0, last deployed 4 days ago by team A; it has 2 open alerts, p95 latency of 150 ms and an error budget of 69% remaining.\n31. Service notifications-31 in Singapore runs version 4.3.3, last deployed 5 days ago by team B; it has 9 open alerts, p95 latency of 167 ms and an error budget of 64% remaining.\n32. Service auth-32 in Frankfurt runs version 4.4.6, last deployed 6 days ago by team C; it has 3 open alerts, p95 latency of 184 ms and an error budget of 99% remaining.\n33. Service catalog-33 in Dublin runs version 4.5.9, last deployed 7 days ago by team D; it has 10 open alerts, p95 latency of 201 ms and an error budget of 94% remaining.\n34. Service shipping-34 in Virginia runs version 4.6.2, last deployed 8 days ago by team E; it has 4 open alerts, p95 latency of 218 ms and an error budget of 89% remaining.\n35. Service reviews-35 in Singapore runs version 4.0.5, last deployed 9 days ago by team F; it has 11 open alerts, p95 latency of 235 ms and an error budget of 84% remaining.\n36. Service billing-36 in Frankfurt runs version 4.1.8, last deployed 10 days ago by team A; it has 5 open alerts, p95 latency of 252 ms and an error budget of 79% remaining.\n37. Service search-37 in Dublin runs version 4.2.1, last deployed 11 days ago by team B; it has 12 open alerts, p95 latency of 269 ms and an error budget of 74% remaining.\n38. Service checkout-38 in Virginia runs version 4.3.4, last deployed 12 days ago by team C; it has 6 open alerts, p95 latency of 286 ms and an error budget of 69% remaining.\n39. Service inventory-39 in Singapore runs version 4.4.7, last deployed 13 days ago by team D; it has 0 open alerts, p95 latency of 303 ms and an error budget of 64% remaining.\n40. Service notifications-40 in Frankfurt runs version 4.5.0, last deployed 14 days ago by team E; it has 7 open alerts, p95 latency of 320 ms and an error budget of 99% remaining.\n41. Service auth-41 in Dublin runs version 4.6.3, last deployed 15 days ago by team F; it has 1 open alerts, p95 latency of 337 ms and an error budget of 94% remaining.\n42. Service catalog-42 in Virginia runs version 4.0.6, last deployed 16 days ago by team A; it has 8 open alerts, p95 latency of 354 ms and an error budget of 89% remaining.\n43. Service shipping-43 in Singapore runs version 4.1.9, last deployed 17 days ago by team B; it has 2 open alerts, p95 latency of 131 ms and an error budget of 84% remaining.\n44. Service reviews-44 in Frankfurt runs version 4.2.2, last deployed 18 days ago by team C; it has 9 open alerts, p95 latency of 148 ms and an error budget of 79% remaining.\n45. Service billing-45 in Dublin runs version 4.3.5, last deployed 19 days ago by team D; it has 3 open alerts, p95 latency of 165 ms and an error budget of 74% remaining.\n46. Service search-46 in Virginia runs version 4.4.8, last deployed 20 days ago by team E; it has 10 open alerts, p95 latency of 182 ms and an error budget of 69% remaining.\n47. Service checkout-47 in Singapore runs version 4.5.1, last deployed 21 days ago by team F; it has 4 open alerts, p95 latency of 199 ms and an error budget of 64% remaining.\n48. Service inventory-48 in Frankfurt runs version 4.6.4, last deployed 22 days ago by team A; it has 11 open alerts, p95 latency of 216 ms and an error budget of 99% remaining.\n49. Service notifications-49 in Dublin runs version 4.0.7, last deployed 23 days ago by team B; it has 5 open alerts, p95 latency of 233 ms and an error budget of 94% remaining.\n50. Service auth-50 in Virginia runs version 4.1.0, last deployed 24 days ago by team C; it has 12 open alerts, p95 latency of 250 ms and an error budget of 89% remaining.\n51. Service catalog-51 in Singapore runs version 4.2.3, last deployed 25 days ago by team D; it has 6 open alerts, p95 latency of 267 ms and an error budget of 84% remaining.\n52. Service shipping-52 in Frankfurt runs version 4.3.6, last deployed 26 days ago by team E; it has 0 open alerts, p95 latency of 284 ms and an error budget of 79% remaining.\n53. Service reviews-53 in Dublin runs version 4.4.9, last deployed 27 days ago by team F; it has 7 open alerts, p95 latency of 301 ms and an error budget of 74% remaining.\n54. Service billing-54 in Virginia runs version 4.5.2, last deployed 1 days ago by team A; it has 1 open alerts, p95 latency of 318 ms and an error budget of 69% remaining.\n55. Service search-55 in Singapore runs version 4.6.5, last deployed 2 days ago by team B; it has 8 open alerts, p95 latency of 335 ms and an error budget of 64% remaining.\n56. Service checkout-56 in Frankfurt runs version 4.0.8, last deployed 3 days ago by team C; it has 2 open alerts, p95 latency of 352 ms and an error budget of 99% remaining.\n57. Service inventory-57 in Dublin runs version 4.1.1, last deployed 4 days ago by team D; it has 9 open alerts, p95 latency of 129 ms and an error budget of 94% remaining.\n58. Service notifications-58 in Virginia runs version 4.2.4, last deployed 5 days ago by team E; it has 3 open alerts, p95 latency of 146 ms and an error budget of 89% remaining.\n59. Service auth-59 in Singapore runs version 4.3.7, last deployed 6 days ago by team F; it has 10 open alerts, p95 latency of 163 ms and an error budget of 84% remaining.\n60. Service catalog-60 in Frankfurt runs version 4.4.0, last deployed 7 days ago by team A; it has 4 open alerts, p95 latency of 180 ms and an error budget of 79% remaining.\n61. Service shipping-61 in Dublin runs version 4.5.3, last deployed 8 days ago by team B; it has 11 open alerts, p95 latency of 197 ms and an error budget of 74% remaining.\n62. Service reviews-62 in Virginia runs version 4.6.6, last deployed 9 days ago by team C; it has 5 open alerts, p95 latency of 214 ms and an error budget of 69% remaining.\n63. Service billing-63 in Singapore runs version 4.0.9, last deployed 10 days ago by team D; it has 12 open alerts, p95 latency of 231 ms and an error budget of 64% remaining.\n64. Service search-64 in Frankfurt runs version 4.1.2, last deployed 11 days ago by team E; it has 6 open alerts, p95 latency of 248 ms and an error budget of 99% remaining.\n65. Service checkout-65 in Dublin runs version 4.2.5, last deployed 12 days ago by team F; it has 0 open alerts, p95 latency of 265 ms and an error budget of 94% remaining.\n66. Service inventory-66 in Virginia runs version 4.3.8, last deployed 13 days ago by team A; it has 7 open alerts, p95 latency of 282 ms and an error budget of 89% remaining.\n67. Service notifications-67 in Singapore runs version 4.4.1, last deployed 14 days ago by team B; it has 1 open alerts, p95 latency of 299 ms and an error budget of 84% remaining.\n68. Service auth-68 in Frankfurt runs version 4.5.4, last deployed 15 days ago by team C; it has 8 open alerts, p95 latency of 316 ms and an error budget of 79% remaining.\n69. Service catalog-69 in Dublin runs version 4.6.7, last deployed 16 days ago by team D; it has 2 open alerts, p95 latency of 333 ms and an error budget of 74% remaining.\n70. Service shipping-70 in Virginia runs version 4.0.0, last deployed 17 days ago by team E; it has 9 open alerts, p95 latency of 350 ms and an error budget of 69% remaining.\n71. Service reviews-71 in Singapore runs version 4.1.3, last deployed 18 days ago by team F; it has 3 open alerts, p95 latency of 127 ms and an error budget of 64% remaining.\n72. Service billing-72 in Frankfurt runs version 4.2.6, last deployed 19 days ago by team A; it has 10 open alerts, p95 latency of 144 ms and an error budget of 99% remaining.\n73. Service search-73 in Dublin runs version 4.3.9, last deployed 20 days ago by team B; it has 4 open alerts, p95 latency of 161 ms and an error budget of 94% remaining.\n74. Service checkout-74 in Virginia runs version 4.4.2, last deployed 21 days ago by team C; it has 11 open alerts, p95 latency of 178 ms and an error budget of 89% remaining.\n75. Service inventory-75 in Singapore runs version 4.5.5, last deployed 22 days ago by team D; it has 5 open alerts, p95 latency of 195 ms and an error budget of 84% remaining.\n76. Service notifications-76 in Frankfurt runs version 4.6.8, last deployed 23 days ago by team E; it has 12 open alerts, p95 latency of 212 ms and an error budget of 79% remaining.\n77. Service auth-77 in Dublin runs version 4.0.1, last deployed 24 days ago by team F; it has 6 open alerts, p95 latency of 229 ms and an error budget of 74% remaining.\n78. Service catalog-78 in Virginia runs version 4.1.4, last deployed 25 days ago by team A; it has 0 open alerts, p95 latency of 246 ms and an error budget of 69% remaining.\n79. Service shipping-79 in Singapore runs version 4.2.7, last deployed 26 days ago by team B; it has 7 open alerts, p95 latency of 263 ms and an error budget of 64% remaining.\n80. Service reviews-80 in Frankfurt runs version 4.3.0, last deployed 27 days ago by team C; it has 1 open alerts, p95 latency of 280 ms and an error budget of 99% remaining.\n81. Service billing-81 in Dublin runs version 4.4.3, last deployed 1 days ago by team D; it has 8 open alerts, p95 latency of 297 ms and an error budget of 94% remaining.\n82. Service search-82 in Virginia runs version 4.5.6, last deployed 2 days ago by team E; it has 2 open alerts, p95 latency of 314 ms and an error budget of 89% remaining.\n83. Service checkout-83 in Singapore runs version 4.6.9, last deployed 3 days ago by team F; it has 9 open alerts, p95 latency of 331 ms and an error budget of 84% remaining.\n84. Service inventory-84 in Frankfurt runs version 4.0.2, last deployed 4 days ago by team A; it has 3 open alerts, p95 latency of 348 ms and an error budget of 79% remaining.\n85. Service notifications-85 in Dublin runs version 4.1.5, last deployed 5 days ago by team B; it has 10 open alerts, p95 latency of 125 ms and an error budget of 74% remaining.\n86. Service auth-86 in Virginia runs version 4.2.8, last deployed 6 days ago by team C; it has 4 open alerts, p95 latency of 142 ms and an error budget of 69% remaining.\n87. Service catalog-87 in Singapore runs version 4.3.1, last deployed 7 days ago by team D; it has 11 open alerts, p95 latency of 159 ms and an error budget of 64% remaining.\n88. Service shipping-88 in Frankfurt runs version 4.4.4, last deployed 8 days ago by team E; it has 5 open alerts, p95 latency of 176 ms and an error budget of 99% remaining.\n89. Service reviews-89 in Dublin runs version 4.5.7, last deployed 9 days ago by team F; it has 12 open alerts, p95 latency of 193 ms and an error budget of 94% remaining.\n90. Service billing-90 in Virginia runs version 4.6.0, last deployed 10 days ago by team A; it has 6 open alerts, p95 latency of 210 ms and an error budget of 89% remaining.\n91. Service search-91 in Singapore runs version 4.0.3, last deployed 11 days ago by team B; it has 0 open alerts, p95 latency of 227 ms and an error budget of 84% remaining.\n92. Service checkout-92 in Frankfurt runs version 4.1.6, last deployed 12 days ago by team C; it has 7 open alerts, p95 latency of 244 ms and an error budget of 79% remaining.\n93. Service inventory-93 in Dublin runs version 4.2.9, last deployed 13 days ago by team D; it has 1 open alerts, p95 latency of 261 ms and an error budget of 74% remaining.\n94. Service notifications-94 in Virginia runs version 4.3.2, last deployed 14 days ago by team E; it has 8 open alerts, p95 latency of 278 ms and an error budget of 69% remaining.\n95. Service auth-95 in Singapore runs version 4.4.5, last deployed 15 days ago by team F; it has 2 open alerts, p95 latency of 295 ms and an error budget of 64% remaining.\n96. Service catalog-96 in Frankfurt runs version 4.5.8, last deployed 16 days ago by team A; it has 9 open alerts, p95 latency of 312 ms and an error budget of 99% remaining.\n97. Service shipping-97 in Dublin runs version 4.6.1, last deployed 17 days ago by team B; it has 3 open alerts, p95 latency of 329 ms and an error budget of 94% remaining.\n98. Service reviews-98 in Virginia runs version 4.0.4, last deployed 18 days ago by team C; it has 10 open alerts, p95 latency of 346 ms and an error budget of 89% remaining.\n99. Service billing-99 in Singapore runs version 4.1.7, last deployed 19 days ago by team D; it has 4 open alerts, p95 latency of 123 ms and an error budget of 84% remaining.\n100. Service search-100 in Frankfurt runs version 4.2.0, last deployed 20 days ago by team E; it has 11 open alerts, p95 latency of 140 ms and an error budget of 79% remaining.\n101. Service checkout-101 in Dublin runs version 4.3.3, last deployed 21 days ago by team F; it has 5 open alerts, p95 latency of 157 ms and an error budget of 74% remaining.\n102. Service inventory-102 in Virginia runs version 4.4.6, last deployed 22 days ago by team A; it has 12 open alerts, p95 latency of 174 ms and an error budget of 69% remaining.\n103. Service notifications-103 in Singapore runs version 4.5.9, last deployed 23 days ago by team B; it has 6 open alerts, p95 latency of 191 ms and an error budget of 64% remaining.\n104. Service auth-104 in Frankfurt runs version 4.6.2, last deployed 24 days ago by team C; it has 0 open alerts, p95 latency of 208 ms and an error budget of 99% remaining.\n105. Service catalog-105 in Dublin runs version 4.0.5, last deployed 25 days ago by team D; it has 7 open alerts, p95 latency of 225 ms and an error budget of 94% remaining.\n106. Service shipping-106 in Virginia runs version 4.1.8, last deployed 26 days ago by team E; it has 1 open alerts, p95 latency of 242 ms and an error budget of 89% remaining.\n107. Service reviews-107 in Singapore runs version 4.2.1, last deployed 27 days ago by team F; it has 8 open alerts, p95 latency of 259 ms and an error budget of 84% remaining.\n108. Service billing-108 in Frankfurt runs version 4.3.4, last deployed 1 days ago by team A; it has 2 open alerts, p95 latency of 276 ms and an error budget of 79% remaining.\n109. Service search-109 in Dublin runs version 4.4.7, last deployed 2 days ago by team B; it has 9 open alerts, p95 latency of 293 ms and an error budget of 74% remaining.\n110. Service checkout-110 in Virginia runs version 4.5.0, last deployed 3 days ago by team C; it has 3 open alerts, p95 latency of 310 ms and an error budget of 69% remaining.\n111. Service inventory-111 in Singapore runs version 4.6.3, last deployed 4 days ago by team D; it has 10 open alerts, p95 latency of 327 ms and an error budget of 64% remaining.\n112. Service notifications-112 in Frankfurt runs version 4.0.6, last deployed 5 days ago by team E; it has 4 open alerts, p95 latency of 344 ms and an error budget of 99% remaining.\n113. Service auth-113 in Dublin runs version 4.1.9, last deployed 6 days ago by team F; it has 11 open alerts, p95 latency of 121 ms and an error budget of 94% remaining.\n114. Service catalog-114 in Virginia runs version 4.2.2, last deployed 7 days ago by team A; it has 5 open alerts, p95 latency of 138 ms and an error budget of 89% remaining.\n115. Service shipping-115 in Singapore runs version 4.3.5, last deployed 8 days ago by team B; it has 12 open alerts, p95 latency of 155 ms and an error budget of 84% remaining.\n116. Service reviews-116 in Frankfurt runs version 4.4.8, last deployed 9 days ago by team C; it has 6 open alerts, p95 latency of 172 ms and an error budget of 79% remaining.\n117. Service billing-117 in Dublin runs version 4.5.1, last deployed 10 days ago by team D; it has 0 open alerts, p95 latency of 189 ms and an error budget of 74% remaining.\n118. Service search-118 in Virginia runs version 4.6.4, last deployed 11 days ago by team E; it has 7 open alerts, p95 latency of 206 ms and an error budget of 69% remaining.\n119. Service checkout-119 in Singapore runs version 4.0.7, last deployed 12 days ago by team F; it has 1 open alerts, p95 latency of 223 ms and an error budget of 64% remaining.\n120. Service inventory-120 in Frankfurt runs version 4.1.0, last deployed 13 days ago by team A; it has 8 open alerts, p95 latency of 240 ms and an error budget of 99% remaining.\n121. Service notifications-121 in Dublin runs version 4.2.3, last deployed 14 days ago by team B; it has 2 open alerts, p95 latency of 257 ms and an error budget of 94% remaining.\n122. Service auth-122 in Virginia runs version 4.3.6, last deployed 15 days ago by team C; it has 9 open alerts, p95 latency of 274 ms and an error budget of 89% remaining.\n123. Service catalog-123 in Singapore runs version 4.4.9, last deployed 16 days ago by team D; it has 3 open alerts, p95 latency of 291 ms and an error budget of 84% remaining.\n124. Service shipping-124 in Frankfurt runs version 4.5.2, last deployed 17 days ago by team E; it has 10 open alerts, p95 latency of 308 ms and an error budget of 79% remaining.\n125. Service reviews-125 in Dublin runs version 4.6.5, last deployed 18 days ago by team F; it has 4 open alerts, p95 latency of 325 ms and an error budget of 74% remaining.\n126. Service billing-126 in Virginia runs version 4.0.8, last deployed 19 days ago by team A; it has 11 open alerts, p95 latency of 342 ms and an error budget of 69% remaining.\n127. Service search-127 in Singapore runs version 4.1.1, last deployed 20 days ago by team B; it has 5 open alerts, p95 latency of 359 ms and an error budget of 64% remaining.\n128. Service checkout-128 in Frankfurt runs version 4.2.4, last deployed 21 days ago by team C; it has 12 open alerts, p95 latency of 136 ms and an error budget of 99% remaining.\n129. Service inventory-129 in Dublin runs version 4.3.7, last deployed 22 days ago by team D; it has 6 open alerts, p95 latency of 153 ms and an error budget of 94% remaining.\n130. Service notifications-130 in Virginia runs version 4.4.0, last deployed 23 days ago by team E; it has 0 open alerts, p95 latency of 170 ms and an error budget of 89% remaining.\n131. Service auth-131 in Singapore runs version 4.5.3, last deployed 24 days ago by team F; it has 7 open alerts, p95 latency of 187 ms and an error budget of 84% remaining.\n132. Service catalog-132 in Frankfurt runs version 4.6.6, last deployed 25 days ago by team A; it has 1 open alerts, p95 latency of 204 ms and an error budget of 79% remaining.\n133. Service shipping-133 in Dublin runs version 4.0.9, last deployed 26 days ago by team B; it has 8 open alerts, p95 latency of 221 ms and an error budget of 74% remaining.\n134. Service reviews-134 in Virginia runs version 4.1.2, last deployed 27 days ago by team C; it has 2 open alerts, p95 latency of 238 ms and an error budget of 69% remaining.\n135. Service billing-135 in Singapore runs version 4.2.5, last deployed 1 days ago by team D; it has 9 open alerts, p95 latency of 255 ms and an error budget of 64% remaining.\n136. Service search-136 in Frankfurt runs version 4.3.8, last deployed 2 days ago by team E; it has 3 open alerts, p95 latency of 272 ms and an error budget of 99% remaining.\n137. Service checkout-137 in Dublin runs version 4.4.1, last deployed 3 days ago by team F; it has 10 open alerts, p95 latency of 289 ms and an error budget of 94% remaining.\n138. Service inventory-138 in Virginia runs version 4.5.4, last deployed 4 days ago by team A; it has 4 open alerts, p95 latency of 306 ms and an error budget of 89% remaining.\n139. Service notifications-139 in Singapore runs version 4.6.7, last deployed 5 days ago by team B; it has 11 open alerts, p95 latency of 323 ms and an error budget of 84% remaining.\n140. Service auth-140 in Frankfurt runs version 4.0.0, last deployed 6 days ago by team C; it has 5 open alerts, p95 latency of 340 ms and an error budget of 79% remaining.\n141. Service catalog-141 in Dublin runs version 4.1.3, last deployed 7 days ago by team D; it has 12 open alerts, p95 latency of 357 ms and an error budget of 74% remaining.\n142. Service shipping-142 in Virginia runs version 4.2.6, last deployed 8 days ago by team E; it has 6 open alerts, p95 latency of 134 ms and an error budget of 69% remaining.\n143. Service reviews-143 in Singapore runs version 4.3.9, last deployed 9 days ago by team F; it has 0 open alerts, p95 latency of 151 ms and an error budget of 64% remaining.\n144. Service billing-144 in Frankfurt runs version 4.4.2, last deployed 10 days ago by team A; it has 7 open alerts, p95 latency of 168 ms and an error budget of 99% remaining.\n145. Service search-145 in Dublin runs version 4.5.5, last deployed 11 days ago by team B; it has 1 open alerts, p95 latency of 185 ms and an error budget of 94% remaining.\n146. Service checkout-146 in Virginia runs version 4.6.8, last deployed 12 days ago by team C; it has 8 open alerts, p95 latency of 202 ms and an error budget of 89% remaining.\n147. Service inventory-147 in Singapore runs version 4.0.1, last deployed 13 days ago by team D; it has 2 open alerts, p95 latency of 219 ms and an error budget of 84% remaining.\n148. Service notifications-148 in Frankfurt runs version 4.1.4, last deployed 14 days ago by team E; it has 9 open alerts, p95 latency of 236 ms and an error budget of 79% remaining.\n149. Service auth-149 in Dublin runs version 4.2.7, last deployed 15 days ago by team F; it has 3 open alerts, p95 latency of 253 ms and an error budget of 74% remaining.\n150. Service catalog-150 in Virginia runs version 4.3.0, last deployed 16 days ago by team A; it has 10 open alerts, p95 latency of 270 ms and an error budget of 69% remaining.\n151. Service shipping-151 in Singapore runs version 4.4.3, last deployed 17 days ago by team B; it has 4 open alerts, p95 latency of 287 ms and an error budget of 64% remaining.\n152. Service reviews-152 in Frankfurt runs version 4.5.6, last deployed 18 days ago by team C; it has 11 open alerts, p95 latency of 304 ms and an error budget of 99% remaining.\n153. Service billing-153 in Dublin runs version 4.6.9, last deployed 19 days ago by team D; it has 5 open alerts, p95 latency of 321 ms and an error budget of 94% remaining.\n154. Service search-154 in Virginia runs version 4.0.2, last deployed 20 days ago by team E; it has 12 open alerts, p95 latency of 338 ms and an error budget of 89% remaining.\n155. Service checkout-155 in Singapore runs version 4.1.5, last deployed 21 days ago by team F; it has 6 open alerts, p95 latency of 355 ms and an error budget of 84% remaining.\n156. Service inventory-156 in Frankfurt runs version 4.2.8, last deployed 22 days ago by team A; it has 0 open alerts, p95 latency of 132 ms and an error budget of 79% remaining.\n157. Service notifications-157 in Dublin runs version 4.3.1, last deployed 23 days ago by team B; it has 7 open alerts, p95 latency of 149 ms and an error budget of 74% remaining.\n158. Service auth-158 in Virginia runs version 4.4.4, last deployed 24 days ago by team C; it has 1 open alerts, p95 latency of 166 ms and an error budget of 69% remaining.\n159. Service catalog-159 in Singapore runs version 4.5.7, last deployed 25 days ago by team D; it has 8 open alerts, p95 latency of 183 ms and an error budget of 64% remaining.\n160. Service shipping-160 in Frankfurt runs version 4.6.0, last deployed 26 days ago by team E; it has 2 open alerts, p95 latency of 200 ms and an error budget of 99% remaining.\n161. Service reviews-161 in Dublin runs version 4.0.3, last deployed 27 days ago by team F; it has 9 open alerts, p95 latency of 217 ms and an error budget of 94% remaining.\n162. Service billing-162 in Virginia runs version 4.1.6, last deployed 1 days ago by team A; it has 3 open alerts, p95 latency of 234 ms and an error budget of 89% remaining.\n163. Service search-163 in Singapore runs version 4.2.9, last deployed 2 days ago by team B; it has 10 open alerts, p95 latency of 251 ms and an error budget of 84% remaining.\n164. Service checkout-164 in Frankfurt runs version 4.3.2, last deployed 3 days ago by team C; it has 4 open alerts, p95 latency of 268 ms and an error budget of 79% remaining.\n165. Service inventory-165 in Dublin runs version 4.4.5, last deployed 4 days ago by team D; it has 11 open alerts, p95 latency of 285 ms and an error budget of 74% remaining.\n166. Service notifications-166 in Virginia runs version 4.5.8, last deployed 5 days ago by team E; it has 5 open alerts, p95 latency of 302 ms and an error budget of 69% remaining.\n167. Service auth-167 in Singapore runs version 4.6.1, last deployed 6 days ago by team F; it has 12 open alerts, p95 latency of 319 ms and an error budget of 64% remaining.\n168. Service catalog-168 in Frankfurt runs version 4.0.4, last deployed 7 days ago by team A; it has 6 open alerts, p95 latency of 336 ms and an error budget of 99% remaining.\n169. Service shipping-169 in Dublin runs version 4.1.7, last deployed 8 days ago by team B; it has 0 open alerts, p95 latency of 353 ms and an error budget of 94% remaining.\n170. Service reviews-170 in Virginia runs version 4.2.0, last deployed 9 days ago by team C; it has 7 open alerts, p95 latency of 130 ms and an error budget of 89% remaining.",
+       "timestamp": 1717509780000
+      },
+      {
+       "role": "user",
+       "content": "Which services have no error budget problems? Anything above 90% remaining is fine.",
+       "timestamp": 1717509960000
+      },
+      {
+       "role": "assistant",
+       "content": "Most of them. The ones to watch are those below 65% remaining; I would start with the checkout and billing services in Frankfurt.",
+       "timestamp": 1717510140000
+      }
+     ]
+    },
+    {
+     "session_id": "deep-followup",
+     "messages": [
+      {
+       "role": "user",
+       "content": "Team C says service checkout-20 was redeployed last night. Note that it now runs version 4.7.1.",
+       "timestamp": 1717579800000
+      },
+      {
+       "role": "assistant",
+       "content": "Noted: checkout-20 now runs version 4.7.1 after last night's redeploy by team C.",
+       "timestamp": 1717579980000
+      }
+     ]
+    }
+   ],
+   "questions": [
+    {
+     "query": "Which version does service checkout-20 run now?",
+     "top_k": 100
+    },
+    {
+     "query": "How many open alerts does inventory-30 have?",
+     "top_k": 100
+    },
+    {
+     "query": "Which region is service auth-05 in?",
+     "options": [
+      "A. Frankfurt",
+      "B. Dublin",
+      "C. Virginia",
+      "D. Singapore"
+     ],
+     "top_k": 10
+    }
+   ]
+  }
+ ]
+}

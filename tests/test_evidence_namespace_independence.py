@@ -5,15 +5,13 @@ user's data reorder another user's results without either seeing the other's rec
 """
 
 import asyncio
-import hashlib
-import re
 
 import pytest
 
-from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evidence import Memory, Message, SearchOptions
 from mnemotree.storage.atom_store import ATOM_FTS
 from mnemotree.storage.lexical import fts_table
+from support import HashEmbedder, OneAtomPerPassage
 
 ALICE = [
     ("user", "I keep an apple in my bag for the commute."),
@@ -33,35 +31,6 @@ QUERIES = [
     ("what fruit did I talk about", None),
     ("fence paint", ["A. green", "B. apple"]),
 ]
-
-
-class HashEmbedder:
-    """Deterministic bag of words: no network, and dense ranks follow the text."""
-
-    spec = EmbeddingSpec(provider="test", model="hash", revision="1", dimensions=32)
-
-    def vector(self, text: str) -> list[float]:
-        vector = [0.0] * self.spec.dimensions
-        for word in re.findall(r"\w+", text.lower()):
-            digest = hashlib.sha256(word.encode()).digest()
-            vector[digest[0] % len(vector)] += 1.0 if digest[1] & 1 else -1.0
-        return vector if any(vector) else [1.0] + [0.0] * (len(vector) - 1)
-
-    async def embed_documents(self, texts):
-        return [self.vector(text) for text in texts]
-
-    async def embed_query(self, text):
-        return self.vector(text)
-
-
-class OneAtomPerPassage:
-    spec = ExtractorSpec(provider="test", model="fixture", revision="1", prompt_hash="test")
-
-    async def extract(self, passages):
-        return [
-            AtomDraft(text=p.text, citations=(Citation(passage_id=p.id, quote=p.text),))
-            for p in passages
-        ]
 
 
 def aml_preset(memory: Memory) -> SearchOptions:

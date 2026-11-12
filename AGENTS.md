@@ -11,6 +11,7 @@ Key locations:
 - Pure ranking steps (query bounding, RRF fusion, role policies, chronological order): `src/mnemotree/retrieval/ranking.py`
 - Storage and indexes: `src/mnemotree/storage/` (`store.py`, `atom_store.py`, `lexical.py`; tables, version and embedding spec in `schema.py`; vector encoding in `vectors.py`)
 - Golden retrieval snapshots: `tests/test_golden_retrieval.py`, `tests/golden/retrieval/` (regenerate with `MNEMOTREE_UPDATE_GOLDEN=1`)
+- Text-track output parity for the service preset (engine and HTTP): `tests/test_parity.py`, `tests/parity/` (regenerate with `MNEMOTREE_UPDATE_PARITY=1`); shared deterministic providers in `tests/support.py`
 - Packing and token counting: `src/mnemotree/retrieval/packing.py`
 - Providers: `src/mnemotree/providers/` (`embeddings.py`, `extraction.py` with `OpenAIExtractor`, `retry.py`)
 - Add/Search HTTP service: `src/mnemotree/service/` (`app.py`, `schemas.py`, `request_log.py`, `presets.py`)

@@ -38,6 +38,16 @@ review:
 MNEMOTREE_UPDATE_GOLDEN=1 .venv/bin/pytest tests/test_golden_retrieval.py
 ```
 
+`tests/test_parity.py` does the same for what the AML text tracks are served: the
+unmodified `aml_options()` preset over histories shaped like LoCoMo and LongMemEval
+(`tests/parity/fixtures/corpus.json`), through `engine.search` and through the HTTP
+service. Work on other tracks must leave `tests/parity/snapshots/` unchanged; a
+deliberate change to text-track output regenerates them, with every diff explained:
+
+```bash
+MNEMOTREE_UPDATE_PARITY=1 .venv/bin/pytest tests/test_parity.py
+```
+
 ## Pull requests
 
 1. Branch off `main`.

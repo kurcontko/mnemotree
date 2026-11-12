@@ -1,0 +1,2858 @@
+{
+ "search_options": {
+  "representation": "raw",
+  "atom_weight": 1.0,
+  "mode": "hybrid",
+  "limit": 100,
+  "candidate_limit": 100,
+  "token_budget": 8000,
+  "neighbor_chunks": 0,
+  "neighbor_messages": 2,
+  "neighbor_chars": 1200,
+  "merge_blocks": true,
+  "order": "rank",
+  "rrf_k": 60,
+  "lexical_weight": 1.0,
+  "dense_weight": 1.0,
+  "chunks_per_source": 1,
+  "role_first": "user",
+  "role_boost": null,
+  "role_first_min_assistant_share": 0.65,
+  "model_query_policy": "combined",
+  "deep_candidate_limit": 300,
+  "deep_history_density": 2.0
+ },
+ "results": [
+  {
+   "user_id": "pair-chat",
+   "query": "When did Maya adopt Pepper?",
+   "options": null,
+   "context": "sha256:549a55e70cb2 len=4024",
+   "evidence": [
+    {
+     "id": "c23de1ea4f37",
+     "source_id": "c6f25bb8bd17",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.030798,
+     "rerank_score": null,
+     "merged": [
+      "28f98a03651a",
+      "47747051adc6",
+      "57c683c6e391",
+      "b781a5dc7297",
+      "45f2edadb5da",
+      "5df069668a14",
+      "5c1db755f011"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "8cf50a0a445d",
+     "source_id": "a38f6d44369e",
+     "span": [
+      0,
+      106
+     ],
+     "score": 0.029877,
+     "rerank_score": null,
+     "merged": [
+      "d63056cf78b6",
+      "2160af7d50cb",
+      "6f71964d45f2",
+      "a58104513042",
+      "f96f55c22443",
+      "e29fd4b9c2c7",
+      "6bcd74c4507a"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "92da073507a6",
+     "source_id": "89abc173903a",
+     "span": [
+      0,
+      100
+     ],
+     "score": 0.028787,
+     "rerank_score": null,
+     "merged": [
+      "4d65430afd9f",
+      "3988d650fe5e",
+      "0eb8da90f6dd",
+      "507b373a8fea",
+      "e0e9f9329c2a",
+      "2626cd505ca3",
+      "bb06c573ac1d"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "b6f14ac4122c",
+     "source_id": "91485691afcd",
+     "span": [
+      0,
+      98
+     ],
+     "score": 0.027971,
+     "rerank_score": null,
+     "merged": [
+      "b35482ea9051",
+      "a8b8aff9895a",
+      "0c66749d81ef",
+      "614b638ee0f5",
+      "e4465ab9cbe1",
+      "6a5d33a9cc94",
+      "bb09ea5ae4fd"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    }
+   ],
+   "candidates": "sha256:de16f5a37f45 len=1032",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "f3d59c4ee12c",
+     "876034ef008d",
+     "0f4ee9dc645b",
+     "8cd121d36b5d",
+     "2f720d9d944d",
+     "6cdb5e394dfa",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "d5333bf90826",
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "1b30b76ec7d9",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "1fe4638904bb",
+     "baea6e0f54fb",
+     "0672859e8665",
+     "4c45ab5dfc29",
+     "ae890b711c47",
+     "e08256fe0d44",
+     "6e5af12af703",
+     "2bbd813005be",
+     "712fc6d8f2d6",
+     "735829047cf7",
+     "b2af8c5a9ae9",
+     "91ceeedb7c45",
+     "8c0d0a1cd9a7",
+     "085cc9a0b7ca"
+    ],
+    "channel_counts": {
+     "lexical": 5,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 6,
+    "model_query_tokens": 6,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "f3d59c4ee12c",
+     "876034ef008d",
+     "0f4ee9dc645b",
+     "8cd121d36b5d",
+     "2f720d9d944d",
+     "6cdb5e394dfa",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "d5333bf90826",
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "1b30b76ec7d9",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "1fe4638904bb",
+     "baea6e0f54fb",
+     "0672859e8665",
+     "4c45ab5dfc29",
+     "ae890b711c47",
+     "e08256fe0d44",
+     "6e5af12af703",
+     "2bbd813005be",
+     "712fc6d8f2d6",
+     "735829047cf7",
+     "b2af8c5a9ae9",
+     "91ceeedb7c45",
+     "8c0d0a1cd9a7",
+     "085cc9a0b7ca"
+    ]
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "What breed is Maya's dog?",
+   "options": null,
+   "context": "sha256:63812e094955 len=4024",
+   "evidence": [
+    {
+     "id": "92da073507a6",
+     "source_id": "89abc173903a",
+     "span": [
+      0,
+      100
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "4d65430afd9f",
+      "2626cd505ca3",
+      "3988d650fe5e",
+      "e0e9f9329c2a",
+      "0eb8da90f6dd",
+      "bb06c573ac1d",
+      "507b373a8fea"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "6a5d33a9cc94",
+     "source_id": "7cdd108bf3a9",
+     "span": [
+      0,
+      75
+     ],
+     "score": 0.031514,
+     "rerank_score": null,
+     "merged": [
+      "b35482ea9051",
+      "a8b8aff9895a",
+      "b6f14ac4122c",
+      "e4465ab9cbe1",
+      "0c66749d81ef",
+      "bb09ea5ae4fd",
+      "614b638ee0f5"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "c23de1ea4f37",
+     "source_id": "c6f25bb8bd17",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.030331,
+     "rerank_score": null,
+     "merged": [
+      "57c683c6e391",
+      "28f98a03651a",
+      "b781a5dc7297",
+      "45f2edadb5da",
+      "47747051adc6",
+      "5df069668a14",
+      "5c1db755f011"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "2160af7d50cb",
+     "source_id": "b7e53337f638",
+     "span": [
+      0,
+      50
+     ],
+     "score": 0.029762,
+     "rerank_score": null,
+     "merged": [
+      "8cf50a0a445d",
+      "f96f55c22443",
+      "6f71964d45f2",
+      "d63056cf78b6",
+      "6bcd74c4507a",
+      "a58104513042",
+      "e29fd4b9c2c7"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    }
+   ],
+   "candidates": "sha256:5bf5024080c7 len=1032",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "8cd121d36b5d",
+     "2f720d9d944d",
+     "6cdb5e394dfa",
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "735829047cf7",
+     "d5333bf90826",
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "f3d59c4ee12c",
+     "0672859e8665",
+     "876034ef008d",
+     "4c45ab5dfc29",
+     "0f4ee9dc645b",
+     "b2af8c5a9ae9",
+     "1fe4638904bb",
+     "91ceeedb7c45",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "712fc6d8f2d6",
+     "1b30b76ec7d9",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "2bbd813005be",
+     "8c0d0a1cd9a7",
+     "ae890b711c47",
+     "6e5af12af703",
+     "085cc9a0b7ca",
+     "e08256fe0d44",
+     "baea6e0f54fb"
+    ],
+    "channel_counts": {
+     "lexical": 5,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 8,
+    "model_query_tokens": 8,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "8cd121d36b5d",
+     "2f720d9d944d",
+     "6cdb5e394dfa",
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "735829047cf7",
+     "d5333bf90826",
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "f3d59c4ee12c",
+     "0672859e8665",
+     "876034ef008d",
+     "4c45ab5dfc29",
+     "0f4ee9dc645b",
+     "b2af8c5a9ae9",
+     "1fe4638904bb",
+     "91ceeedb7c45",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "712fc6d8f2d6",
+     "1b30b76ec7d9",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "2bbd813005be",
+     "8c0d0a1cd9a7",
+     "ae890b711c47",
+     "6e5af12af703",
+     "085cc9a0b7ca",
+     "e08256fe0d44",
+     "baea6e0f54fb"
+    ]
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "How long did Tom take to finish the half marathon?",
+   "options": null,
+   "context": "sha256:c4678219d527 len=4024",
+   "evidence": [
+    {
+     "id": "6f71964d45f2",
+     "source_id": "8cf8d781049a",
+     "span": [
+      0,
+      55
+     ],
+     "score": 0.03101,
+     "rerank_score": null,
+     "merged": [
+      "e29fd4b9c2c7",
+      "a58104513042",
+      "8cf50a0a445d",
+      "2160af7d50cb",
+      "d63056cf78b6",
+      "f96f55c22443",
+      "6bcd74c4507a"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "5c1db755f011",
+     "source_id": "c0136c41d15b",
+     "span": [
+      0,
+      49
+     ],
+     "score": 0.03031,
+     "rerank_score": null,
+     "merged": [
+      "47747051adc6",
+      "5df069668a14",
+      "b781a5dc7297",
+      "45f2edadb5da",
+      "28f98a03651a",
+      "57c683c6e391",
+      "c23de1ea4f37"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "4d65430afd9f",
+     "source_id": "1b681ad05131",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.029116,
+     "rerank_score": null,
+     "merged": [
+      "3988d650fe5e",
+      "bb06c573ac1d",
+      "507b373a8fea",
+      "0eb8da90f6dd",
+      "92da073507a6",
+      "2626cd505ca3",
+      "e0e9f9329c2a"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "bb09ea5ae4fd",
+     "source_id": "076940d50fbd",
+     "span": [
+      0,
+      51
+     ],
+     "score": 0.016393,
+     "rerank_score": null,
+     "merged": [
+      "0c66749d81ef",
+      "614b638ee0f5",
+      "b35482ea9051",
+      "e4465ab9cbe1",
+      "a8b8aff9895a",
+      "b6f14ac4122c",
+      "6a5d33a9cc94"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    }
+   ],
+   "candidates": "sha256:f8366ea98a3f len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "b2af8c5a9ae9",
+     "baea6e0f54fb",
+     "91ceeedb7c45",
+     "1fe4638904bb",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "eecfefa4c061",
+     "712fc6d8f2d6",
+     "d5333bf90826",
+     "2f720d9d944d",
+     "ae890b711c47",
+     "e08256fe0d44",
+     "2bbd813005be",
+     "d43a6ecdb99c",
+     "8c0d0a1cd9a7",
+     "eb5206542e76",
+     "56d2befa45ef",
+     "082cae7af3a4",
+     "085cc9a0b7ca",
+     "6e5af12af703",
+     "210c5ac1885c",
+     "dbf9e8b036da",
+     "735829047cf7",
+     "f65756f3ea12",
+     "876034ef008d",
+     "0f4ee9dc645b",
+     "f3d59c4ee12c",
+     "1b30b76ec7d9",
+     "6cdb5e394dfa",
+     "0672859e8665",
+     "4c45ab5dfc29",
+     "8cd121d36b5d"
+    ],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 11,
+    "model_query_tokens": 11,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "b2af8c5a9ae9",
+     "baea6e0f54fb",
+     "91ceeedb7c45",
+     "1fe4638904bb",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "eecfefa4c061",
+     "712fc6d8f2d6",
+     "d5333bf90826",
+     "2f720d9d944d",
+     "ae890b711c47",
+     "e08256fe0d44",
+     "2bbd813005be",
+     "d43a6ecdb99c",
+     "8c0d0a1cd9a7",
+     "eb5206542e76",
+     "56d2befa45ef",
+     "082cae7af3a4",
+     "085cc9a0b7ca",
+     "6e5af12af703",
+     "210c5ac1885c",
+     "dbf9e8b036da",
+     "735829047cf7",
+     "f65756f3ea12",
+     "876034ef008d",
+     "0f4ee9dc645b",
+     "f3d59c4ee12c",
+     "1b30b76ec7d9",
+     "6cdb5e394dfa",
+     "0672859e8665",
+     "4c45ab5dfc29",
+     "8cd121d36b5d"
+    ]
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "Where is Tom's sister moving and why?",
+   "options": null,
+   "context": "sha256:de1f05dfa9e0 len=4024",
+   "evidence": [
+    {
+     "id": "6a5d33a9cc94",
+     "source_id": "7cdd108bf3a9",
+     "span": [
+      0,
+      75
+     ],
+     "score": 0.031778,
+     "rerank_score": null,
+     "merged": [
+      "bb09ea5ae4fd",
+      "b6f14ac4122c",
+      "0c66749d81ef",
+      "614b638ee0f5",
+      "b35482ea9051",
+      "e4465ab9cbe1",
+      "a8b8aff9895a"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "2160af7d50cb",
+     "source_id": "b7e53337f638",
+     "span": [
+      0,
+      50
+     ],
+     "score": 0.03101,
+     "rerank_score": null,
+     "merged": [
+      "6f71964d45f2",
+      "8cf50a0a445d",
+      "f96f55c22443",
+      "e29fd4b9c2c7",
+      "d63056cf78b6",
+      "a58104513042",
+      "6bcd74c4507a"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "4d65430afd9f",
+     "source_id": "1b681ad05131",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.030366,
+     "rerank_score": null,
+     "merged": [
+      "92da073507a6",
+      "2626cd505ca3",
+      "507b373a8fea",
+      "bb06c573ac1d",
+      "0eb8da90f6dd",
+      "3988d650fe5e",
+      "e0e9f9329c2a"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "45f2edadb5da",
+     "source_id": "1dd529c66973",
+     "span": [
+      0,
+      70
+     ],
+     "score": 0.013699,
+     "rerank_score": null,
+     "merged": [
+      "5c1db755f011",
+      "57c683c6e391",
+      "5df069668a14",
+      "b781a5dc7297",
+      "c23de1ea4f37",
+      "28f98a03651a",
+      "47747051adc6"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    }
+   ],
+   "candidates": "sha256:be632928f7b7 len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "735829047cf7",
+     "0672859e8665",
+     "876034ef008d",
+     "4c45ab5dfc29",
+     "d5333bf90826",
+     "2f720d9d944d",
+     "b2af8c5a9ae9",
+     "baea6e0f54fb",
+     "91ceeedb7c45",
+     "e08256fe0d44",
+     "6e5af12af703",
+     "8cd121d36b5d",
+     "6cdb5e394dfa",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "0f4ee9dc645b",
+     "ae890b711c47",
+     "085cc9a0b7ca",
+     "1fe4638904bb",
+     "8c0d0a1cd9a7",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "2bbd813005be",
+     "41920a58c6bf",
+     "eecfefa4c061",
+     "712fc6d8f2d6",
+     "f18ea8bdfedd",
+     "d43a6ecdb99c",
+     "f3d59c4ee12c",
+     "1b30b76ec7d9"
+    ],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "735829047cf7",
+     "0672859e8665",
+     "876034ef008d",
+     "4c45ab5dfc29",
+     "d5333bf90826",
+     "2f720d9d944d",
+     "b2af8c5a9ae9",
+     "baea6e0f54fb",
+     "91ceeedb7c45",
+     "e08256fe0d44",
+     "6e5af12af703",
+     "8cd121d36b5d",
+     "6cdb5e394dfa",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "0f4ee9dc645b",
+     "ae890b711c47",
+     "085cc9a0b7ca",
+     "1fe4638904bb",
+     "8c0d0a1cd9a7",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "2bbd813005be",
+     "41920a58c6bf",
+     "eecfefa4c061",
+     "712fc6d8f2d6",
+     "f18ea8bdfedd",
+     "d43a6ecdb99c",
+     "f3d59c4ee12c",
+     "1b30b76ec7d9"
+    ]
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "What did Maya make for her mother's birthday, and what went wrong?",
+   "options": null,
+   "context": "sha256:9db049f71679 len=4024",
+   "evidence": [
+    {
+     "id": "2160af7d50cb",
+     "source_id": "b7e53337f638",
+     "span": [
+      0,
+      50
+     ],
+     "score": 0.032787,
+     "rerank_score": null,
+     "merged": [
+      "8cf50a0a445d",
+      "f96f55c22443",
+      "d63056cf78b6",
+      "6f71964d45f2",
+      "a58104513042",
+      "e29fd4b9c2c7",
+      "6bcd74c4507a"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    },
+    {
+     "id": "6a5d33a9cc94",
+     "source_id": "7cdd108bf3a9",
+     "span": [
+      0,
+      75
+     ],
+     "score": 0.032002,
+     "rerank_score": null,
+     "merged": [
+      "614b638ee0f5",
+      "b35482ea9051",
+      "b6f14ac4122c",
+      "0c66749d81ef",
+      "e4465ab9cbe1",
+      "bb09ea5ae4fd",
+      "a8b8aff9895a"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "92da073507a6",
+     "source_id": "89abc173903a",
+     "span": [
+      0,
+      100
+     ],
+     "score": 0.031754,
+     "rerank_score": null,
+     "merged": [
+      "bb06c573ac1d",
+      "3988d650fe5e",
+      "0eb8da90f6dd",
+      "2626cd505ca3",
+      "507b373a8fea",
+      "4d65430afd9f",
+      "e0e9f9329c2a"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "28f98a03651a",
+     "source_id": "aa8eda68aba7",
+     "span": [
+      0,
+      54
+     ],
+     "score": 0.013889,
+     "rerank_score": null,
+     "merged": [
+      "c23de1ea4f37",
+      "45f2edadb5da",
+      "5df069668a14",
+      "5c1db755f011",
+      "57c683c6e391",
+      "47747051adc6",
+      "b781a5dc7297"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    }
+   ],
+   "candidates": "sha256:b935dbe93405 len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "0672859e8665",
+     "876034ef008d",
+     "4c45ab5dfc29",
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "735829047cf7",
+     "8cd121d36b5d",
+     "2f720d9d944d",
+     "6cdb5e394dfa",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "0f4ee9dc645b",
+     "ae890b711c47",
+     "e08256fe0d44",
+     "085cc9a0b7ca",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "b2af8c5a9ae9",
+     "1fe4638904bb",
+     "91ceeedb7c45",
+     "d5333bf90826",
+     "8c0d0a1cd9a7",
+     "1b30b76ec7d9",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "baea6e0f54fb",
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "f3d59c4ee12c",
+     "6e5af12af703",
+     "2bbd813005be",
+     "712fc6d8f2d6"
+    ],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 16,
+    "model_query_tokens": 16,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "0672859e8665",
+     "876034ef008d",
+     "4c45ab5dfc29",
+     "082cae7af3a4",
+     "210c5ac1885c",
+     "735829047cf7",
+     "8cd121d36b5d",
+     "2f720d9d944d",
+     "6cdb5e394dfa",
+     "56d2befa45ef",
+     "dbf9e8b036da",
+     "0f4ee9dc645b",
+     "ae890b711c47",
+     "e08256fe0d44",
+     "085cc9a0b7ca",
+     "eb5206542e76",
+     "f65756f3ea12",
+     "b2af8c5a9ae9",
+     "1fe4638904bb",
+     "91ceeedb7c45",
+     "d5333bf90826",
+     "8c0d0a1cd9a7",
+     "1b30b76ec7d9",
+     "41920a58c6bf",
+     "f18ea8bdfedd",
+     "baea6e0f54fb",
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "f3d59c4ee12c",
+     "6e5af12af703",
+     "2bbd813005be",
+     "712fc6d8f2d6"
+    ]
+   }
+  },
+  {
+   "user_id": "pair-chat",
+   "query": "Which race is Tom planning to run in December?",
+   "options": null,
+   "context": "sha256:63812e094955 len=4024",
+   "evidence": [
+    {
+     "id": "4d65430afd9f",
+     "source_id": "1b681ad05131",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.030579,
+     "rerank_score": null,
+     "merged": [
+      "e0e9f9329c2a",
+      "3988d650fe5e",
+      "bb06c573ac1d",
+      "507b373a8fea",
+      "0eb8da90f6dd",
+      "92da073507a6",
+      "2626cd505ca3"
+     ],
+     "neighbors": [],
+     "content": "sha256:cc78e25d771b len=1090"
+    },
+    {
+     "id": "e4465ab9cbe1",
+     "source_id": "95a25512d37b",
+     "span": [
+      0,
+      93
+     ],
+     "score": 0.030303,
+     "rerank_score": null,
+     "merged": [
+      "bb09ea5ae4fd",
+      "0c66749d81ef",
+      "6a5d33a9cc94",
+      "614b638ee0f5",
+      "a8b8aff9895a",
+      "b6f14ac4122c",
+      "b35482ea9051"
+     ],
+     "neighbors": [],
+     "content": "sha256:7e61bf0b28dc len=1082"
+    },
+    {
+     "id": "47747051adc6",
+     "source_id": "1b12ff900cad",
+     "span": [
+      0,
+      85
+     ],
+     "score": 0.02895,
+     "rerank_score": null,
+     "merged": [
+      "45f2edadb5da",
+      "5c1db755f011",
+      "b781a5dc7297",
+      "28f98a03651a",
+      "5df069668a14",
+      "c23de1ea4f37",
+      "57c683c6e391"
+     ],
+     "neighbors": [],
+     "content": "sha256:f054690233fe len=933"
+    },
+    {
+     "id": "6f71964d45f2",
+     "source_id": "8cf8d781049a",
+     "span": [
+      0,
+      55
+     ],
+     "score": 0.028739,
+     "rerank_score": null,
+     "merged": [
+      "e29fd4b9c2c7",
+      "d63056cf78b6",
+      "8cf50a0a445d",
+      "f96f55c22443",
+      "6bcd74c4507a",
+      "a58104513042",
+      "2160af7d50cb"
+     ],
+     "neighbors": [],
+     "content": "sha256:03cadab638ce len=913"
+    }
+   ],
+   "candidates": "sha256:f1f74dcef54b len=1042",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "d5333bf90826",
+     "2f720d9d944d",
+     "8cd121d36b5d",
+     "6cdb5e394dfa",
+     "ae890b711c47",
+     "8c0d0a1cd9a7",
+     "f65756f3ea12",
+     "56d2befa45ef",
+     "2bbd813005be",
+     "41920a58c6bf",
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "b2af8c5a9ae9",
+     "baea6e0f54fb",
+     "91ceeedb7c45",
+     "e08256fe0d44",
+     "876034ef008d",
+     "0f4ee9dc645b",
+     "210c5ac1885c",
+     "dbf9e8b036da",
+     "eb5206542e76",
+     "082cae7af3a4",
+     "f18ea8bdfedd",
+     "712fc6d8f2d6",
+     "1b30b76ec7d9",
+     "735829047cf7",
+     "085cc9a0b7ca",
+     "6e5af12af703",
+     "1fe4638904bb",
+     "0672859e8665",
+     "4c45ab5dfc29",
+     "f3d59c4ee12c"
+    ],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 32
+    },
+    "packed_tokens": 1134,
+    "evidence_tokens": 1134,
+    "tokenizer": "golden-words",
+    "omitted_ids": [],
+    "candidate_limit": 100,
+    "chunk_density": 1.0,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.482368,
+    "role_first_applied": false,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "d5333bf90826",
+     "2f720d9d944d",
+     "8cd121d36b5d",
+     "6cdb5e394dfa",
+     "ae890b711c47",
+     "8c0d0a1cd9a7",
+     "f65756f3ea12",
+     "56d2befa45ef",
+     "2bbd813005be",
+     "41920a58c6bf",
+     "d43a6ecdb99c",
+     "eecfefa4c061",
+     "b2af8c5a9ae9",
+     "baea6e0f54fb",
+     "91ceeedb7c45",
+     "e08256fe0d44",
+     "876034ef008d",
+     "0f4ee9dc645b",
+     "210c5ac1885c",
+     "dbf9e8b036da",
+     "eb5206542e76",
+     "082cae7af3a4",
+     "f18ea8bdfedd",
+     "712fc6d8f2d6",
+     "1b30b76ec7d9",
+     "735829047cf7",
+     "085cc9a0b7ca",
+     "6e5af12af703",
+     "1fe4638904bb",
+     "0672859e8665",
+     "4c45ab5dfc29",
+     "f3d59c4ee12c"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "What size is the Dutch oven I bought?",
+   "options": null,
+   "context": "sha256:92e8a0e65377 len=13669",
+   "evidence": [
+    {
+     "id": "5c82285a6551",
+     "source_id": "c46dd5b254d9",
+     "span": [
+      0,
+      80
+     ],
+     "score": 0.032787,
+     "rerank_score": null,
+     "merged": [
+      "feafe93c5eff",
+      "d3a741238a6b",
+      "de2c92463b8e",
+      "9b1c65ccfeb8",
+      "e6f69dbefe8f"
+     ],
+     "neighbors": [
+      "3dfb07724762",
+      "9459d7b6ccb5",
+      "987b0df33546"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "2bd7f9575640",
+     "source_id": "d277c1d072b4",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.016129,
+     "rerank_score": null,
+     "merged": [
+      "bc3fed4347f1",
+      "02fbc0d6585b",
+      "7a6f91196bfa",
+      "39c72619e7be",
+      "22a2eeb70f9b"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.015873,
+     "rerank_score": null,
+     "merged": [
+      "26b7e348ee57",
+      "a5b276f92a14",
+      "a71a04a66c35",
+      "f5f9af20ef13",
+      "19c802fb98bd"
+     ],
+     "neighbors": [
+      "20c441cb8d36"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "2856890b7956",
+     "source_id": "23ba8a59927b",
+     "span": [
+      0,
+      87
+     ],
+     "score": 0.013158,
+     "rerank_score": null,
+     "merged": [
+      "0f1f7cb52765",
+      "beddacc427ba",
+      "79f71b4b281e",
+      "73102361ebc4",
+      "7ace4f9d091c",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [
+      "4f7a94c783b7"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:96f531f9c874 len=795",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "04d5e42efc98",
+     "6e4f72a8f3d7",
+     "00b101e0ba53",
+     "6de98796742f",
+     "2ad0614ba3c3",
+     "a2546dff171d",
+     "f319819ed456",
+     "7dddf1381029",
+     "bd762a84ce67",
+     "17738929689d",
+     "7a5d3cfdf490",
+     "deab17cc92c6",
+     "80baef560f70",
+     "0c99ad8bf7d8",
+     "2466641fc24f",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "9b07a6fa79d7",
+     "46bf2572df04",
+     "c9a6569bfd03",
+     "c10e61a7c9fc",
+     "6691ff8c8bf6"
+    ],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "c116893c88ee",
+     "79b5380238ec",
+     "b508fd079632",
+     "81d741fe99a3",
+     "240b829600b7"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 9,
+    "model_query_tokens": 9,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "04d5e42efc98",
+     "3dfb07724762",
+     "6e4f72a8f3d7",
+     "00b101e0ba53",
+     "6de98796742f",
+     "2ad0614ba3c3",
+     "a2546dff171d",
+     "f319819ed456",
+     "7dddf1381029",
+     "9459d7b6ccb5",
+     "bd762a84ce67",
+     "17738929689d",
+     "7a5d3cfdf490",
+     "deab17cc92c6",
+     "80baef560f70",
+     "0c99ad8bf7d8",
+     "2466641fc24f",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "9b07a6fa79d7",
+     "20c441cb8d36",
+     "4f7a94c783b7",
+     "46bf2572df04",
+     "c9a6569bfd03",
+     "c10e61a7c9fc",
+     "6691ff8c8bf6",
+     "987b0df33546"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "How much is my rent now?",
+   "options": [
+    "A. 1,150 euros",
+    "B. 1,240 euros",
+    "C. 1,350 euros",
+    "D. 1,800 euros"
+   ],
+   "context": "sha256:6e6d533d8f6b len=13669",
+   "evidence": [
+    {
+     "id": "02fbc0d6585b",
+     "source_id": "9b3a4c27b50a",
+     "span": [
+      0,
+      131
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "2bd7f9575640",
+      "bc3fed4347f1",
+      "22a2eeb70f9b",
+      "7a6f91196bfa",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "a5b276f92a14",
+     "source_id": "d62ac543d888",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "26b7e348ee57",
+      "78f541cd97d5",
+      "f5f9af20ef13",
+      "19c802fb98bd",
+      "a71a04a66c35"
+     ],
+     "neighbors": [
+      "20c441cb8d36"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "5c82285a6551",
+      "feafe93c5eff",
+      "de2c92463b8e",
+      "81d741fe99a3",
+      "e6f69dbefe8f",
+      "9b1c65ccfeb8"
+     ],
+     "neighbors": [
+      "3dfb07724762",
+      "9459d7b6ccb5"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.013514,
+     "rerank_score": null,
+     "merged": [
+      "beddacc427ba",
+      "2856890b7956",
+      "79f71b4b281e",
+      "7ace4f9d091c",
+      "73102361ebc4",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [
+      "4f7a94c783b7"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:7cf1fe4570f6 len=836",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "00b101e0ba53",
+     "6de98796742f",
+     "c10e61a7c9fc",
+     "0c99ad8bf7d8",
+     "9b07a6fa79d7",
+     "f319819ed456",
+     "deab17cc92c6",
+     "80baef560f70",
+     "7dddf1381029",
+     "2466641fc24f",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "17738929689d",
+     "7a5d3cfdf490",
+     "46bf2572df04",
+     "987b0df33546",
+     "2ad0614ba3c3",
+     "c9a6569bfd03",
+     "a2546dff171d",
+     "6691ff8c8bf6"
+    ],
+    "channel_counts": {
+     "lexical": 12,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "240b829600b7",
+     "c116893c88ee",
+     "79b5380238ec",
+     "b508fd079632"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 31,
+    "model_query_tokens": 31,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "00b101e0ba53",
+     "6de98796742f",
+     "c10e61a7c9fc",
+     "0c99ad8bf7d8",
+     "9b07a6fa79d7",
+     "f319819ed456",
+     "deab17cc92c6",
+     "80baef560f70",
+     "20c441cb8d36",
+     "7dddf1381029",
+     "2466641fc24f",
+     "9459d7b6ccb5",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "17738929689d",
+     "7a5d3cfdf490",
+     "46bf2572df04",
+     "987b0df33546",
+     "3dfb07724762",
+     "2ad0614ba3c3",
+     "4f7a94c783b7",
+     "c9a6569bfd03",
+     "a2546dff171d",
+     "6691ff8c8bf6"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "At what temperature should the sourdough bake after the lid comes off?",
+   "options": null,
+   "context": "sha256:6e6d533d8f6b len=13669",
+   "evidence": [
+    {
+     "id": "2bd7f9575640",
+     "source_id": "d277c1d072b4",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.032522,
+     "rerank_score": null,
+     "merged": [
+      "bc3fed4347f1",
+      "02fbc0d6585b",
+      "7a6f91196bfa",
+      "22a2eeb70f9b",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.032002,
+     "rerank_score": null,
+     "merged": [
+      "26b7e348ee57",
+      "a5b276f92a14",
+      "a71a04a66c35",
+      "f5f9af20ef13",
+      "19c802fb98bd"
+     ],
+     "neighbors": [
+      "20c441cb8d36"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.027253,
+     "rerank_score": null,
+     "merged": [
+      "feafe93c5eff",
+      "5c82285a6551",
+      "b508fd079632",
+      "de2c92463b8e",
+      "e6f69dbefe8f",
+      "9b1c65ccfeb8"
+     ],
+     "neighbors": [
+      "987b0df33546",
+      "9459d7b6ccb5",
+      "3dfb07724762"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "beddacc427ba",
+     "source_id": "4bafdaafc99b",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "0f1f7cb52765",
+      "2856890b7956",
+      "79f71b4b281e",
+      "7ace4f9d091c",
+      "73102361ebc4",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [
+      "4f7a94c783b7"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:857133db19eb len=827",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "deab17cc92c6",
+     "00b101e0ba53",
+     "80baef560f70",
+     "2ad0614ba3c3",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "2466641fc24f",
+     "17738929689d",
+     "04d5e42efc98",
+     "7a5d3cfdf490",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "6de98796742f",
+     "a2546dff171d",
+     "7dddf1381029",
+     "9b07a6fa79d7",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "46bf2572df04",
+     "c9a6569bfd03",
+     "c10e61a7c9fc",
+     "6691ff8c8bf6"
+    ],
+    "channel_counts": {
+     "lexical": 11,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "81d741fe99a3",
+     "79b5380238ec",
+     "c116893c88ee",
+     "240b829600b7"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 13,
+    "model_query_tokens": 13,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "deab17cc92c6",
+     "00b101e0ba53",
+     "80baef560f70",
+     "2ad0614ba3c3",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "2466641fc24f",
+     "17738929689d",
+     "04d5e42efc98",
+     "7a5d3cfdf490",
+     "9459d7b6ccb5",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "6de98796742f",
+     "a2546dff171d",
+     "7dddf1381029",
+     "9b07a6fa79d7",
+     "987b0df33546",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "4f7a94c783b7",
+     "46bf2572df04",
+     "20c441cb8d36",
+     "c9a6569bfd03",
+     "3dfb07724762",
+     "c10e61a7c9fc",
+     "6691ff8c8bf6"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "How much did I end up paying for the gravel bike compared with the original price?",
+   "options": null,
+   "context": "sha256:1f4677a12786 len=13669",
+   "evidence": [
+    {
+     "id": "02fbc0d6585b",
+     "source_id": "9b3a4c27b50a",
+     "span": [
+      0,
+      131
+     ],
+     "score": 0.031025,
+     "rerank_score": null,
+     "merged": [
+      "2bd7f9575640",
+      "bc3fed4347f1",
+      "22a2eeb70f9b",
+      "39c72619e7be",
+      "7a6f91196bfa"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "feafe93c5eff",
+     "source_id": "8c20b65ad683",
+     "span": [
+      0,
+      57
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "d3a741238a6b",
+      "5c82285a6551",
+      "79b5380238ec",
+      "9b1c65ccfeb8",
+      "e6f69dbefe8f"
+     ],
+     "neighbors": [
+      "9459d7b6ccb5",
+      "7a5d3cfdf490",
+      "987b0df33546",
+      "3dfb07724762"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "a5b276f92a14",
+     "source_id": "d62ac543d888",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.0125,
+     "rerank_score": null,
+     "merged": [
+      "78f541cd97d5",
+      "26b7e348ee57",
+      "240b829600b7",
+      "19c802fb98bd",
+      "a71a04a66c35"
+     ],
+     "neighbors": [
+      "c10e61a7c9fc",
+      "20c441cb8d36"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "2856890b7956",
+     "source_id": "23ba8a59927b",
+     "span": [
+      0,
+      87
+     ],
+     "score": 0.012346,
+     "rerank_score": null,
+     "merged": [
+      "beddacc427ba",
+      "0f1f7cb52765",
+      "e6f0a8b7a2be",
+      "79f71b4b281e",
+      "73102361ebc4"
+     ],
+     "neighbors": [
+      "4f7a94c783b7",
+      "c9a6569bfd03"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:6e6cb33450b3 len=776",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "8d5c504db630",
+     "46bf2572df04",
+     "00b101e0ba53",
+     "6de98796742f",
+     "deab17cc92c6",
+     "80baef560f70",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "17738929689d",
+     "bd762a84ce67",
+     "04d5e42efc98",
+     "6e4f72a8f3d7",
+     "7dddf1381029",
+     "2466641fc24f",
+     "2ad0614ba3c3",
+     "a2546dff171d",
+     "6691ff8c8bf6"
+    ],
+    "channel_counts": {
+     "lexical": 6,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "7ace4f9d091c",
+     "f5f9af20ef13",
+     "c116893c88ee",
+     "81d741fe99a3",
+     "de2c92463b8e",
+     "b508fd079632"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 17,
+    "model_query_tokens": 17,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "8d5c504db630",
+     "46bf2572df04",
+     "00b101e0ba53",
+     "6de98796742f",
+     "deab17cc92c6",
+     "80baef560f70",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "17738929689d",
+     "9459d7b6ccb5",
+     "7a5d3cfdf490",
+     "bd762a84ce67",
+     "04d5e42efc98",
+     "6e4f72a8f3d7",
+     "4f7a94c783b7",
+     "c9a6569bfd03",
+     "20c441cb8d36",
+     "7dddf1381029",
+     "2466641fc24f",
+     "2ad0614ba3c3",
+     "a2546dff171d",
+     "c10e61a7c9fc",
+     "6691ff8c8bf6",
+     "987b0df33546",
+     "3dfb07724762"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "Which day of the week should the database cutover happen?",
+   "options": [
+    "A. Monday",
+    "B. Tuesday",
+    "C. Friday",
+    "D. Sunday"
+   ],
+   "context": "sha256:6b5aa3fe5209 len=13669",
+   "evidence": [
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.030159,
+     "rerank_score": null,
+     "merged": [
+      "2856890b7956",
+      "beddacc427ba",
+      "7ace4f9d091c",
+      "79f71b4b281e",
+      "73102361ebc4",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [
+      "4f7a94c783b7"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    },
+    {
+     "id": "bc3fed4347f1",
+     "source_id": "dfe72a8667a9",
+     "span": [
+      0,
+      90
+     ],
+     "score": 0.027056,
+     "rerank_score": null,
+     "merged": [
+      "02fbc0d6585b",
+      "2bd7f9575640",
+      "22a2eeb70f9b",
+      "39c72619e7be",
+      "7a6f91196bfa"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "feafe93c5eff",
+     "source_id": "8c20b65ad683",
+     "span": [
+      0,
+      57
+     ],
+     "score": 0.015625,
+     "rerank_score": null,
+     "merged": [
+      "5c82285a6551",
+      "d3a741238a6b",
+      "79b5380238ec",
+      "81d741fe99a3",
+      "e6f69dbefe8f",
+      "9b1c65ccfeb8"
+     ],
+     "neighbors": [
+      "9459d7b6ccb5",
+      "7a5d3cfdf490",
+      "3dfb07724762"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "26b7e348ee57",
+     "source_id": "39893a3867d2",
+     "span": [
+      0,
+      97
+     ],
+     "score": 0.012987,
+     "rerank_score": null,
+     "merged": [
+      "78f541cd97d5",
+      "a5b276f92a14",
+      "f5f9af20ef13",
+      "19c802fb98bd",
+      "a71a04a66c35"
+     ],
+     "neighbors": [
+      "20c441cb8d36"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    }
+   ],
+   "candidates": "sha256:7fa4d719ec6f len=829",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "8d5c504db630",
+     "46bf2572df04",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "c9a6569bfd03",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "17738929689d",
+     "6de98796742f",
+     "80baef560f70",
+     "a2546dff171d",
+     "6691ff8c8bf6",
+     "00b101e0ba53",
+     "deab17cc92c6",
+     "7dddf1381029",
+     "2466641fc24f",
+     "2ad0614ba3c3",
+     "c10e61a7c9fc",
+     "987b0df33546"
+    ],
+    "channel_counts": {
+     "lexical": 12,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "c116893c88ee",
+     "de2c92463b8e",
+     "240b829600b7",
+     "b508fd079632"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 23,
+    "model_query_tokens": 23,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "8d5c504db630",
+     "46bf2572df04",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "c9a6569bfd03",
+     "9459d7b6ccb5",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "4f7a94c783b7",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "17738929689d",
+     "7a5d3cfdf490",
+     "6de98796742f",
+     "80baef560f70",
+     "a2546dff171d",
+     "6691ff8c8bf6",
+     "00b101e0ba53",
+     "deab17cc92c6",
+     "3dfb07724762",
+     "20c441cb8d36",
+     "7dddf1381029",
+     "2466641fc24f",
+     "2ad0614ba3c3",
+     "c10e61a7c9fc",
+     "987b0df33546"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "How many loaves had I baked by late September, and at what hydration?",
+   "options": null,
+   "context": "sha256:1f4677a12786 len=13669",
+   "evidence": [
+    {
+     "id": "bc3fed4347f1",
+     "source_id": "dfe72a8667a9",
+     "span": [
+      0,
+      90
+     ],
+     "score": 0.032266,
+     "rerank_score": null,
+     "merged": [
+      "2bd7f9575640",
+      "02fbc0d6585b",
+      "39c72619e7be",
+      "7a6f91196bfa",
+      "22a2eeb70f9b"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.029857,
+     "rerank_score": null,
+     "merged": [
+      "5c82285a6551",
+      "feafe93c5eff",
+      "79b5380238ec",
+      "b508fd079632",
+      "e6f69dbefe8f",
+      "9b1c65ccfeb8"
+     ],
+     "neighbors": [
+      "987b0df33546",
+      "3dfb07724762",
+      "9459d7b6ccb5",
+      "7a5d3cfdf490"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.029644,
+     "rerank_score": null,
+     "merged": [
+      "a5b276f92a14",
+      "26b7e348ee57",
+      "a71a04a66c35",
+      "f5f9af20ef13",
+      "19c802fb98bd"
+     ],
+     "neighbors": [
+      "20c441cb8d36"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    },
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.0125,
+     "rerank_score": null,
+     "merged": [
+      "2856890b7956",
+      "beddacc427ba",
+      "c116893c88ee",
+      "73102361ebc4",
+      "7ace4f9d091c",
+      "e6f0a8b7a2be"
+     ],
+     "neighbors": [
+      "6691ff8c8bf6",
+      "4f7a94c783b7"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    }
+   ],
+   "candidates": "sha256:7126cc2111d1 len=826",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "80baef560f70",
+     "2ad0614ba3c3",
+     "6de98796742f",
+     "a2546dff171d",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "deab17cc92c6",
+     "00b101e0ba53",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "2466641fc24f",
+     "7dddf1381029",
+     "17738929689d",
+     "c10e61a7c9fc",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "46bf2572df04",
+     "c9a6569bfd03",
+     "9b07a6fa79d7"
+    ],
+    "channel_counts": {
+     "lexical": 12,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "de2c92463b8e",
+     "81d741fe99a3",
+     "79f71b4b281e",
+     "240b829600b7"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 15,
+    "model_query_tokens": 15,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "80baef560f70",
+     "2ad0614ba3c3",
+     "6de98796742f",
+     "a2546dff171d",
+     "9459d7b6ccb5",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "deab17cc92c6",
+     "00b101e0ba53",
+     "987b0df33546",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "2466641fc24f",
+     "7dddf1381029",
+     "17738929689d",
+     "7a5d3cfdf490",
+     "c10e61a7c9fc",
+     "3dfb07724762",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "4f7a94c783b7",
+     "46bf2572df04",
+     "c9a6569bfd03",
+     "6691ff8c8bf6",
+     "9b07a6fa79d7",
+     "20c441cb8d36"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "What did you recommend for the first morning in Lisbon?",
+   "options": null,
+   "context": "sha256:273f57c77b18 len=13669",
+   "evidence": [
+    {
+     "id": "2856890b7956",
+     "source_id": "23ba8a59927b",
+     "span": [
+      0,
+      87
+     ],
+     "score": 0.028442,
+     "rerank_score": null,
+     "merged": [
+      "beddacc427ba",
+      "0f1f7cb52765",
+      "79f71b4b281e",
+      "e6f0a8b7a2be",
+      "73102361ebc4"
+     ],
+     "neighbors": [
+      "4f7a94c783b7",
+      "c9a6569bfd03"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    },
+    {
+     "id": "feafe93c5eff",
+     "source_id": "8c20b65ad683",
+     "span": [
+      0,
+      57
+     ],
+     "score": 0.013514,
+     "rerank_score": null,
+     "merged": [
+      "d3a741238a6b",
+      "5c82285a6551",
+      "9b1c65ccfeb8",
+      "79b5380238ec",
+      "e6f69dbefe8f"
+     ],
+     "neighbors": [
+      "9459d7b6ccb5",
+      "7a5d3cfdf490",
+      "987b0df33546",
+      "3dfb07724762"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "2bd7f9575640",
+     "source_id": "d277c1d072b4",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.012987,
+     "rerank_score": null,
+     "merged": [
+      "02fbc0d6585b",
+      "bc3fed4347f1",
+      "22a2eeb70f9b",
+      "7a6f91196bfa",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "78f541cd97d5",
+     "source_id": "73f8c3d9483c",
+     "span": [
+      0,
+      66
+     ],
+     "score": 0.012821,
+     "rerank_score": null,
+     "merged": [
+      "a5b276f92a14",
+      "26b7e348ee57",
+      "240b829600b7",
+      "19c802fb98bd",
+      "a71a04a66c35"
+     ],
+     "neighbors": [
+      "c10e61a7c9fc",
+      "20c441cb8d36"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    }
+   ],
+   "candidates": "sha256:2dc6de085ebe len=799",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "17738929689d",
+     "04d5e42efc98",
+     "46bf2572df04",
+     "6691ff8c8bf6",
+     "deab17cc92c6",
+     "6de98796742f",
+     "80baef560f70",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "7dddf1381029",
+     "2466641fc24f",
+     "00b101e0ba53",
+     "2ad0614ba3c3",
+     "a2546dff171d"
+    ],
+    "channel_counts": {
+     "lexical": 10,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "f5f9af20ef13",
+     "c116893c88ee",
+     "81d741fe99a3",
+     "7ace4f9d091c",
+     "b508fd079632",
+     "de2c92463b8e"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 11,
+    "model_query_tokens": 11,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "8d5c504db630",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "17738929689d",
+     "04d5e42efc98",
+     "7a5d3cfdf490",
+     "46bf2572df04",
+     "6691ff8c8bf6",
+     "deab17cc92c6",
+     "6de98796742f",
+     "80baef560f70",
+     "9459d7b6ccb5",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "20c441cb8d36",
+     "7dddf1381029",
+     "2466641fc24f",
+     "00b101e0ba53",
+     "2ad0614ba3c3",
+     "a2546dff171d",
+     "4f7a94c783b7",
+     "c10e61a7c9fc",
+     "3dfb07724762",
+     "c9a6569bfd03",
+     "987b0df33546"
+    ]
+   }
+  },
+  {
+   "user_id": "assistant-heavy",
+   "query": "数据库迁移 backfill 需要多久?",
+   "options": null,
+   "context": "sha256:6b5aa3fe5209 len=13669",
+   "evidence": [
+    {
+     "id": "0f1f7cb52765",
+     "source_id": "587dc1d1dd3e",
+     "span": [
+      0,
+      99
+     ],
+     "score": 0.013889,
+     "rerank_score": null,
+     "merged": [
+      "beddacc427ba",
+      "2856890b7956",
+      "e6f0a8b7a2be",
+      "79f71b4b281e",
+      "73102361ebc4"
+     ],
+     "neighbors": [
+      "c9a6569bfd03",
+      "4f7a94c783b7"
+     ],
+     "content": "sha256:8d2472b6148f len=4106"
+    },
+    {
+     "id": "02fbc0d6585b",
+     "source_id": "9b3a4c27b50a",
+     "span": [
+      0,
+      131
+     ],
+     "score": 0.012987,
+     "rerank_score": null,
+     "merged": [
+      "2bd7f9575640",
+      "bc3fed4347f1",
+      "22a2eeb70f9b",
+      "7a6f91196bfa",
+      "39c72619e7be"
+     ],
+     "neighbors": [],
+     "content": "sha256:59120f450aca len=2005"
+    },
+    {
+     "id": "d3a741238a6b",
+     "source_id": "a33166fed398",
+     "span": [
+      0,
+      79
+     ],
+     "score": 0.012821,
+     "rerank_score": null,
+     "merged": [
+      "feafe93c5eff",
+      "5c82285a6551",
+      "79b5380238ec",
+      "b508fd079632",
+      "e6f69dbefe8f",
+      "9b1c65ccfeb8"
+     ],
+     "neighbors": [
+      "987b0df33546",
+      "9459d7b6ccb5",
+      "7a5d3cfdf490",
+      "3dfb07724762"
+     ],
+     "content": "sha256:0af2b3a816f4 len=4818"
+    },
+    {
+     "id": "26b7e348ee57",
+     "source_id": "39893a3867d2",
+     "span": [
+      0,
+      97
+     ],
+     "score": 0.012658,
+     "rerank_score": null,
+     "merged": [
+      "78f541cd97d5",
+      "a5b276f92a14",
+      "240b829600b7",
+      "19c802fb98bd",
+      "a71a04a66c35"
+     ],
+     "neighbors": [
+      "20c441cb8d36",
+      "c10e61a7c9fc"
+     ],
+     "content": "sha256:b6b579aae2ae len=2734"
+    }
+   ],
+   "candidates": "sha256:bbebbd331184 len=745",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "8d5c504db630",
+     "46bf2572df04",
+     "deab17cc92c6",
+     "6de98796742f",
+     "80baef560f70",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "17738929689d",
+     "7dddf1381029",
+     "2466641fc24f",
+     "00b101e0ba53",
+     "2ad0614ba3c3",
+     "a2546dff171d",
+     "6691ff8c8bf6"
+    ],
+    "channel_counts": {
+     "lexical": 2,
+     "dense": 30
+    },
+    "packed_tokens": 3274,
+    "evidence_tokens": 3274,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "7ace4f9d091c",
+     "81d741fe99a3",
+     "c116893c88ee",
+     "f5f9af20ef13",
+     "de2c92463b8e"
+    ],
+    "candidate_limit": 100,
+    "chunk_density": 1.25,
+    "original_model_query_tokens": 4,
+    "model_query_tokens": 4,
+    "model_query_truncated": false,
+    "assistant_share": 0.919716,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "8d5c504db630",
+     "46bf2572df04",
+     "deab17cc92c6",
+     "6de98796742f",
+     "80baef560f70",
+     "9459d7b6ccb5",
+     "04d5e42efc98",
+     "bd762a84ce67",
+     "6e4f72a8f3d7",
+     "5c2ab9b8a6d8",
+     "fe25bc8b3b54",
+     "4f7a94c783b7",
+     "c9a6569bfd03",
+     "9b07a6fa79d7",
+     "0c99ad8bf7d8",
+     "f319819ed456",
+     "17738929689d",
+     "7a5d3cfdf490",
+     "3dfb07724762",
+     "20c441cb8d36",
+     "7dddf1381029",
+     "2466641fc24f",
+     "00b101e0ba53",
+     "987b0df33546",
+     "2ad0614ba3c3",
+     "a2546dff171d",
+     "6691ff8c8bf6",
+     "c10e61a7c9fc"
+    ]
+   }
+  },
+  {
+   "user_id": "long-turns",
+   "query": "Which version does service checkout-20 run now?",
+   "options": null,
+   "context": "sha256:8ab35eb9b5ee len=29964",
+   "evidence": [
+    {
+     "id": "6954144581e6",
+     "source_id": "751667bbd082",
+     "span": [
+      0,
+      95
+     ],
+     "score": 0.032258,
+     "rerank_score": null,
+     "merged": [
+      "5ba61c0605c2"
+     ],
+     "neighbors": [],
+     "content": "sha256:bcc2e106aa2c len=319"
+    },
+    {
+     "id": "29e879e64666",
+     "source_id": "77e68723a5e6",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.022266,
+     "rerank_score": null,
+     "merged": [
+      "4258b5043dfd",
+      "74a565accf94",
+      "16513f5b433c",
+      "c290a35fe059",
+      "27509f8ea505",
+      "3af31600b3f3",
+      "7060853cb5a4",
+      "8bdb3d2999a6",
+      "55a435f65791",
+      "779c0b681c75",
+      "0f1db5275e97",
+      "ecb6d5d6d8c7",
+      "94cd0866fe72",
+      "50bba1994ce5",
+      "35c1074c8dc9",
+      "20ab7a46d38a",
+      "56c31ecb5392",
+      "d9cf4135d011",
+      "dfa517e27166",
+      "2673676e5b56",
+      "fa6906f31e83",
+      "193795830ae6",
+      "53342582a61d",
+      "404d55df5a02",
+      "fb50c555e175",
+      "46b4d341bbe9",
+      "82b95ec9a0da"
+     ],
+     "neighbors": [
+      "d453368d86ed",
+      "f3d07551f233"
+     ],
+     "content": "sha256:c752518d39f0 len=29643"
+    }
+   ],
+   "candidates": "sha256:c4a254fbb223 len=245",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "3aacfd34ee93",
+     "69b9b08104d0",
+     "c30a91b580a7",
+     "d74a4212ceb3",
+     "25aee785a57c"
+    ],
+    "channel_counts": {
+     "lexical": 35,
+     "dense": 35
+    },
+    "packed_tokens": 7761,
+    "evidence_tokens": 7761,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "d9458798bcc3",
+     "28efa605054d",
+     "c89f8d25adab",
+     "c5ec558e4e83",
+     "6bad969d80df"
+    ],
+    "candidate_limit": 300,
+    "chunk_density": 5.833333,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.991815,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "3aacfd34ee93",
+     "69b9b08104d0",
+     "c30a91b580a7",
+     "d74a4212ceb3",
+     "25aee785a57c",
+     "d453368d86ed",
+     "f3d07551f233"
+    ]
+   }
+  },
+  {
+   "user_id": "long-turns",
+   "query": "How many open alerts does inventory-30 have?",
+   "options": null,
+   "context": "sha256:6dbe56a07f60 len=30465",
+   "evidence": [
+    {
+     "id": "4258b5043dfd",
+     "source_id": "eee61236d5b0",
+     "span": [
+      0,
+      70
+     ],
+     "score": 0.016393,
+     "rerank_score": null,
+     "merged": [
+      "29e879e64666",
+      "27509f8ea505",
+      "16513f5b433c",
+      "94cd0866fe72",
+      "8bdb3d2999a6",
+      "7060853cb5a4",
+      "82b95ec9a0da",
+      "c5ec558e4e83",
+      "404d55df5a02",
+      "0f1db5275e97",
+      "50bba1994ce5",
+      "46b4d341bbe9",
+      "3af31600b3f3",
+      "fa6906f31e83",
+      "35c1074c8dc9",
+      "ecb6d5d6d8c7",
+      "dfa517e27166",
+      "74a565accf94",
+      "2673676e5b56",
+      "fb50c555e175",
+      "20ab7a46d38a",
+      "779c0b681c75",
+      "6bad969d80df",
+      "c290a35fe059",
+      "53342582a61d",
+      "193795830ae6",
+      "d9cf4135d011"
+     ],
+     "neighbors": [
+      "f3d07551f233",
+      "d453368d86ed"
+     ],
+     "content": "sha256:f46d91464bbd len=30144"
+    },
+    {
+     "id": "6954144581e6",
+     "source_id": "751667bbd082",
+     "span": [
+      0,
+      95
+     ],
+     "score": 0.010638,
+     "rerank_score": null,
+     "merged": [
+      "5ba61c0605c2"
+     ],
+     "neighbors": [],
+     "content": "sha256:bcc2e106aa2c len=319"
+    }
+   ],
+   "candidates": "sha256:64809bae9795 len=193",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "c30a91b580a7",
+     "d74a4212ceb3",
+     "25aee785a57c",
+     "3aacfd34ee93",
+     "69b9b08104d0"
+    ],
+    "channel_counts": {
+     "lexical": 30,
+     "dense": 35
+    },
+    "packed_tokens": 7902,
+    "evidence_tokens": 7902,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "d9458798bcc3",
+     "28efa605054d",
+     "55a435f65791",
+     "c89f8d25adab",
+     "56c31ecb5392"
+    ],
+    "candidate_limit": 300,
+    "chunk_density": 5.833333,
+    "original_model_query_tokens": 10,
+    "model_query_tokens": 10,
+    "model_query_truncated": false,
+    "assistant_share": 0.991815,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "c30a91b580a7",
+     "d74a4212ceb3",
+     "25aee785a57c",
+     "f3d07551f233",
+     "3aacfd34ee93",
+     "d453368d86ed",
+     "69b9b08104d0"
+    ]
+   }
+  },
+  {
+   "user_id": "long-turns",
+   "query": "Which region is service auth-05 in?",
+   "options": [
+    "A. Frankfurt",
+    "B. Dublin",
+    "C. Virginia",
+    "D. Singapore"
+   ],
+   "context": "sha256:5923217a3cfa len=30664",
+   "evidence": [
+    {
+     "id": "29e879e64666",
+     "source_id": "77e68723a5e6",
+     "span": [
+      0,
+      83
+     ],
+     "score": 0.026378,
+     "rerank_score": null,
+     "merged": [
+      "4258b5043dfd",
+      "779c0b681c75",
+      "16513f5b433c",
+      "193795830ae6",
+      "8bdb3d2999a6",
+      "20ab7a46d38a",
+      "82b95ec9a0da",
+      "35c1074c8dc9",
+      "94cd0866fe72",
+      "c89f8d25adab",
+      "56c31ecb5392",
+      "fb50c555e175",
+      "ecb6d5d6d8c7",
+      "c5ec558e4e83",
+      "27509f8ea505",
+      "7060853cb5a4",
+      "c290a35fe059",
+      "50bba1994ce5",
+      "6bad969d80df",
+      "55a435f65791",
+      "0f1db5275e97",
+      "53342582a61d",
+      "74a565accf94",
+      "d9cf4135d011",
+      "dfa517e27166",
+      "3af31600b3f3"
+     ],
+     "neighbors": [
+      "d453368d86ed",
+      "f3d07551f233"
+     ],
+     "content": "sha256:9854526f78cf len=30343"
+    },
+    {
+     "id": "6954144581e6",
+     "source_id": "751667bbd082",
+     "span": [
+      0,
+      95
+     ],
+     "score": 0.024503,
+     "rerank_score": null,
+     "merged": [
+      "5ba61c0605c2"
+     ],
+     "neighbors": [],
+     "content": "sha256:bcc2e106aa2c len=319"
+    }
+   ],
+   "candidates": "sha256:612bc4eead92 len=248",
+   "atom_hits": [],
+   "trace": {
+    "mode": "hybrid",
+    "omitted_context_ids": [
+     "c30a91b580a7",
+     "d74a4212ceb3",
+     "25aee785a57c",
+     "69b9b08104d0",
+     "3aacfd34ee93"
+    ],
+    "channel_counts": {
+     "lexical": 35,
+     "dense": 35
+    },
+    "packed_tokens": 7980,
+    "evidence_tokens": 7980,
+    "tokenizer": "golden-words",
+    "omitted_ids": [
+     "d9458798bcc3",
+     "46b4d341bbe9",
+     "2673676e5b56",
+     "28efa605054d",
+     "fa6906f31e83",
+     "404d55df5a02"
+    ],
+    "candidate_limit": 300,
+    "chunk_density": 5.833333,
+    "original_model_query_tokens": 21,
+    "model_query_tokens": 21,
+    "model_query_truncated": false,
+    "assistant_share": 0.991815,
+    "role_first_applied": true,
+    "role_boost_applied": false,
+    "context_candidates": [
+     "c30a91b580a7",
+     "d74a4212ceb3",
+     "25aee785a57c",
+     "d453368d86ed",
+     "69b9b08104d0",
+     "3aacfd34ee93",
+     "f3d07551f233"
+    ]
+   }
+  }
+ ]
+}
