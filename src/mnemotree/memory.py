@@ -13,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from . import engine
 from .core.models import (
     Evidence,
     Message,
@@ -25,6 +24,7 @@ from .core.models import (
     scope,
 )
 from .core.protocols import Embedder, Reranker, TokenCounter
+from .engine import EvidenceEngine
 
 
 class MemoryItem(Record):
@@ -80,7 +80,7 @@ class Memory:
     ) -> None:
         self.namespace = scope(namespace)
         self.search = search
-        self.engine = engine.EvidenceEngine(
+        self.engine = EvidenceEngine(
             path,
             embedder=embedder,
             reranker=reranker,
@@ -91,7 +91,7 @@ class Memory:
 
     @classmethod
     def from_engine(
-        cls, memory: engine.EvidenceEngine, *, namespace: str, search: SearchOptions | None = None
+        cls, engine: EvidenceEngine, *, namespace: str, search: SearchOptions | None = None
     ) -> Memory:
         """Bind an already configured engine, such as one built from a CLI config.
 
@@ -100,7 +100,7 @@ class Memory:
         self = cls.__new__(cls)
         self.namespace = scope(namespace)
         self.search = search
-        self.engine = memory
+        self.engine = engine
         return self
 
     def close(self) -> None:
