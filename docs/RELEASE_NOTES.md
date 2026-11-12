@@ -14,6 +14,10 @@ directly.
   place of nine arguments. Only code that writes to the store directly is affected;
   `EvidenceEngine.add` and `Memory.remember` are unchanged.
 
+- The `lite` extra needs sentence-transformers 5.4 or later, where the embedding
+  dimension method was renamed. Earlier releases are no longer supported, and the
+  embedder no longer triggers the old name's `FutureWarning`.
+
 # 1.0.4 (2026-11-12)
 
 Every 1.0 import path and class name keeps working. The one removal is payload

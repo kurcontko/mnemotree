@@ -18,7 +18,7 @@ license = { text = "MIT" }
 embeddings = ["httpx>=0.27,<1.0", "tenacity>=9.2.1,<10"]
 serve = ["fastapi>=0.115,<1.0", "uvicorn>=0.30,<1.0"]
 # Local SentenceTransformer embedder (evidence.providers.SentenceTransformerEmbedder)
-lite = ["sentence-transformers>=2.7.0"]
+lite = ["sentence-transformers>=5.4"]
 dev = [
     "build>=1.4.0,<2",
     "httpx>=0.27,<1.0",
