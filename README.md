@@ -32,13 +32,6 @@ The default install needs only Pydantic, sqlite-vec and tiktoken. See
 pip install mnemotree
 ```
 
-This README describes the 0.5 API. When using it before the 0.5 release, install
-the development version instead:
-
-```bash
-pip install "mnemotree @ git+https://github.com/kurcontko/mnemotree.git@main"
-```
-
 Python's `sqlite3` must support loadable extensions and FTS5. Tiktoken downloads its
 vocabulary once; see [the guide](docs/GUIDE.md#configuration) to run offline.
 
@@ -162,7 +155,8 @@ numbers were produced and what they leave out.
 
 Releases up to 0.4.0 shipped `MemoryCore`, pluggable vector/graph backends and an
 older MCP server. They have been removed, and `Memory` does not read their databases.
-See the [0.5 release notes](docs/RELEASE_NOTES.md) for API and compatibility changes.
+See [upgrading from 0.4.0](docs/RELEASE_NOTES.md#upgrading-from-040-or-earlier) in the
+release notes for API and compatibility changes.
 
 ## Development
 
