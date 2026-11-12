@@ -18,14 +18,16 @@ import struct
 import tempfile
 import zipfile
 from collections import defaultdict
+from collections.abc import Iterator, Sequence
 from contextlib import ExitStack, contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
-from mnemotree import Memory
-from mnemotree.evidence.models import EmbeddingSpec, Message, SearchOptions
-from mnemotree.evidence.packing import TiktokenCounter
+from mnemotree import Memory, Recall
+from mnemotree.core.models import ContextSpan, EmbeddingSpec, Evidence, Message, SearchOptions
+from mnemotree.retrieval.packing import TiktokenCounter
 
 FIXTURES = Path(__file__).resolve().parents[2] / "benchmarks/ci/fixtures"
 METRICS = (
@@ -50,8 +52,8 @@ def require(condition: bool, message: str) -> None:
 
 
 @contextmanager
-def offline():
-    def forbidden(*args, **kwargs):
+def offline() -> Iterator[None]:
+    def forbidden(*args: object, **kwargs: object) -> None:
         raise RuntimeError("Frozen evaluation forbids network access")
 
     with ExitStack() as stack:
@@ -65,7 +67,7 @@ def offline():
         yield
 
 
-def load_fixture(directory: Path):
+def load_fixture(directory: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, bytes]]:
     pin = json.loads((directory / "fixture.json").read_bytes())
     archive_bytes = (directory / "open-model-v1.zip").read_bytes()
     require(sha(archive_bytes) == pin["sha256"], "Frozen fixture archive checksum changed")
@@ -86,7 +88,7 @@ def load_fixture(directory: Path):
 
 
 class FrozenEmbedder:
-    def __init__(self, provenance, files):
+    def __init__(self, provenance: dict[str, Any], files: dict[str, bytes]) -> None:
         config = provenance["embedding"]
         self.spec = EmbeddingSpec(
             **{key: config[key] for key in ("provider", "model", "revision", "dimensions")}
@@ -96,7 +98,7 @@ class FrozenEmbedder:
         size = self.spec.dimensions * 4
         data = files["vectors.f32"]
         require(len(data) == len(keys) * size, "Invalid frozen vector byte length")
-        self.vectors = {}
+        self.vectors: dict[str, tuple[float, ...]] = {}
         for index, key in enumerate(keys):
             values = struct.unpack_from(f"<{self.spec.dimensions}f", data, index * size)
             norm = math.sqrt(sum(value * value for value in values))
@@ -105,26 +107,32 @@ class FrozenEmbedder:
         self.document_lookups = 0
         self.query_lookups = 0
 
-    def lookup(self, kind, text):
+    def lookup(self, kind: str, text: str) -> tuple[float, ...]:
         key = vector_key(kind, text)
         if key not in self.vectors:
             raise ValueError(f"Cache refresh required: missing {kind} vector {key}")
         return self.vectors[key]
 
-    async def embed_documents(self, texts):
+    async def embed_documents(self, texts: Sequence[str]) -> list[tuple[float, ...]]:
         self.document_lookups += len(texts)
         return [self.lookup("document", text) for text in texts]
 
-    async def embed_query(self, text):
+    async def embed_query(self, text: str) -> tuple[float, ...]:
         self.query_lookups += 1
         return self.lookup("query", text)
 
 
-def coverage(expected, actual):
+def coverage(expected: Sequence[str], actual: set[str]) -> float | None:
     return len(set(expected) & actual) / len(expected) if expected else None
 
 
-def inspect_recall(recall, sources, labels, options, counter):
+def inspect_recall(
+    recall: Recall,
+    sources: dict[str, dict[str, Any]],
+    labels: dict[str, Any],
+    options: SearchOptions,
+    counter: TiktokenCounter,
+) -> dict[str, Any]:
     require(recall.trace.mode == "hybrid", "Hybrid retrieval silently changed mode")
     require(recall.trace.channel_counts.get("dense", 0) > 0, "Dense retrieval did not run")
     require(len(recall.evidence) <= options.limit, "Returned item limit exceeded")
@@ -141,7 +149,8 @@ def inspect_recall(recall, sources, labels, options, counter):
     packed = set()
     for item in recall.evidence:
         for member in item.members():
-            for span in (member, *member.neighbors):
+            spans: tuple[Evidence | ContextSpan, ...] = (member, *member.neighbors)
+            for span in spans:
                 require(span.source_id in sources, "Source outside visible history")
                 source = sources[span.source_id]
                 require(0 <= span.start < span.end <= len(source["content"]), "Invalid source span")
@@ -151,9 +160,11 @@ def inspect_recall(recall, sources, labels, options, counter):
                 )
                 require(span.role == source["role"], "Packed evidence role differs")
                 packed.add(span.source_id)
-    for item in recall.items:
-        require(item.id in sources, "Returned memory outside visible history")
-        require(item.content == sources[item.id]["content"], "Returned memory differs from source")
+    for memory in recall.items:
+        require(memory.id in sources, "Returned memory outside visible history")
+        require(
+            memory.content == sources[memory.id]["content"], "Returned memory differs from source"
+        )
     candidates = {candidate.chunk.source_id for candidate in recall.trace.candidates}
     require(candidates <= sources.keys(), "Candidate outside visible history")
     evidence = [] if labels["abstention"] else labels["evidence"]
@@ -174,7 +185,9 @@ def inspect_recall(recall, sources, labels, options, counter):
     }
 
 
-async def replay(provenance, files, working: Path):
+async def replay(
+    provenance: dict[str, Any], files: dict[str, bytes], working: Path
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     histories = json.loads(files["histories.json"])
     questions = json.loads(files["questions.json"])
     labels = json.loads(files["labels.json"])
@@ -256,7 +269,9 @@ async def replay(provenance, files, working: Path):
     }
 
 
-def compare(rows, baseline, fixture_sha):
+def compare(
+    rows: list[dict[str, Any]], baseline: dict[str, Any], fixture_sha: str
+) -> tuple[list[dict[str, Any]], list[str]]:
     require(baseline["fixture_sha256"] == fixture_sha, "Baseline belongs to a different fixture")
     expected = {row["id"]: row for row in baseline["cases"]}
     require(len(expected) == len(baseline["cases"]), "Duplicate baseline IDs")
@@ -276,7 +291,7 @@ def compare(rows, baseline, fixture_sha):
     return regressions, changed
 
 
-def summary(rows):
+def summary(rows: list[dict[str, Any]]) -> str:
     lines = [
         "# Frozen memory evaluations",
         "",
@@ -320,7 +335,8 @@ def main() -> int:
             with args.record_baseline.open("x") as handle:
                 json.dump(candidate, handle, indent=2)
                 handle.write("\n")
-            regressions, changed = [], []
+            regressions: list[dict[str, Any]] = []
+            changed: list[str] = []
         else:
             baseline = json.loads((args.fixtures / "baseline.json").read_bytes())
             regressions, changed = compare(rows, baseline, pin["sha256"])
