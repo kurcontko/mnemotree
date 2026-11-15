@@ -1,4 +1,4 @@
-# Unreleased
+# 1.1.0 (2026-11-15)
 
 Every 1.0 import path and class name keeps working. Two changes can break a 1.0
 caller: one that passes an engine by keyword, and one that writes to the store
