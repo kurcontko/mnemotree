@@ -22,8 +22,8 @@ from typing import Any
 
 import pytest
 
+from mnemotree import EvidenceEngine, Message, SearchOptions
 from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
-from mnemotree.evidence import Memory, Message, SearchOptions
 
 GOLDEN = Path(__file__).parent / "golden" / "retrieval"
 UPDATE = os.environ.get("MNEMOTREE_UPDATE_GOLDEN") == "1"
@@ -205,7 +205,7 @@ def snapshot(dump: dict[str, Any]) -> dict[str, Any]:
 
 
 async def run_case(tmp_path: Path, kind: str, options: dict[str, Any]) -> list[Any]:
-    memory = Memory(
+    memory = EvidenceEngine(
         tmp_path / "golden.db",
         embedder=HashEmbedder() if kind != "lexical" else None,
         reranker=OverlapReranker() if kind == "reranked" else None,

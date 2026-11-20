@@ -2,9 +2,8 @@ import asyncio
 
 import pytest
 
-from mnemotree import ProviderError
+from mnemotree import EvidenceEngine, Message, ProviderError, SearchOptions
 from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
-from mnemotree.evidence import Memory, Message, SearchOptions
 
 
 class CharCounter:
@@ -58,7 +57,7 @@ class Extractor:
 
 
 def memory(path, embedder, extractor):
-    return Memory(path, embedder=embedder, extractor=extractor, token_counter=CharCounter())
+    return EvidenceEngine(path, embedder=embedder, extractor=extractor, token_counter=CharCounter())
 
 
 async def add(memory):

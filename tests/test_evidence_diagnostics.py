@@ -6,9 +6,9 @@ import subprocess
 import httpx
 import pytest
 
+from mnemotree import EvidenceEngine, Message, SearchOptions
 from mnemotree.cli import evidence as cli
 from mnemotree.core.models import ContextSpan, EmbeddingSpec, Evidence
-from mnemotree.evidence import Memory, Message, SearchOptions
 from mnemotree.service.app import create_app
 from mnemotree.service.request_log import returned_role_chars
 
@@ -63,7 +63,7 @@ async def test_adapter_preserves_option_boundaries_and_model_input_and_logs(tmp_
 
     embedder = Embedder()
     path = tmp_path / "requests.jsonl"
-    with Memory(tmp_path / "m.db", embedder=embedder) as memory:
+    with EvidenceEngine(tmp_path / "m.db", embedder=embedder) as memory:
         await memory.add("u", [Message(content="zirconium")], request_id="r", session_id="s")
         app = create_app(memory, api_key="test", request_log=path)
         stem = " ".join(f"prefix{i}" for i in range(100))
@@ -121,7 +121,7 @@ async def test_role_gate_diagnostics_use_retrieval_snapshot(tmp_path):
                 )
             return [1.0] * len(texts)
 
-    with Memory(tmp_path / "m.db", reranker=WriteDuringRerank()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", reranker=WriteDuringRerank()) as memory:
         await memory.add("u", [Message(content="needle")], request_id="first", session_id="s")
         options = SearchOptions(
             mode="lexical", role_first="user", role_first_min_assistant_share=0.65

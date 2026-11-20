@@ -3,8 +3,8 @@ from datetime import UTC
 
 import pytest
 
+from mnemotree import EvidenceEngine, Message, SearchOptions
 from mnemotree.evaluation import ablate_context
-from mnemotree.evidence import Memory, Message, SearchOptions
 
 
 async def add(memory, namespace="u", request="r", session="s"):
@@ -24,7 +24,7 @@ async def add(memory, namespace="u", request="r", session="s"):
 
 
 async def test_context_recovers_unmatched_response_with_attribution(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await add(memory)
         baseline = await memory.search(
             "u", "Boston", options=SearchOptions(mode="lexical", limit=1)
@@ -52,7 +52,7 @@ async def test_context_recovers_unmatched_response_with_attribution(tmp_path):
 
 
 async def test_context_is_bounded_by_namespace_and_session(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await add(memory)
         await add(memory, namespace="other")
         await add(memory, request="r2", session="another")
@@ -67,7 +67,7 @@ async def test_context_is_bounded_by_namespace_and_session(tmp_path):
 
 async def test_context_crosses_add_requests_within_a_session(tmp_path):
     # AML splits a session into Add requests of at most 20 messages.
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await add(memory, request="r1")
         await add(memory, request="r2", session="another")
         await add(memory, request="r3")
@@ -94,7 +94,7 @@ async def test_context_crosses_add_requests_within_a_session(tmp_path):
 
 
 async def test_context_uses_exact_adjacent_spans_and_preserves_anchor_budget(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await memory.add(
             "u",
             [
@@ -122,7 +122,7 @@ async def test_context_uses_exact_adjacent_spans_and_preserves_anchor_budget(tmp
 
 
 async def test_neighbors_already_in_selected_anchors_are_not_repeated(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await memory.add(
             "u",
             [Message(id="a", content="target one"), Message(id="b", content="target two")],
@@ -158,7 +158,7 @@ async def test_context_ablation_reports_anchor_and_expansion_recall(tmp_path):
             {"id": "q", "namespace": "u", "query": "Boston", "relevant_source_ids": ["answer"]}
         )
     )
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         report = await ablate_context(
             memory, corpus, queries, SearchOptions(mode="lexical", limit=1)
         )
@@ -175,7 +175,7 @@ async def test_context_ablation_reports_anchor_and_expansion_recall(tmp_path):
 
 
 async def test_only_packed_anchors_can_omit_context(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         for session in ("s1", "s2"):
             await memory.add(
                 "u",
@@ -196,7 +196,7 @@ async def test_only_packed_anchors_can_omit_context(tmp_path):
 
 
 async def test_merged_blocks_count_once_against_the_limit(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         texts = ["intro chatter", "kiwi first", "kiwi second", "plain filler", "kiwi third"]
         await memory.add(
             "u",
@@ -225,7 +225,7 @@ async def test_merged_blocks_count_once_against_the_limit(tmp_path):
 
 
 async def test_merge_reach_includes_neighbor_windows(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         texts = ["kiwi start", "plain middle", "kiwi end"]
         await memory.add(
             "u",
@@ -251,7 +251,7 @@ async def test_merge_reach_includes_neighbor_windows(tmp_path):
 
 async def test_merged_chunks_of_one_message_render_as_one_line(tmp_path):
     content = "kiwi " * 20
-    with Memory(tmp_path / "m.db", chunk_size=20, chunk_overlap=5) as memory:
+    with EvidenceEngine(tmp_path / "m.db", chunk_size=20, chunk_overlap=5) as memory:
         await memory.add("u", [Message(id="m", content=content)], request_id="r", session_id="s")
         result = await memory.search(
             "u", "kiwi", options=SearchOptions(mode="lexical", merge_blocks=True)
@@ -382,7 +382,7 @@ async def test_time_order_compares_instants_across_offsets(tmp_path):
     # Earlier as an instant, later on the wall clock.
     tokyo = datetime(2023, 5, 9, 8, 30, tzinfo=timezone(timedelta(hours=9)))
     utc = datetime(2023, 5, 8, 23, 45, tzinfo=UTC)
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         for id, when in (("second", utc), ("first", tokyo)):
             await memory.add(
                 "u",
@@ -401,7 +401,7 @@ async def test_time_order_returns_selected_items_chronologically(tmp_path):
 
     early = datetime(2023, 5, 1, tzinfo=UTC)
     late = datetime(2023, 6, 1, tzinfo=UTC)
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         for request, (when, text) in enumerate(
             [(early, "Bought a kayak."), (late, "Kayak trip, kayak lessons, kayak club.")]
         ):

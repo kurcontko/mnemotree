@@ -101,7 +101,7 @@ def test_offline_guard_blocks_network_calls():
 
 
 def test_joined_context_and_block_token_counts_are_checked_separately():
-    from mnemotree.evidence.models import Evidence, SearchOptions
+    from mnemotree.core.models import Evidence, SearchOptions
 
     evidence = [
         Evidence(

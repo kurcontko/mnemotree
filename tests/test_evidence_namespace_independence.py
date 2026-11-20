@@ -10,8 +10,8 @@ import re
 
 import pytest
 
+from mnemotree import EvidenceEngine, Message, SearchOptions
 from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
-from mnemotree.evidence import Memory, Message, SearchOptions
 from mnemotree.storage.atom_store import ATOM_FTS
 from mnemotree.storage.lexical import fts_table
 
@@ -64,7 +64,7 @@ class OneAtomPerPassage:
         ]
 
 
-def aml_preset(memory: Memory) -> SearchOptions:
+def aml_preset(memory: EvidenceEngine) -> SearchOptions:
     from mnemotree.service.presets import aml_options
 
     return aml_options(memory)
@@ -77,7 +77,7 @@ def snapshot(result) -> dict:
     return dump
 
 
-async def write_alice(memory: Memory, namespace: str = "alice") -> None:
+async def write_alice(memory: EvidenceEngine, namespace: str = "alice") -> None:
     await memory.add(
         namespace,
         [
@@ -89,7 +89,7 @@ async def write_alice(memory: Memory, namespace: str = "alice") -> None:
     )
 
 
-async def write_bob(memory: Memory, namespace: str = "bob") -> list[str]:
+async def write_bob(memory: EvidenceEngine, namespace: str = "bob") -> list[str]:
     ids = [f"bob-{index}" for index in range(len(BOB))]
     await memory.add(
         namespace,
@@ -106,7 +106,7 @@ async def write_bob(memory: Memory, namespace: str = "bob") -> list[str]:
 
 @pytest.mark.parametrize("hybrid", [False, True], ids=["lexical", "hybrid"])
 async def test_additions_updates_and_deletions_leave_other_namespaces_unchanged(tmp_path, hybrid):
-    with Memory(tmp_path / "m.db", embedder=HashEmbedder() if hybrid else None) as memory:
+    with EvidenceEngine(tmp_path / "m.db", embedder=HashEmbedder() if hybrid else None) as memory:
         options = aml_preset(memory)
 
         async def alice() -> list[dict]:
@@ -147,7 +147,7 @@ async def test_arrival_order_between_namespaces_does_not_change_retrieval(tmp_pa
     query, answers = QUERIES[0]
 
     async def alice_after(writes, name: str) -> dict:
-        with Memory(tmp_path / f"{name}.db", embedder=HashEmbedder()) as memory:
+        with EvidenceEngine(tmp_path / f"{name}.db", embedder=HashEmbedder()) as memory:
             await writes(memory)
             return snapshot(
                 await memory.search(
@@ -157,11 +157,11 @@ async def test_arrival_order_between_namespaces_does_not_change_retrieval(tmp_pa
 
     alone = await alice_after(write_alice, "alone")
 
-    async def bob_first(memory: Memory) -> None:
+    async def bob_first(memory: EvidenceEngine) -> None:
         await write_bob(memory)
         await write_alice(memory)
 
-    async def concurrent(memory: Memory) -> None:
+    async def concurrent(memory: EvidenceEngine) -> None:
         await asyncio.gather(write_bob(memory), write_alice(memory))
 
     assert await alice_after(bob_first, "bob-first") == alone
@@ -170,7 +170,7 @@ async def test_arrival_order_between_namespaces_does_not_change_retrieval(tmp_pa
 
 async def test_another_namespaces_atoms_cannot_change_atom_retrieval(tmp_path):
     options = SearchOptions(mode="lexical", representation="atoms")
-    with Memory(
+    with EvidenceEngine(
         tmp_path / "m.db", extractor=OneAtomPerPassage(), extraction_batch_chars=1000
     ) as memory:
 
@@ -190,7 +190,7 @@ async def test_another_namespaces_atoms_cannot_change_atom_retrieval(tmp_path):
 
 async def test_forgetting_removes_atoms_from_the_namespace_index(tmp_path):
     options = SearchOptions(mode="lexical", representation="atoms")
-    with Memory(tmp_path / "m.db", extractor=OneAtomPerPassage()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", extractor=OneAtomPerPassage()) as memory:
         await write_alice(memory)
         db = memory.store.db
         table = fts_table(ATOM_FTS, "alice")
@@ -201,7 +201,7 @@ async def test_forgetting_removes_atoms_from_the_namespace_index(tmp_path):
 
 
 async def test_a_namespace_without_records_searches_empty(tmp_path):
-    with Memory(tmp_path / "m.db", extractor=OneAtomPerPassage()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", extractor=OneAtomPerPassage()) as memory:
         for representation in ("raw", "atoms"):
             options = SearchOptions(mode="lexical", representation=representation)
             assert not (await memory.search("nobody", "apple", options=options)).evidence
@@ -210,7 +210,7 @@ async def test_a_namespace_without_records_searches_empty(tmp_path):
 async def test_namespace_text_never_reaches_sql_as_a_name(tmp_path):
     hostile = "../x'; DROP TABLE evidence_chunks; --"
     options = SearchOptions(mode="lexical")
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await write_alice(memory, hostile)
         await write_alice(memory)
         found = await memory.search(hostile, "apple", options=options)
@@ -223,7 +223,7 @@ async def test_a_failed_first_write_leaves_the_namespace_usable(tmp_path, monkey
         raise RuntimeError("stop after the chunks are indexed")
 
     options = SearchOptions(mode="lexical")
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         # The transaction that created the namespace's index rolls back with it.
         with monkeypatch.context() as patch:
             patch.setattr(memory.store.atoms, "insert", fail)

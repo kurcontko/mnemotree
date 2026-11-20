@@ -1,12 +1,25 @@
 # Unreleased
 
-Every 1.0 import path and class name keeps working. Two changes can break a 1.0
-caller: one that passes an engine by keyword, and one that writes to the store
-directly.
+Three changes can break a 1.0 caller: one that imports from `mnemotree.evidence`,
+one that passes an engine by keyword, and one that writes to the store directly.
 
+- The 1.0 import paths under `mnemotree.evidence` are gone. Import the engine and
+  its records from `mnemotree` (`EvidenceEngine`, `Message`, `SearchOptions`,
+  `EmbeddingSpec`, the errors), and everything else from the modules they moved to
+  in 1.0.4: `mnemotree.evidence.<module>` became `mnemotree.engine`,
+  `mnemotree.core.models`, `.core.protocols`, `.core.temporal`, `.ingest.chunking`,
+  `.ingest.atoms`, `.retrieval.packing`, `.storage.store`, `.storage.lexical`,
+  `.storage.atom_store`, `.providers.embeddings`, `.providers.retry`,
+  `.service.app`, `.evaluation` and `.cli.evidence`. `mnemotree.evidence.Memory` is
+  `mnemotree.EvidenceEngine`. `python -m mnemotree.evidence.cli` is now
+  `mnemotree-evidence` or `python -m mnemotree.cli.evidence`. The old module's
+  `secret` and `open_memory` wrappers are gone: `mnemotree.config.secret` and
+  `Config.open` raise `ConfigurationError` on a missing credential instead of
+  exiting. Logger names (`mnemotree.evidence`, `mnemotree.evidence.providers`,
+  `mnemotree.evidence.server`) are unchanged.
 - Functions that take an engine call the parameter `engine`, not `memory`:
   `create_app`, `aml_options`, `Memory.from_engine`, the evidence CLI's `run`
-  (`mnemotree.evidence.cli.run`), and in `mnemotree.evaluation` `evaluate`, `ablate`,
+  (`mnemotree.cli.evidence.run`), and in `mnemotree.evaluation` `evaluate`, `ablate`,
   `ablate_context`, `ablate_retrieval`, `retrieval_variants`, `ingest_corpus` and
   `score_queries`. Passing the engine positionally works as before; passing it as
   `memory=` no longer does.

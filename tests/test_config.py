@@ -6,10 +6,13 @@ from pydantic import ValidationError
 
 from mnemotree import (
     ConfigurationError,
+    EvidenceEngine,
     IngestConflict,
     InvalidInput,
+    Message,
     MnemotreeError,
     ProviderError,
+    SearchOptions,
 )
 from mnemotree.config import (
     Config,
@@ -18,7 +21,6 @@ from mnemotree.config import (
     SentenceTransformerEmbeddingConfig,
 )
 from mnemotree.core.models import EmbeddingSpec
-from mnemotree.evidence import Memory, Message, SearchOptions
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,20 +105,6 @@ def test_missing_key_names_the_variable(monkeypatch):
         config.build()
 
 
-def test_the_1_0_cli_names_keep_exiting_on_a_missing_credential(monkeypatch, tmp_path):
-    from mnemotree import config
-    from mnemotree.evidence import cli as legacy_cli
-
-    monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
-    assert legacy_cli.Config is config.Config
-    with pytest.raises(SystemExit, match="mnemotree-evidence: set the EMBEDDING_API_KEY"):
-        legacy_cli.secret("EMBEDDING_API_KEY")
-    settings = {"kind": "openai", "model": "m", "dimensions": 4, "revision": "r"}
-    with pytest.raises(SystemExit, match="EMBEDDING_API_KEY"):
-        legacy_cli.open_memory(tmp_path / "m.db", config.Config(embedding=settings))
-    assert not (tmp_path / "m.db").exists()
-
-
 def test_errors_are_value_errors():
     for error in (InvalidInput, ConfigurationError, IngestConflict, ProviderError):
         assert issubclass(error, MnemotreeError)
@@ -124,7 +112,7 @@ def test_errors_are_value_errors():
 
 
 async def test_invalid_arguments_raise_invalid_input(tmp_path):
-    with Memory(tmp_path / "m.db", token_counter=CharCounter()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", token_counter=CharCounter()) as memory:
         with pytest.raises(InvalidInput, match="query must not be blank"):
             await memory.search("u", "  ")
         with pytest.raises(InvalidInput, match="namespace"):
@@ -136,7 +124,7 @@ async def test_invalid_arguments_raise_invalid_input(tmp_path):
 
 
 async def test_unservable_requests_raise_configuration_error(tmp_path):
-    with Memory(tmp_path / "m.db", token_counter=CharCounter()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", token_counter=CharCounter()) as memory:
         with pytest.raises(ConfigurationError, match="indexed embedder"):
             await memory.search("u", "q", options=SearchOptions(mode="dense"))
         with pytest.raises(ConfigurationError, match="extracted corpus"):
@@ -144,7 +132,7 @@ async def test_unservable_requests_raise_configuration_error(tmp_path):
                 "u", "q", options=SearchOptions(mode="lexical", representation="atoms")
             )
     with pytest.raises(ConfigurationError, match="chunk_size"):
-        Memory(tmp_path / "m.db", chunk_size=1, chunk_overlap=1)
+        EvidenceEngine(tmp_path / "m.db", chunk_size=1, chunk_overlap=1)
 
 
 def test_config_round_trips_through_json():

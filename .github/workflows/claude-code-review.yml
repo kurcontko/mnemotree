@@ -120,7 +120,7 @@ jobs:
             Prioritize reachable correctness or security failures and these
             mnemotree invariants: the public surface exported from
             src/mnemotree/__init__.py and the HTTP Add/Search contract in
-            src/mnemotree/evidence/server.py are client contracts; ingestion
+            src/mnemotree/service/app.py are client contracts; ingestion
             commits sources, chunks, FTS5, vectors and the request receipt in
             one transaction, and a replayed request never duplicates or
             resurrects content; every read and write is scoped to an exact

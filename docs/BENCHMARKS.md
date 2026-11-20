@@ -23,7 +23,7 @@ engine `e9e694c`, whose `src/` tree is identical to `02aefee`.
 ## Method
 
 The benchmarks use the default profile of the AML Add/Search service,
-`aml_options` in `src/mnemotree/evidence/server.py`. No LLM, reranker or extractor
+`aml_options` in `src/mnemotree/service/presets.py`. No LLM, reranker or extractor
 runs inside Mnemotree. The embedder is the only model it calls.
 
 - **Storage.** Mnemotree stores each message verbatim in SQLite and splits it into
@@ -57,7 +57,7 @@ The budget is a setting, and `token_budget` accepts up to 117,760 tokens. Changi
 it on default `SearchOptions` won't reproduce the benchmarks, though. The defaults
 have no neighbor window, no merging, no per-message chunk cap and no user-first
 ordering. To keep the benchmarked retrieval and change only the budget, start from
-the values `aml_options` sets in `src/mnemotree/evidence/server.py`:
+the values `aml_options` sets in `src/mnemotree/service/presets.py`:
 
 ```python
 from mnemotree import Memory, SearchOptions
