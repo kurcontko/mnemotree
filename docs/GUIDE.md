@@ -341,11 +341,16 @@ and delete what is stored, behind the same key:
 - `POST /v1/memories/stats` with `{"user_id": ...}` returns counts of `memories`,
   `chunks` and Add `requests`.
 
-`user_id` partitions the data; it is not access control. Anyone holding the service
-key can read and delete every user's memories. Replaying an Add after one of its
-messages was deleted answers 409: the replay cannot restore it. Send the message
-again under a new `request_id` to store it again. There is no route that erases a
-whole user: list their memories and delete each one.
+The service is built for one trusted caller. Run it behind your own backend, which
+authenticates your users and holds the key; do not expose it to end users or hand
+the key to a client you do not control. `user_id` partitions the data; it is not
+access control, and anyone holding the key can read and delete every user's
+memories.
+
+Replaying an Add after one of its messages was deleted answers 409: the replay
+cannot restore it. Send the message again under a new `request_id` to store it
+again. There is no route that erases a whole user: list their memories and delete
+each one.
 
 ```bash
 pip install 'mnemotree[serve]'
