@@ -8,6 +8,9 @@ Local, source-first memory for LLM agents: SQLite, FTS5 and sqlite-vec.
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kurcontko_mnemotree&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kurcontko_mnemotree)
 [![CodeQL](https://github.com/kurcontko/mnemotree/actions/workflows/codeql.yml/badge.svg)](https://github.com/kurcontko/mnemotree/actions/workflows/codeql.yml)
 
+[![AML Cycle 2: #2 open-source textual · 60.81](https://img.shields.io/badge/AML_Cycle_2-%232_open--source_textual_%C2%B7_60.81-1a7f74.svg)](https://agentmemoryleaderboard.ai/results/cycle-2/#academic-textual)
+[![LoCoMo-Refined: 78.7 · official scorer](https://img.shields.io/badge/LoCoMo--Refined-78.7_%C2%B7_official_scorer-2b6cb0.svg)](#benchmarks)
+
 <p align="center">
   <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
 </p>
@@ -24,7 +27,8 @@ instead of rewritten summaries.
 - **Isolated:** every read and write is scoped to one namespace.
 
 The default install needs only Pydantic, sqlite-vec and tiktoken. See
-[Benchmarks](#benchmarks) for end-to-end results on LoCoMo and LongMemEval.
+[Benchmarks](#benchmarks) for the Agent Memory Leaderboard result and end-to-end
+results on LoCoMo and LongMemEval.
 
 ## Install
 
@@ -62,6 +66,14 @@ asyncio.run(main())
 and `forget`. Pass an `embedder` for hybrid retrieval.
 
 ## Benchmarks
+
+<a href="https://agentmemoryleaderboard.ai/results/cycle-2/#academic-textual">
+  <img src="assets/aml-cycle2-textual-open-source.png" alt="AML Cycle 2: mnemotree second in Textual Memory, open-source methods, score 60.81" width="560">
+</a>
+
+On the [Agent Memory Leaderboard](https://agentmemoryleaderboard.ai/results/cycle-2/#academic-textual)
+Cycle 2 (2026), mnemotree
+placed second in Textual Memory with 60.81, 0.41 behind first.
 
 These scores measure end-to-end question answering with the `v1.0.0` engine.
 Mnemotree packs at most 8,000 tokens of evidence per question. gpt-4o-mini answers
