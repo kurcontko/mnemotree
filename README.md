@@ -9,6 +9,7 @@ Local, source-first memory for LLM agents: SQLite, FTS5 and sqlite-vec.
 [![CodeQL](https://github.com/kurcontko/mnemotree/actions/workflows/codeql.yml/badge.svg)](https://github.com/kurcontko/mnemotree/actions/workflows/codeql.yml)
 
 [![AML Cycle 2: #2 open-source textual · 60.81](https://img.shields.io/badge/AML_Cycle_2-%232_open--source_textual_%C2%B7_60.81-1a7f74.svg)](https://agentmemoryleaderboard.ai/results/cycle-2/#academic-textual)
+[![LoCoMo-Refined: 78.7 · official scorer](https://img.shields.io/badge/LoCoMo--Refined-78.7_%C2%B7_official_scorer-2b6cb0.svg)](#benchmarks)
 
 <p align="center">
   <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
