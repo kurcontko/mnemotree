@@ -176,10 +176,10 @@ vulnerable API; say which API and which grep proved it.
 3. **For High.** Read the release notes between old and new (PR body, then
    `https://pypi.org/project/<pkg>/<version>/` and the upstream changelog).
    For `sqlite-vec`, list the SQL functions and virtual-table syntax used in
-   `src/mnemotree/evidence/store.py` and `atom_store.py` and check each
+   `src/mnemotree/storage/store.py` and `atom_store.py` and check each
    against the new version's documentation. For `pydantic`, check
    validator, serializer and `model_config` changes against
-   `src/mnemotree/evidence/models.py`.
+   `src/mnemotree/core/models.py`.
    Then ask Context7 about the new version directly, using the symbol list
    the greps above produced: `mcp__context7__resolve-library-id`
    (`libraryName` = the package, `query` = what you are checking), then

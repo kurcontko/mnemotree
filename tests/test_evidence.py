@@ -5,16 +5,16 @@ from importlib import import_module
 
 import pytest
 
-from mnemotree import ProviderError
-from mnemotree.core.models import Chunk
-from mnemotree.evidence import (
+from mnemotree import (
     EmbeddingSpec,
+    EvidenceEngine,
     IngestConflict,
     IngestReceipt,
-    Memory,
     Message,
+    ProviderError,
     SearchOptions,
 )
+from mnemotree.core.models import Chunk
 from mnemotree.retrieval.packing import LINE_SAFE_ENCODINGS, TiktokenCounter
 from mnemotree.retrieval.ranking import QUERY_EMBED_CHARS, QUERY_EMBED_TOKENS, fuse
 from mnemotree.storage.lexical import fts_table
@@ -50,7 +50,7 @@ async def add(memory, text="apple orchard", *, namespace="alice", request="r1", 
 async def test_persistence_scope_idempotency_and_forgetting(tmp_path):
     path = tmp_path / "memory.db"
     embedder = ToyEmbedder()
-    with Memory(path, embedder=embedder) as memory:
+    with EvidenceEngine(path, embedder=embedder) as memory:
         receipt = await add(memory, id="same")
         replay = await add(memory, id="same")
         assert replay.replayed and replay.source_ids == receipt.source_ids
@@ -58,7 +58,7 @@ async def test_persistence_scope_idempotency_and_forgetting(tmp_path):
         with pytest.raises(IngestConflict, match="different payload"):
             await add(memory, "changed")
         await add(memory, namespace="bob", id="same")
-    with Memory(path, embedder=embedder) as memory:
+    with EvidenceEngine(path, embedder=embedder) as memory:
         for mode in ("lexical", "dense", "hybrid"):
             result = await memory.search("alice", "apple", options=SearchOptions(mode=mode))
             assert [item.source_id for item in result.evidence] == ["same"]
@@ -78,7 +78,7 @@ async def test_persistence_scope_idempotency_and_forgetting(tmp_path):
 
 async def test_durable_atomic_add_and_conflicting_source_ids(tmp_path):
     embedder = ToyEmbedder()
-    with Memory(tmp_path / "m.db", embedder=embedder) as memory:
+    with EvidenceEngine(tmp_path / "m.db", embedder=embedder) as memory:
         embedder.fail = True
         with pytest.raises(RuntimeError):
             await add(memory)
@@ -108,7 +108,7 @@ async def test_durable_atomic_add_and_conflicting_source_ids(tmp_path):
 
 async def test_occurrences_spans_time_and_neighbor_context(tmp_path):
     content = "😀 café\n" * 10 + "apple orchard\n" + "終わり " * 10
-    with Memory(tmp_path / "m.db", chunk_size=40, chunk_overlap=10) as memory:
+    with EvidenceEngine(tmp_path / "m.db", chunk_size=40, chunk_overlap=10) as memory:
         receipt = await memory.add(
             "alice",
             [
@@ -134,7 +134,7 @@ async def test_occurrences_spans_time_and_neighbor_context(tmp_path):
 
 
 async def test_filter_before_cap_and_retrieve_beyond_200(tmp_path):
-    with Memory(tmp_path / "m.db", embedder=ToyEmbedder()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", embedder=ToyEmbedder()) as memory:
         await memory.add(
             "bob",
             [Message(content="apple", id=f"b{i}") for i in range(220)],
@@ -157,7 +157,7 @@ async def test_filter_before_cap_and_retrieve_beyond_200(tmp_path):
 
 async def test_independent_connections_and_concurrent_retries(tmp_path):
     path = tmp_path / "m.db"
-    with Memory(path) as first, Memory(path) as second:
+    with EvidenceEngine(path) as first, EvidenceEngine(path) as second:
         receipts = await asyncio.gather(
             asyncio.to_thread(asyncio.run, add(first)),
             asyncio.to_thread(asyncio.run, add(second)),
@@ -173,7 +173,7 @@ async def test_reranking_candidate_depth_and_exact_budget(tmp_path):
         async def score(self, query, texts):
             return [1 if "short" in text else 0 for text in texts]
 
-    with Memory(tmp_path / "m.db", reranker=Reverse(), chunk_size=5000) as memory:
+    with EvidenceEngine(tmp_path / "m.db", reranker=Reverse(), chunk_size=5000) as memory:
         await memory.add(
             "alice",
             [
@@ -205,7 +205,7 @@ async def test_reranking_candidate_depth_and_exact_budget(tmp_path):
 
 @pytest.mark.parametrize("order", ["rank", "time"])
 async def test_context_budget_includes_separators_in_presentation_order(tmp_path, order):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await memory.add(
             "alice",
             [
@@ -243,7 +243,7 @@ async def test_context_budget_includes_separators_in_presentation_order(tmp_path
 
 
 async def test_joined_budget_holds_through_merges_and_neighbors(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await memory.add(
             "u",
             [
@@ -285,7 +285,7 @@ async def test_joined_budget_holds_through_merges_and_neighbors(tmp_path):
 
 async def test_sources_list_a_message_once_across_its_chunks(tmp_path):
     content = "apple orchard harvest notes\n" * 12
-    with Memory(tmp_path / "m.db", chunk_size=40, chunk_overlap=10) as memory:
+    with EvidenceEngine(tmp_path / "m.db", chunk_size=40, chunk_overlap=10) as memory:
         await memory.add(
             "u",
             [Message(id="long", content=content), Message(id="other", content="apple pie")],
@@ -303,7 +303,7 @@ async def test_sources_list_a_message_once_across_its_chunks(tmp_path):
 async def test_replay_payload_identity_includes_the_timestamp_offset(tmp_path):
     utc = datetime(2024, 1, 1, 8, 30, tzinfo=UTC)
     paris = utc.astimezone(timezone(timedelta(hours=1)))
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
 
         async def send(when):
             return await memory.add(
@@ -322,23 +322,23 @@ async def test_replay_payload_identity_includes_the_timestamp_offset(tmp_path):
 
 async def test_embedding_signature_and_lexical_reopen(tmp_path):
     path = tmp_path / "m.db"
-    with Memory(path, embedder=ToyEmbedder()) as memory:
+    with EvidenceEngine(path, embedder=ToyEmbedder()) as memory:
         await add(memory)
     wrong = ToyEmbedder()
     wrong.spec = wrong.spec.model_copy(update={"revision": "2"})
     with pytest.raises(ValueError, match="signature mismatch"):
-        Memory(path, embedder=wrong)
-    with Memory(path) as memory:
+        EvidenceEngine(path, embedder=wrong)
+    with EvidenceEngine(path) as memory:
         assert (await memory.search("alice", "apple")).evidence
         with pytest.raises(ValueError, match="configured embedder"):
             await add(memory, request="new")
         with pytest.raises(ValueError, match="requires the indexed embedder"):
             await memory.search("alice", "apple", options=SearchOptions(mode="dense"))
     lexical = tmp_path / "lexical.db"
-    with Memory(lexical) as memory:
+    with EvidenceEngine(lexical) as memory:
         await add(memory)
     with pytest.raises(ValueError, match="vector rebuild"):
-        Memory(lexical, embedder=ToyEmbedder())
+        EvidenceEngine(lexical, embedder=ToyEmbedder())
 
 
 async def test_stale_lexical_connection_cannot_write_into_a_dense_database(tmp_path):
@@ -346,7 +346,7 @@ async def test_stale_lexical_connection_cannot_write_into_a_dense_database(tmp_p
     # after the lexical one cached "no spec". Chunks written without vectors
     # would be invisible to dense search, so the stale writer must be refused.
     path = tmp_path / "m.db"
-    with Memory(path) as stale, Memory(path, embedder=ToyEmbedder()) as dense:
+    with EvidenceEngine(path) as stale, EvidenceEngine(path, embedder=ToyEmbedder()) as dense:
         with pytest.raises(ValueError, match="configuration changed"):
             await add(stale)
         assert dense.store.db.execute("SELECT count(*) FROM evidence_chunks").fetchone()[0] == 0
@@ -364,7 +364,7 @@ def test_invalid_vectors(vector):
 
 
 def test_cosine_is_stable_for_large_finite_vectors(tmp_path):
-    with Memory(tmp_path / "large.db") as memory:
+    with EvidenceEngine(tmp_path / "large.db") as memory:
         distance = memory.store.db.execute(
             "SELECT vec_distance_cosine(?, ?)",
             (vector_blob([1e38, 1e38], 2), vector_blob([1, 1], 2)),
@@ -404,11 +404,11 @@ async def test_invalid_embedding_and_reranker_responses(tmp_path):
         async def score(self, query, texts):
             return [float("nan")]
 
-    with Memory(tmp_path / "bad.db", embedder=Broken()) as memory:
+    with EvidenceEngine(tmp_path / "bad.db", embedder=Broken()) as memory:
         with pytest.raises(ValueError):
             await add(memory)
         assert memory.store.stats("alice")["requests"] == 0
-    with Memory(tmp_path / "rank.db", reranker=BrokenRanker()) as memory:
+    with EvidenceEngine(tmp_path / "rank.db", reranker=BrokenRanker()) as memory:
         await add(memory)
         with pytest.raises(ProviderError, match="finite score"):
             await memory.search("alice", "apple")
@@ -431,7 +431,7 @@ def test_stored_receipt_with_a_newer_field_still_replays():
 
 
 async def test_lexical_cjk_bigrams_stemming_and_stopwords(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await memory.add(
             "u",
             [
@@ -465,7 +465,7 @@ def test_rejects_previous_schema_version(tmp_path):
     db.commit()
     db.close()
     with pytest.raises(ValueError, match=r"version '1' \(this build reads '\d+'\); rebuild"):
-        Memory(path)
+        EvidenceEngine(path)
     # Refused before any DDL: the old file keeps exactly its own tables and version.
     db = sqlite3.connect(path)
     tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
@@ -475,7 +475,7 @@ def test_rejects_previous_schema_version(tmp_path):
 
 
 async def test_forgotten_chunks_leave_no_lexical_rows_for_new_ingests(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await add(memory, "apple orchard", id="old", request="r1")
         assert memory.forget("alice", "old")
         # The next chunk can reuse the forgotten chunk's rowid; a stale FTS row would
@@ -497,7 +497,7 @@ async def test_long_queries_are_clipped_for_the_embedder(tmp_path):
             return await super().embed_query(text)
 
     embedder = Recording()
-    with Memory(tmp_path / "memory.db", embedder=embedder) as memory:
+    with EvidenceEngine(tmp_path / "memory.db", embedder=embedder) as memory:
         await add(memory)
         query = "apple " + "filler " * 12000 + "orchard question"
         result = await memory.search("alice", query, options=SearchOptions(mode="hybrid"))
@@ -510,7 +510,7 @@ async def test_long_queries_are_clipped_for_the_embedder(tmp_path):
 
 async def test_lexical_search_reads_only_its_namespace(tmp_path):
     assert fts_table(CHUNK_FTS, "alice") != fts_table(CHUNK_FTS, "alicee")
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await add(memory, "apple orchard", namespace="alice", id="a")
         await add(memory, "apple apple apple", namespace="alicee", id="b")
         result = await memory.search("alice", "apple", options=SearchOptions(mode="lexical"))
@@ -524,7 +524,7 @@ async def test_lexical_search_reads_only_its_namespace(tmp_path):
 async def test_role_stack_options(tmp_path):
     """One chunk per message, user turns first, and the density-gated deep pool."""
     long_reply = ("apple " * 30 + "\n") * 8  # several chunks, all matching "apple"
-    with Memory(tmp_path / "m.db", chunk_size=200, chunk_overlap=20) as memory:
+    with EvidenceEngine(tmp_path / "m.db", chunk_size=200, chunk_overlap=20) as memory:
         messages = []
         for i in range(6):
             messages.append(Message(content=f"apple question {i}", role="user", id=f"u{i}"))
@@ -611,7 +611,7 @@ async def test_role_stack_options(tmp_path):
 
 
 async def test_capped_chunks_fill_unused_budget(tmp_path):
-    with Memory(tmp_path / "m.db", chunk_size=300, chunk_overlap=50) as memory:
+    with EvidenceEngine(tmp_path / "m.db", chunk_size=300, chunk_overlap=50) as memory:
         paragraphs = [
             f"Paragraph {i}: the report discusses topic {i} in detail. " * 4 for i in range(8)
         ]
@@ -701,7 +701,7 @@ async def test_packaging_does_not_decide_what_survives(tmp_path):
     ]
     final = "final observation: the migration finished with 7 warnings and task 289 is complete."
     trace = "\n".join(steps + [final])
-    with Memory(
+    with EvidenceEngine(
         tmp_path / "m.db", embedder=ToyEmbedder(), chunk_size=400, chunk_overlap=40
     ) as memory:
         # One trajectory message vs. the same ordered trace as several messages.
@@ -780,7 +780,7 @@ async def test_packaging_does_not_decide_what_survives(tmp_path):
 
 
 def test_default_options_follow_the_embedder(tmp_path):
-    with Memory(tmp_path / "lexical.db") as memory:
+    with EvidenceEngine(tmp_path / "lexical.db") as memory:
         assert memory.default_options() == SearchOptions(mode="lexical")
-    with Memory(tmp_path / "dense.db", embedder=ToyEmbedder()) as memory:
+    with EvidenceEngine(tmp_path / "dense.db", embedder=ToyEmbedder()) as memory:
         assert memory.default_options() == SearchOptions(mode="hybrid")

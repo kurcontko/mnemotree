@@ -3,10 +3,9 @@ import json
 import httpx
 import pytest
 
-from mnemotree import InvalidInput, ProviderError
+from mnemotree import EvidenceEngine, InvalidInput, Message, ProviderError, SearchOptions
 from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evaluation import ablate
-from mnemotree.evidence import Memory, Message, SearchOptions
 from mnemotree.providers.extraction import OpenAIExtractor
 
 
@@ -57,7 +56,7 @@ async def ingest(memory, namespace="u", request="r"):
 async def test_atom_search_resolves_to_original_sources_and_replays(tmp_path):
     extractor = Extractor()
     path = tmp_path / "m.db"
-    with Memory(path, extractor=extractor, embedder=Embedder()) as memory:
+    with EvidenceEngine(path, extractor=extractor, embedder=Embedder()) as memory:
         receipt = await ingest(memory)
         assert receipt.atom_count == 1
         assert (await ingest(memory)).replayed
@@ -81,7 +80,7 @@ async def test_atom_search_resolves_to_original_sources_and_replays(tmp_path):
         assert len({item.id for item in combined.evidence}) == 2
         assert any(set(item.channels) == {"lexical", "atom_lexical"} for item in combined.evidence)
         assert combined.trace.packed_tokens <= 8000
-    with Memory(path) as reopened:
+    with EvidenceEngine(path) as reopened:
         assert (
             await reopened.search(
                 "u", "physician", options=SearchOptions(mode="lexical", representation="atoms")
@@ -92,7 +91,7 @@ async def test_atom_search_resolves_to_original_sources_and_replays(tmp_path):
 
 
 async def test_scope_and_deletion_invalidate_shared_atoms(tmp_path):
-    with Memory(tmp_path / "m.db", extractor=Extractor(), embedder=Embedder()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", extractor=Extractor(), embedder=Embedder()) as memory:
         await ingest(memory)
         await ingest(memory, namespace="v")
         assert not (
@@ -109,7 +108,7 @@ async def test_scope_and_deletion_invalidate_shared_atoms(tmp_path):
 
 async def test_invalid_citations_and_failed_atom_insert_roll_back(tmp_path):
     extractor = Extractor()
-    with Memory(tmp_path / "m.db", extractor=extractor, embedder=Embedder()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", extractor=extractor, embedder=Embedder()) as memory:
         extractor.bad_quote = True
         with pytest.raises(ProviderError, match="exact, unambiguous"):
             await ingest(memory)
@@ -130,7 +129,9 @@ async def test_invalid_citations_and_failed_atom_insert_roll_back(tmp_path):
 async def test_bounded_extraction_has_no_silent_text_loss(tmp_path):
     extractor = Extractor()
     content = "abcd" * 15
-    with Memory(tmp_path / "m.db", extractor=extractor, extraction_batch_chars=17) as memory:
+    with EvidenceEngine(
+        tmp_path / "m.db", extractor=extractor, extraction_batch_chars=17
+    ) as memory:
         await memory.add("u", [Message(id="x", content=content)], request_id="r", session_id="s")
         assert "".join(p.text for batch in extractor.inputs for p in batch) == content
         assert all(sum(len(p.text) for p in batch) <= 17 for batch in extractor.inputs)
@@ -141,19 +142,19 @@ async def test_bounded_extraction_has_no_silent_text_loss(tmp_path):
     wrong = Extractor()
     wrong.spec = wrong.spec.model_copy(update={"revision": "2"})
     with pytest.raises(ValueError, match="signature mismatch"):
-        Memory(tmp_path / "m.db", extractor=wrong, extraction_batch_chars=17)
+        EvidenceEngine(tmp_path / "m.db", extractor=wrong, extraction_batch_chars=17)
 
 
 async def test_explicit_rebuild_and_raw_mode(tmp_path):
     path = tmp_path / "m.db"
-    with Memory(path) as memory:
+    with EvidenceEngine(path) as memory:
         await ingest(memory)
         with pytest.raises(ValueError, match="extracted corpus"):
             await memory.search(
                 "u", "doctor", options=SearchOptions(mode="lexical", representation="atoms")
             )
     with pytest.raises(ValueError, match="extraction rebuild"):
-        Memory(path, extractor=Extractor())
+        EvidenceEngine(path, extractor=Extractor())
 
 
 async def test_openai_extractor_transport_and_strict_output(monkeypatch, tmp_path):
@@ -191,7 +192,7 @@ async def test_openai_extractor_transport_and_strict_output(monkeypatch, tmp_pat
         lambda **kwargs: actual_client(**kwargs, transport=httpx.MockTransport(respond)),
     )
     extractor = OpenAIExtractor(model="fixture", revision="1", api_key="test-only")
-    with Memory(tmp_path / "m.db", extractor=extractor) as memory:
+    with EvidenceEngine(tmp_path / "m.db", extractor=extractor) as memory:
         assert (await ingest(memory)).atom_count == 1
         malformed = True
         with pytest.raises(ValueError, match="complete normally"):
@@ -220,7 +221,7 @@ async def test_same_corpus_ablation_only_extracts_once(tmp_path):
         )
     )
     extractor = Extractor()
-    with Memory(tmp_path / "m.db", extractor=extractor) as memory:
+    with EvidenceEngine(tmp_path / "m.db", extractor=extractor) as memory:
         report = await ablate(memory, corpus, queries, SearchOptions(mode="lexical"))
         assert extractor.calls == 1
         assert report["summary"]["raw"]["packed_source_recall"] == 0
@@ -232,7 +233,7 @@ async def test_same_corpus_ablation_only_extracts_once(tmp_path):
 
 async def test_stale_connection_cannot_bypass_projection_configuration(tmp_path):
     path = tmp_path / "m.db"
-    with Memory(path) as stale, Memory(path, extractor=Extractor()) as configured:
+    with EvidenceEngine(path) as stale, EvidenceEngine(path, extractor=Extractor()) as configured:
         with pytest.raises(ValueError, match="configuration changed"):
             await ingest(stale)
         assert (await ingest(configured)).atom_count == 1
@@ -245,14 +246,14 @@ async def test_citations_cannot_refer_to_another_batch(tmp_path):
                 AtomDraft(text="fact", citations=(Citation(passage_id="outside", quote="fact"),))
             ]
 
-    with Memory(tmp_path / "m.db", extractor=Invalid()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", extractor=Invalid()) as memory:
         with pytest.raises(ProviderError, match="outside its extraction batch"):
             await ingest(memory)
         assert memory.store.stats("u")["sources"] == 0
 
 
 async def test_list_sources_pages_in_storage_order(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await ingest(memory, "u", request="r1")
         await memory.add("u", [Message(content="later")], request_id="r2", session_id="t")
         await ingest(memory, "v")

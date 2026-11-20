@@ -6,8 +6,8 @@ import threading
 import httpx
 import pytest
 
+from mnemotree import EvidenceEngine, SearchOptions
 from mnemotree.evaluation import evaluate
-from mnemotree.evidence import Memory, SearchOptions
 from mnemotree.providers.embeddings import OpenAIEmbedder
 
 
@@ -15,7 +15,7 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
     pytest.importorskip("fastapi")
     from mnemotree.service.app import create_app
 
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         app = create_app(memory, api_key="test-key")
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -129,7 +129,7 @@ def test_service_defaults_use_merged_context_in_a_bounded_window(tmp_path):
     pytest.importorskip("fastapi")
     from mnemotree.service.presets import AML_TOKEN_BUDGET, aml_options
 
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         options = aml_options(memory)
         assert options.mode == "lexical" and options.limit == 100
         assert options.token_budget == AML_TOKEN_BUDGET < 117_760
@@ -222,7 +222,7 @@ async def test_reproducible_source_recall_report(tmp_path):
             ]
         )
     )
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         result = await evaluate(memory, corpus, queries, SearchOptions(mode="lexical"))
         assert result["summary"]["candidate_source_recall"] == 0.75
         assert result["summary"]["packed_all_sources"] == 0.5
@@ -243,7 +243,7 @@ async def test_request_log_records_add_and_search_metadata_only(tmp_path):
     from mnemotree.service.app import create_app
 
     log = tmp_path / "logs" / "r.jsonl"  # the parent directory does not exist yet
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         app = create_app(memory, api_key="k", request_log=log)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app),
@@ -301,7 +301,7 @@ async def test_request_log_explains_validation_and_auth_failures(tmp_path):
     from mnemotree.service.app import create_app
 
     log = tmp_path / "r.jsonl"
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         app = create_app(memory, api_key="k", request_log=log)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -351,7 +351,7 @@ async def test_provider_failure_logs_status_without_provider_body(tmp_path, monk
 
     log = tmp_path / "r.jsonl"
     secret = "rate limited for key sk-provider-SECRET"
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
 
         async def failing_search(*args, **kwargs):
             request = httpx.Request("POST", "https://provider.test/v1/embeddings")
@@ -395,7 +395,7 @@ async def test_request_log_bounds_unmatched_paths(tmp_path):
     from mnemotree.service.request_log import MAX_LOGGED_PATH
 
     log = tmp_path / "r.jsonl"
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         app = create_app(memory, api_key="k", request_log=log)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -411,7 +411,7 @@ async def test_search_clamps_top_k_in_the_options_the_engine_receives(tmp_path, 
     from mnemotree.service.app import create_app
     from mnemotree.service.schemas import MAX_TOP_K
 
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         limits = []
         search = memory.search
 
@@ -434,15 +434,15 @@ async def test_search_clamps_top_k_in_the_options_the_engine_receives(tmp_path, 
 
 def test_service_refuses_a_dense_database_without_its_embedder(tmp_path):
     pytest.importorskip("fastapi")
-    from mnemotree.evidence import EmbeddingSpec
+    from mnemotree import EmbeddingSpec
     from mnemotree.service.app import create_app
 
     class Embedder:
         spec = EmbeddingSpec(provider="test", model="toy", revision="1", dimensions=2)
 
-    Memory(tmp_path / "m.db", embedder=Embedder()).close()
+    EvidenceEngine(tmp_path / "m.db", embedder=Embedder()).close()
     lexical = SearchOptions(mode="lexical")
-    with Memory(tmp_path / "m.db") as memory, pytest.raises(ValueError, match="embedder"):
+    with EvidenceEngine(tmp_path / "m.db") as memory, pytest.raises(ValueError, match="embedder"):
         create_app(memory, api_key="test-key", options=lexical)
 
 
@@ -450,7 +450,7 @@ async def test_health_answers_while_a_search_waits_in_the_store(tmp_path, monkey
     pytest.importorskip("fastapi")
     from mnemotree.service.app import create_app
 
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         entered, release, returned = threading.Event(), threading.Event(), threading.Event()
         lexical = memory.store.lexical
 
