@@ -1,6 +1,6 @@
 import pytest
 
-from mnemotree.evidence import EmbeddingSpec, Memory, Message, SearchOptions
+from mnemotree import EmbeddingSpec, EvidenceEngine, Message, SearchOptions
 
 
 class RecordingEmbedder:
@@ -28,7 +28,7 @@ async def test_question_policy_keeps_options_in_lexical_but_not_dense(tmp_path):
 
     embedder = RecordingEmbedder()
     reranker = RecordingReranker()
-    with Memory(tmp_path / "m.db", embedder=embedder, reranker=reranker) as memory:
+    with EvidenceEngine(tmp_path / "m.db", embedder=embedder, reranker=reranker) as memory:
         await memory.add(
             "u",
             [Message(content="apple", id="question"), Message(content="banana", id="option")],
@@ -58,7 +58,7 @@ async def test_question_policy_keeps_options_in_lexical_but_not_dense(tmp_path):
 
 
 async def test_bounded_role_prior_and_gate(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await memory.add(
             "u",
             [
@@ -99,7 +99,7 @@ async def test_role_boost_feeds_but_does_not_override_reranker(tmp_path):
         async def score(self, query, texts):
             return [float("assistant" in text) for text in texts]
 
-    with Memory(tmp_path / "m.db", reranker=Reranker()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", reranker=Reranker()) as memory:
         await memory.add(
             "u",
             [
@@ -124,7 +124,7 @@ def test_role_boost_requires_a_role():
 
 
 async def test_soft_prior_keeps_a_strong_assistant_ahead_of_weak_user(tmp_path):
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         await memory.add(
             "u",
             [Message(content="apple pear", id=f"a{i:02}", role="assistant") for i in range(19)]
@@ -158,7 +158,7 @@ def test_policies_preserve_measured_service_defaults(tmp_path):
 
     plain = SearchOptions()
     assert plain.role_boost is None and plain.model_query_policy == "combined"
-    with Memory(tmp_path / "m.db") as memory:
+    with EvidenceEngine(tmp_path / "m.db") as memory:
         service = aml_options(memory)
     assert service.role_first == "user"
     assert service.role_boost is None
@@ -171,7 +171,7 @@ async def test_hard_partition_still_applies_after_reranking(tmp_path):
         async def score(self, query, texts):
             return [float("assistant" in text) for text in texts]
 
-    with Memory(tmp_path / "m.db", reranker=AssistantReranker()) as memory:
+    with EvidenceEngine(tmp_path / "m.db", reranker=AssistantReranker()) as memory:
         await memory.add(
             "u",
             [

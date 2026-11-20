@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from mnemotree.evidence import EmbeddingSpec, IngestConflict, Memory, Message, SearchOptions
+from mnemotree import EmbeddingSpec, EvidenceEngine, IngestConflict, Message, SearchOptions
 
 
 class DurabilityEmbedder:
@@ -89,7 +89,7 @@ async def _check_receipts(memory):
 
 async def test_online_wal_backup_restores_indexes_scope_and_deletion_receipts(tmp_path):
     live, snapshot = tmp_path / "live.db", tmp_path / "restored.db"
-    with Memory(live, embedder=DurabilityEmbedder()) as writer:
+    with EvidenceEngine(live, embedder=DurabilityEmbedder()) as writer:
         writer.store.db.execute("PRAGMA wal_autocheckpoint=0")
         writer.store.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         await _seed(writer)
@@ -107,7 +107,7 @@ async def test_online_wal_backup_restores_indexes_scope_and_deletion_receipts(tm
             session_id="session",
         )
         # Restore while the original writer remains open, at an independent path.
-        with Memory(snapshot, embedder=DurabilityEmbedder()) as restored:
+        with EvidenceEngine(snapshot, embedder=DurabilityEmbedder()) as restored:
             assert await _fingerprint(restored) == expected
             assert restored.source("alice", "after-snapshot") is None
             assert writer.source("alice", "after-snapshot") is not None
@@ -117,7 +117,7 @@ async def test_online_wal_backup_restores_indexes_scope_and_deletion_receipts(tm
     incompatible = DurabilityEmbedder()
     incompatible.spec = incompatible.spec.model_copy(update={"revision": "other-weights"})
     with pytest.raises(ValueError, match="embedding signature mismatch"):
-        Memory(snapshot, embedder=incompatible)
+        EvidenceEngine(snapshot, embedder=incompatible)
 
 
 def _child(script, database):
@@ -138,7 +138,7 @@ def test_committed_wal_survives_unclean_exit_and_fresh_interpreter(tmp_path):
     seed = """
 import asyncio, json, os, runpy, sys
 ns = runpy.run_path(sys.argv[1])
-memory = ns["Memory"](sys.argv[2], embedder=ns["DurabilityEmbedder"]())
+memory = ns["EvidenceEngine"](sys.argv[2], embedder=ns["DurabilityEmbedder"]())
 memory.store.db.execute("PRAGMA wal_autocheckpoint=0")
 asyncio.run(ns["_seed"](memory))
 print(json.dumps(asyncio.run(ns["_fingerprint"](memory))), flush=True)
@@ -149,7 +149,7 @@ os._exit(0)
     verify = """
 import asyncio, json, runpy, sys
 ns = runpy.run_path(sys.argv[1])
-with ns["Memory"](sys.argv[2], embedder=ns["DurabilityEmbedder"]()) as memory:
+with ns["EvidenceEngine"](sys.argv[2], embedder=ns["DurabilityEmbedder"]()) as memory:
     result = asyncio.run(ns["_fingerprint"](memory))
     asyncio.run(ns["_check_receipts"](memory))
     print(json.dumps(result))

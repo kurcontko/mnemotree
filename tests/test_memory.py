@@ -3,8 +3,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from mnemotree import IngestConflict, Memory, MemoryItem, Message, SearchOptions
-from mnemotree.evidence import EmbeddingSpec
+from mnemotree import (
+    EmbeddingSpec,
+    EvidenceEngine,
+    IngestConflict,
+    Memory,
+    MemoryItem,
+    Message,
+    SearchOptions,
+)
 
 
 class ToyEmbedder:
@@ -198,9 +205,7 @@ def test_items_are_immutable():
 
 
 async def test_from_engine_binds_and_owns_a_configured_engine(tmp_path):
-    from mnemotree import evidence
-
-    engine = evidence.Memory(tmp_path / "m.db")
+    engine = EvidenceEngine(tmp_path / "m.db")
     with pytest.raises(ValueError):
         Memory.from_engine(engine, namespace="")
     with Memory.from_engine(engine, namespace="alice") as memory:

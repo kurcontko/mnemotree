@@ -195,10 +195,10 @@ async def asgi_call(
 
 async def service_roundtrip(workdir: Path) -> None:
     """Build the AML app and send Add and Search through its routes and middleware."""
-    from mnemotree.evidence import Memory
+    from mnemotree import EvidenceEngine
     from mnemotree.service.app import create_app
 
-    with Memory(workdir / "service.sqlite") as memory:
+    with EvidenceEngine(workdir / "service.sqlite") as memory:
         app = create_app(memory, api_key="smoke-key")
         assert await asgi_call(app, "GET", "/health") == (200, {"status": "ok"})
         status, body = await asgi_call(
@@ -237,9 +237,9 @@ async def memory_roundtrip(workdir: Path) -> None:
 
 
 async def evidence_roundtrip(workdir: Path) -> None:
-    from mnemotree.evidence import Memory, Message
+    from mnemotree import EvidenceEngine, Message
 
-    with Memory(workdir / "evidence.sqlite") as memory:
+    with EvidenceEngine(workdir / "evidence.sqlite") as memory:
         await memory.add(
             "smoke",
             [Message(content="The package smoke test stored this evidence.")],
@@ -250,32 +250,6 @@ async def evidence_roundtrip(workdir: Path) -> None:
         assert [item.text for item in result.evidence] == [
             "The package smoke test stored this evidence."
         ], result.evidence
-
-
-def check_legacy_paths(*, bare: bool) -> None:
-    """The 1.0 mnemotree.evidence.<module> paths hand out the moved modules' objects."""
-    moved = {
-        "engine": "mnemotree.engine",
-        "models": "mnemotree.core.models",
-        "store": "mnemotree.storage.store",
-        "atoms": "mnemotree.ingest.atoms",
-        "providers": "mnemotree.providers.embeddings",
-        "cli": "mnemotree.cli.evidence",
-    }
-    if not bare:
-        moved["server"] = "mnemotree.service.app"
-    for old, new in moved.items():
-        module = importlib.import_module(f"mnemotree.evidence.{old}")
-        target = importlib.import_module(new)
-        # 1.0's secret exits on a missing credential; the moved one raises.
-        kept = {"secret"} if old == "cli" else set()
-        public = [
-            name
-            for name in vars(module)
-            if not name.startswith("_") and name not in kept and hasattr(target, name)
-        ]
-        assert public, (old, new)
-        assert all(getattr(module, name) is getattr(target, name) for name in public), (old, new)
 
 
 def main() -> None:
@@ -295,7 +269,6 @@ def main() -> None:
         return
     check_optional_absent()
     check_serve(bare=variant == "bare")
-    check_legacy_paths(bare=variant == "bare")
     # The mnemotree-mcp distribution owns that script; two owning it would clash.
     assert not script("mnemotree-mcp").exists(), "mnemotree installs a mnemotree-mcp script"
     with tempfile.TemporaryDirectory() as tmp:

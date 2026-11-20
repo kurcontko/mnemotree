@@ -10,7 +10,7 @@ import mnemotree
 ROOT = Path(mnemotree.__file__).parent
 
 # What each top-level package or module may import from the rest of mnemotree.
-# The CLIs sit on top, and ``evidence`` (the 1.0 paths) re-exports from everywhere.
+# The CLIs sit on top.
 LOWER = {"core", "errors"}
 ALLOWED = {
     "errors": set(),
@@ -65,4 +65,4 @@ def test_every_package_has_a_rule():
         for path in ROOT.iterdir()
         if path.suffix == ".py" or (path / "__init__.py").exists()
     }
-    assert packages - {"__init__", "cli", "evidence"} == set(ALLOWED)
+    assert packages - {"__init__", "cli"} == set(ALLOWED)

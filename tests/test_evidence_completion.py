@@ -2,7 +2,7 @@
 
 import pytest
 
-from mnemotree.evidence import Memory, Message, SearchOptions
+from mnemotree import EvidenceEngine, Message, SearchOptions
 
 
 def completion_options():
@@ -25,7 +25,7 @@ def completion_options():
 async def test_completion_reads_each_source_once_and_preserves_output(
     tmp_path, monkeypatch, length
 ):
-    with Memory(tmp_path / "memory.db") as memory:
+    with EvidenceEngine(tmp_path / "memory.db") as memory:
         text = "needle " + "ordinary words " * (length // 15)
         await memory.add(
             "alice", [Message(content=text, id="long")], request_id="r", session_id="s"
@@ -60,7 +60,7 @@ async def test_completion_reads_each_source_once_and_preserves_output(
 
 
 async def test_window_rejects_cached_source_from_other_scope(tmp_path):
-    with Memory(tmp_path / "memory.db") as memory:
+    with EvidenceEngine(tmp_path / "memory.db") as memory:
         for namespace in ("alice", "bob"):
             await memory.add(
                 namespace,

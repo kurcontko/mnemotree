@@ -3,6 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from mnemotree import EvidenceEngine, Message, SearchOptions
 from mnemotree.evaluation import (
     AnswerSpan,
     QueryRecord,
@@ -12,7 +13,6 @@ from mnemotree.evaluation import (
     retrieval_variants,
     score_queries,
 )
-from mnemotree.evidence import Memory, Message, SearchOptions
 
 
 def write_rows(path, rows):
@@ -50,7 +50,7 @@ async def test_retrieving_source_does_not_imply_retrieving_its_answer(tmp_path):
             }
         ],
     )
-    with Memory(tmp_path / "db", chunk_size=8, chunk_overlap=0) as memory:
+    with EvidenceEngine(tmp_path / "db", chunk_size=8, chunk_overlap=0) as memory:
         report = await evaluate(memory, corpus, queries, SearchOptions(mode="lexical", limit=1))
     row = report["queries"][0]
     assert row["candidate_source_recall"] == row["packed_source_recall"] == 1
@@ -84,7 +84,7 @@ async def test_neighbor_expansion_can_add_answer_not_present_in_candidates(tmp_p
             }
         ],
     )
-    with Memory(tmp_path / "db") as memory:
+    with EvidenceEngine(tmp_path / "db") as memory:
         report = await evaluate(
             memory, corpus, queries, SearchOptions(mode="lexical", limit=1, neighbor_messages=1)
         )
@@ -119,7 +119,7 @@ async def test_options_are_wired_and_zero_budget_reports_packing_loss(tmp_path):
             {"id": "unknown", "namespace": "u", "query": "zebra", "relevant_source_ids": []},
         ],
     )
-    with Memory(tmp_path / "db") as memory:
+    with EvidenceEngine(tmp_path / "db") as memory:
         report = await evaluate(
             memory, corpus, queries, SearchOptions(mode="lexical", token_budget=0)
         )
@@ -155,7 +155,7 @@ async def test_lexical_ablation_skips_unsupported_modes_and_validates_settings(t
         ],
     )
     baseline = SearchOptions(mode="lexical")
-    with Memory(tmp_path / "db") as memory:
+    with EvidenceEngine(tmp_path / "db") as memory:
         settings = retrieval_variants(memory, baseline)
         assert "mode_dense" not in settings and "mode_hybrid" not in settings
         assert settings["baseline"] == baseline
@@ -178,7 +178,7 @@ async def test_span_bounds_and_namespace_checked_before_search(tmp_path):
     corpus = tmp_path / "corpus.jsonl"
     corpus.write_text("")
     queries = tmp_path / "queries.jsonl"
-    with Memory(tmp_path / "db") as memory:
+    with EvidenceEngine(tmp_path / "db") as memory:
         await memory.add("u", [Message(id="a", content="zebra")], request_id="r", session_id="s")
         for namespace, end, message in [("other", 5, "absent source"), ("u", 6, "bounds")]:
             write_rows(
@@ -202,7 +202,7 @@ async def test_unlabeled_only_and_empty_query_sets_are_not_scores(tmp_path):
     corpus = tmp_path / "corpus.jsonl"
     corpus.write_text("")
     queries = tmp_path / "queries.jsonl"
-    with Memory(tmp_path / "db") as memory:
+    with EvidenceEngine(tmp_path / "db") as memory:
         for rows, message in [
             ([], "at least one query"),
             ([{"id": "q", "namespace": "u", "query": "zebra"}], "labeled"),
@@ -257,7 +257,7 @@ async def test_merged_neighbors_and_chunk_completion_count_each_gold_character_o
             }
         ],
     )
-    with Memory(tmp_path / "db") as memory:
+    with EvidenceEngine(tmp_path / "db") as memory:
         report = await evaluate(
             memory,
             corpus,
@@ -293,7 +293,7 @@ async def test_merged_neighbors_and_chunk_completion_count_each_gold_character_o
             }
         ],
     )
-    with Memory(tmp_path / "db2", chunk_size=8, chunk_overlap=0) as memory:
+    with EvidenceEngine(tmp_path / "db2", chunk_size=8, chunk_overlap=0) as memory:
         report = await evaluate(
             memory,
             corpus,

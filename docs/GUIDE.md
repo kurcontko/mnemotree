@@ -13,9 +13,7 @@ which takes a namespace on every call and exposes every retrieval option).
 
 The engine's modules live in `mnemotree.engine`, `mnemotree.core` (models, protocols),
 `.ingest` (chunking, atoms), `.retrieval` (ranking, packing), `.storage`, `.providers`
-and `.service`. The 1.0 paths under `mnemotree.evidence` (for example
-`mnemotree.evidence.Memory` or `mnemotree.evidence.atoms`) still import the same
-objects.
+and `.service`.
 
 ```python
 from mnemotree import Memory, Message
