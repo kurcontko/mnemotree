@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from mnemotree import EvidenceEngine, Message, ProviderError, SearchOptions
+from mnemotree import EvidenceEngine, InvalidInput, Message, ProviderError, SearchOptions
 from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
 from mnemotree.evaluation import ablate
 from mnemotree.providers.extraction import OpenAIExtractor
@@ -250,3 +250,31 @@ async def test_citations_cannot_refer_to_another_batch(tmp_path):
         with pytest.raises(ProviderError, match="outside its extraction batch"):
             await ingest(memory)
         assert memory.store.stats("u")["sources"] == 0
+
+
+async def test_list_sources_pages_in_storage_order(tmp_path):
+    with EvidenceEngine(tmp_path / "m.db") as memory:
+        await ingest(memory, "u", request="r1")
+        await memory.add("u", [Message(content="later")], request_id="r2", session_id="t")
+        await ingest(memory, "v")
+        first, cursor = memory.list_sources("u", limit=2)
+        assert [source.id for source in first] == ["name", "job"] and cursor is not None
+        rest, end = memory.list_sources("u", limit=2, after=cursor)
+        assert [source.content for source in rest] == ["later"] and end is None
+        only_t, _ = memory.list_sources("u", session_id="t")
+        assert [source.content for source in only_t] == ["later"]
+        assert memory.list_sources("w") == ([], None)
+        # Each page reads the namespace index in rowid order instead of sorting it.
+        for session in (None, "t"):
+            query = "SELECT * FROM evidence_sources WHERE namespace=? AND rowid>?"
+            args = ["u", 0]
+            if session is not None:
+                query += " AND session_id=?"
+                args.append(session)
+            plan = memory.store.db.execute(
+                f"EXPLAIN QUERY PLAN {query} ORDER BY rowid LIMIT ?", (*args, 2)
+            ).fetchall()
+            details = " ".join(row[3] for row in plan)
+            assert "evidence_sources_namespace" in details and "TEMP B-TREE" not in details
+        with pytest.raises(InvalidInput):
+            memory.list_sources("u", limit=0)

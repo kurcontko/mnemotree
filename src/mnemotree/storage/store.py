@@ -431,6 +431,29 @@ class SQLiteEvidenceStore:
             self.atoms.unindex(namespace, atoms)
             return cursor.rowcount > 0
 
+    def list_sources(
+        self,
+        namespace: str,
+        *,
+        limit: int,
+        after: int | None = None,
+        session_id: str | None = None,
+    ) -> tuple[list[Source], int | None]:
+        """Sources in storage order after the ``after`` cursor, and the next cursor."""
+        scope(namespace)
+        query = "SELECT * FROM evidence_sources WHERE namespace=? AND rowid>?"
+        parameters: list[Any] = [namespace, after if after is not None else 0]
+        if session_id is not None:
+            query += " AND session_id=?"
+            parameters.append(session_id)
+        with self._lock:
+            rows = self.db.execute(
+                query + " ORDER BY rowid LIMIT ?", (*parameters, limit + 1)
+            ).fetchall()
+        more = len(rows) > limit
+        rows = rows[:limit]
+        return [self._source(row) for row in rows], rows[-1]["rowid"] if more else None
+
     def conversation_context(
         self,
         namespace: str,

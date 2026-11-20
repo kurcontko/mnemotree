@@ -13,7 +13,7 @@ Key locations:
 - Golden retrieval snapshots: `tests/test_golden_retrieval.py`, `tests/golden/retrieval/` (regenerate with `MNEMOTREE_UPDATE_GOLDEN=1`)
 - Packing and token counting: `src/mnemotree/retrieval/packing.py`
 - Providers: `src/mnemotree/providers/` (`embeddings.py`, `extraction.py` with `OpenAIExtractor`, `retry.py`)
-- Add/Search HTTP service: `src/mnemotree/service/` (`app.py`, `schemas.py`, `request_log.py`, `presets.py`)
+- HTTP service (AML Add/Search, plus get, delete, list and stats): `src/mnemotree/service/` (`app.py`, `schemas.py`, `request_log.py`, `presets.py`)
 - Evaluation and ablations: `src/mnemotree/evaluation.py`
 - Public API: `src/mnemotree/memory.py` (`Memory`, `MemoryItem`, `Recall`)
 - CLI/MCP JSON config, opened as an engine with `Config.open(path)`: `src/mnemotree/config.py`

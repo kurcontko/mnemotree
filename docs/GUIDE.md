@@ -311,13 +311,47 @@ notebook with top-level `await`, like the API example above.
 `mnemotree-evidence serve` (the `serve` extra) implements the
 [textual Agent Memory Leaderboard API](https://agentmemoryleaderboard.ai/api-guide):
 `POST /v1/memories/add`, `POST /v1/memories/search` and unauthenticated `GET /health`.
-Add and Search require the key from `MNEMOTREE_API_KEY` (or `--key-env`), sent as
-`Authorization: Bearer <key>`, `Authorization: Token <key>` or `X-Api-Key: <key>`. It
+Every route except `/health` requires the key from `MNEMOTREE_API_KEY` (or
+`--key-env`), sent as `Authorization: Bearer <key>`, `Authorization: Token <key>` or
+`X-Api-Key: <key>`. It
 accepts ordered user/assistant messages with optional Unix-millisecond timestamps,
 echoes IDs exactly, acknowledges writes durably and synchronously, isolates by
 `user_id`, appends multiple-choice options to the retrieval query, and returns ranked
 `{id, content, score}` results capped by `top_k`, with `created_at` on dated evidence.
 Multimodal payloads are rejected, and no answer is generated.
+
+Beyond the AML contract, Add returns `ids`, the memory IDs of the stored messages in
+request order (blank messages are skipped and get none, so the list can be shorter
+than `messages`), and each Search result carries `source_ids`, every stored message
+its `content` shows. That includes the neighboring turns added for context, so
+deleting all of a result's `source_ids` removes more than the turn that matched.
+Four more routes read and delete what is stored, behind the same key:
+
+- `POST /v1/memories/get` with `{"user_id": ..., "ids": [...]}` (1 to 100 IDs)
+  returns `{"data": [...], "missing": [...]}`. Each item is the stored message
+  verbatim: `id`, `content`, `role`, `session_id`, `ingested_at`, and `created_at`
+  when the message had a timestamp.
+- `POST /v1/memories/delete` with `{"user_id": ..., "id": ...}` deletes one memory
+  with its chunks and index entries and returns `{"deleted": true|false, ...}`;
+  `false` means there was nothing to delete under that `user_id`.
+- `POST /v1/memories/list` with `{"user_id": ..., "session_id"?: ..., "limit"?: 100,
+  "cursor"?: ...}` returns `{"data": [...], "next_cursor": ...}`: the user's memories
+  in the order they were stored, in the item shape of Get, at most 100 per page (a
+  larger `limit` is clamped). Pass `next_cursor` back as `cursor` for the next page;
+  it is `null` on the last one.
+- `POST /v1/memories/stats` with `{"user_id": ...}` returns counts of `memories`,
+  `chunks` and Add `requests`.
+
+The service is built for one trusted caller. Run it behind your own backend, which
+authenticates your users and holds the key; do not expose it to end users or hand
+the key to a client you do not control. `user_id` partitions the data; it is not
+access control, and anyone holding the key can read and delete every user's
+memories.
+
+Replaying an Add after one of its messages was deleted answers 409: the replay
+cannot restore it. Send the message again under a new `request_id` to store it
+again. There is no route that erases a whole user: list their memories and delete
+each one.
 
 ```bash
 pip install 'mnemotree[serve]'

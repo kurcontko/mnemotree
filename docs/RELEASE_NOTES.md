@@ -27,6 +27,12 @@ one that passes an engine by keyword, and one that writes to the store directly.
   place of nine arguments. Only code that writes to the store directly is affected;
   `EvidenceEngine.add` and `Memory.remember` are unchanged.
 
+- The HTTP service has four more routes behind the same key: `POST /v1/memories/get`
+  (memories by ID), `/delete` (one memory by ID), `/list` (a user's memories in the
+  order they were stored, paged) and `/stats` (counts). `EvidenceEngine.list_sources`
+  backs the listing. Add now returns `ids`, the stored messages' memory IDs, and each
+  Search result carries `source_ids`. The AML fields are unchanged; clients that read
+  only them see no difference.
 - The `lite` extra needs sentence-transformers 5.4 or later, where the embedding
   dimension method was renamed. Earlier releases are no longer supported, and the
   embedder no longer triggers the old name's `FutureWarning`.

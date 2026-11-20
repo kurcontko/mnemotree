@@ -47,12 +47,15 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
             for _ in range(2):
                 response = await client.post("/v1/memories/add", json=payload)
                 assert response.status_code == 200
-                assert response.json() == {
+                body = response.json()
+                assert body == {
                     "success": True,
                     "request_id": "r",
                     "user_id": "u",
                     "session_id": "s",
+                    "ids": body["ids"],
                 }
+                assert len(body["ids"]) == 2
             request = {
                 "query": "Where did I move?",
                 "options": ["Warsaw", "Paris"],
@@ -68,6 +71,7 @@ async def test_http_contract_and_immediate_visibility(tmp_path):
                 "[2024-01-01 Mon 00:00 UTC] user: I moved to Warsaw\nassistant: Warsaw sounds good"
             )
             assert results[0]["created_at"] == "2024-01-01T00:00:00+00:00"
+            assert sorted(results[0]["source_ids"]) == sorted(body["ids"])
             assert isinstance(results[0]["score"], float)
             assert (
                 await client.post("/v1/memories/search", json={**request, "user_id": "other"})

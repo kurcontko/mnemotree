@@ -1,7 +1,11 @@
-"""Textual AML Add/Search contract; the caller owns the engine's lifecycle."""
+"""Textual AML Add/Search contract, plus routes to read and delete stored memories.
+
+The caller owns the engine's lifecycle.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -17,7 +21,7 @@ from fastapi.exception_handlers import (
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..core.models import Evidence, SearchOptions
+from ..core.models import Evidence, SearchOptions, Source
 from ..engine import EvidenceEngine
 from ..errors import ConfigurationError, IngestConflict
 from .presets import aml_options
@@ -34,7 +38,16 @@ from .request_log import (
     result_fields,
     utc_now,
 )
-from .schemas import MAX_TOP_K, AddRequest, SearchRequest
+from .schemas import (
+    MAX_LIST,
+    MAX_TOP_K,
+    AddRequest,
+    DeleteRequest,
+    GetRequest,
+    ListRequest,
+    SearchRequest,
+    UserRequest,
+)
 
 MAX_DETAIL_ERRORS = 10
 
@@ -159,6 +172,7 @@ def create_app(
         except (ValueError, OverflowError, OSError) as exc:
             raise HTTPException(status_code=422, detail="invalid message or timestamp") from exc
         add_started = perf_counter()
+        ids: list[str] = []
         try:
             if messages:
                 receipt = await engine.add(
@@ -168,6 +182,7 @@ def create_app(
                     session_id=request.session_id,
                 )
                 note(http, replay=receipt.replayed, chunks=receipt.chunk_count)
+                ids = list(receipt.source_ids)
         except IngestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
@@ -184,6 +199,8 @@ def create_app(
             "request_id": request.request_id,
             "user_id": request.user_id,
             "session_id": request.session_id,
+            # Source IDs of the stored (nonblank) messages, in request order.
+            "ids": ids,
         }
 
     @app.post("/v1/memories/search", dependencies=[Depends(authorize)])
@@ -213,7 +230,88 @@ def create_app(
         note(http, **result_fields(result, options))
         return {"data": [response_item(item) for item in result.evidence]}
 
+    @app.post("/v1/memories/get", dependencies=[Depends(authorize)])
+    async def get(request: GetRequest, http: HTTPRequest) -> dict[str, Any]:
+        ids = list(dict.fromkeys(request.ids))
+        note(http, user_id=request.user_id, ids=len(ids))
+        try:
+            found = await asyncio.to_thread(engine.sources, request.user_id, ids)
+        except Exception as exc:
+            note(http, **failure(exc))
+            raise HTTPException(
+                status_code=503, detail="lookup failed; retry this request"
+            ) from exc
+        note(http, found=len(found))
+        return {
+            "data": [memory_item(found[id]) for id in ids if id in found],
+            "missing": [id for id in ids if id not in found],
+        }
+
+    @app.post("/v1/memories/delete", dependencies=[Depends(authorize)])
+    async def delete(request: DeleteRequest, http: HTTPRequest) -> dict[str, Any]:
+        note(http, user_id=request.user_id)
+        try:
+            deleted = await asyncio.to_thread(engine.forget, request.user_id, request.id)
+        except Exception as exc:
+            note(http, **failure(exc))
+            raise HTTPException(
+                status_code=503, detail="delete failed; retry this request"
+            ) from exc
+        note(http, deleted=deleted)
+        return {"deleted": deleted, "id": request.id, "user_id": request.user_id}
+
+    @app.post("/v1/memories/list", dependencies=[Depends(authorize)])
+    async def list_memories(request: ListRequest, http: HTTPRequest) -> dict[str, Any]:
+        limit = min(request.limit, MAX_LIST)
+        note(http, user_id=request.user_id, limit=limit, session=request.session_id is not None)
+        after = int(request.cursor) if request.cursor is not None else None
+        try:
+            sources, cursor = await asyncio.to_thread(
+                lambda: engine.list_sources(
+                    request.user_id, limit=limit, after=after, session_id=request.session_id
+                )
+            )
+        except Exception as exc:
+            note(http, **failure(exc))
+            raise HTTPException(
+                status_code=503, detail="listing failed; retry this request"
+            ) from exc
+        note(http, items=len(sources))
+        return {
+            "data": [memory_item(source) for source in sources],
+            "next_cursor": str(cursor) if cursor is not None else None,
+        }
+
+    @app.post("/v1/memories/stats", dependencies=[Depends(authorize)])
+    async def stats(request: UserRequest, http: HTTPRequest) -> dict[str, Any]:
+        note(http, user_id=request.user_id)
+        try:
+            counts = await asyncio.to_thread(engine.store.stats, request.user_id)
+        except Exception as exc:
+            note(http, **failure(exc))
+            raise HTTPException(status_code=503, detail="stats failed; retry this request") from exc
+        return {
+            "user_id": request.user_id,
+            "memories": counts["sources"],
+            "chunks": counts["chunks"],
+            "requests": counts["requests"],
+        }
+
     return app
+
+
+def memory_item(source: Source) -> dict[str, Any]:
+    """One stored message, verbatim; ``created_at`` means what it means in Search."""
+    value: dict[str, Any] = {
+        "id": source.id,
+        "content": source.content,
+        "role": source.role,
+        "session_id": source.session_id,
+        "ingested_at": source.ingested_at.isoformat(),
+    }
+    if source.timestamp is not None:
+        value["created_at"] = source.timestamp.isoformat()
+    return value
 
 
 def response_item(item: Evidence) -> dict[str, Any]:
@@ -221,6 +319,8 @@ def response_item(item: Evidence) -> dict[str, Any]:
         "id": item.id,
         "content": item.render(),
         "score": item.rerank_score if item.rerank_score is not None else item.score,
+        # The stored messages this passage was cut from, for Get and Delete.
+        "source_ids": item.source_ids(),
     }
     # Some AML answer prompts format memories as "- [created_at] text". A merged
     # block starts at its earliest dated message, whichever anchor ranked first.

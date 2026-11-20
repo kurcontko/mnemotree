@@ -43,7 +43,7 @@ vocabulary once; see [the guide](docs/GUIDE.md#configuration) to run offline.
 | --- | --- |
 | `embeddings` | OpenAI-compatible HTTP embedder and extractor |
 | `lite` | Local SentenceTransformer embedder |
-| `serve` | AML Add/Search HTTP service |
+| `serve` | HTTP service: AML Add/Search, plus routes to list, read and delete memories |
 | `all` | All of the above |
 
 ## Quickstart
@@ -142,6 +142,50 @@ Sessions pointed at the same database share one memory. With `pip install mnemot
 `mnemotree mcp` runs the same server, but with no default model: pass `--config` or
 `--lexical`.
 
+## HTTP service
+
+The `serve` extra runs memory as a small HTTP API. Add and Search follow the
+[Agent Memory Leaderboard API](https://agentmemoryleaderboard.ai/api-guide); four more
+routes read and delete what is stored. Without `--config` it is lexical-only.
+
+```bash
+pip install 'mnemotree[serve]'
+export MNEMOTREE_API_KEY='replace-with-your-service-key'
+mnemotree-evidence --db service.sqlite serve --port 8000
+```
+
+```bash
+KEY="Authorization: Bearer $MNEMOTREE_API_KEY"
+curl -s localhost:8000/v1/memories/add -H "$KEY" -H 'Content-Type: application/json' -d '{
+  "request_id": "r1", "user_id": "alice", "session_id": "s1",
+  "messages": [{"role": "user", "content": "I moved to Warsaw last spring"}]}'
+# {"success": true, ..., "ids": ["67fd494a..."]}
+
+curl -s localhost:8000/v1/memories/search -H "$KEY" -H 'Content-Type: application/json' \
+  -d '{"user_id": "alice", "query": "Where did I move?", "top_k": 5}'
+# {"data": [{"id": "...", "content": "user: I moved to Warsaw last spring",
+#            "score": 0.016, "source_ids": ["67fd494a..."]}]}
+```
+
+| Route (all `POST`) | Body | Returns |
+| --- | --- | --- |
+| `/v1/memories/add` | `request_id`, `user_id`, `session_id`, `messages` | `ids` of the stored messages |
+| `/v1/memories/search` | `user_id`, `query`, `top_k` | ranked passages with their `source_ids` |
+| `/v1/memories/get` | `user_id`, `ids` (up to 100) | the stored messages, and `missing` |
+| `/v1/memories/list` | `user_id`, optional `session_id`, `limit`, `cursor` | a page of messages, oldest first, and `next_cursor` |
+| `/v1/memories/stats` | `user_id` | counts of memories, chunks and Add requests |
+| `/v1/memories/delete` | `user_id`, `id` | `deleted: true` or `false` |
+
+Every route but `GET /health` needs the key, as `Authorization: Bearer`,
+`Authorization: Token` or `X-Api-Key`. Memory IDs are unique within a user, so get
+and delete always take the `user_id`. Blank messages are skipped and get no ID.
+
+The service is built for one trusted caller: run it behind your own backend, which
+authenticates your users and holds the key. `user_id` keeps users' data apart but is
+not access control, and anyone with the key can read and delete every user's
+memories. [The guide](docs/GUIDE.md#aml-addsearch-service) has the full contract,
+the search defaults and a Docker deployment.
+
 ## Command line
 
 ```bash
@@ -149,14 +193,10 @@ Sessions pointed at the same database share one memory. With `pip install mnemot
 mnemotree-evidence --db demo.sqlite --config examples/evidence/lexical.json \
   evaluate examples/evidence/corpus.jsonl examples/evidence/queries.jsonl \
   --output demo-results.json
-
-# AML Add/Search service with a bearer key (the serve extra).
-export MNEMOTREE_API_KEY='replace-with-your-service-key'
-mnemotree-evidence --db service.sqlite serve
 ```
 
-`mnemotree-evidence` also runs `add`, `search`, and the `ablate`, `ablate-context` and
-`ablate-retrieval` comparisons.
+`mnemotree-evidence` also runs `add`, `search`, `serve` (the HTTP service above), and
+the `ablate`, `ablate-context` and `ablate-retrieval` comparisons.
 
 ## Documentation
 

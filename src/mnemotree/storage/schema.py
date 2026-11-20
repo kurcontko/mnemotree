@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS evidence_sources(
     ingested_at TEXT NOT NULL, UNIQUE(namespace, id),
     UNIQUE(namespace, session_id, session_seq)
 );
+-- Listing pages one namespace in rowid order; without this, every page sorts all of
+-- the namespace's sources. The rowid is implicit in the index.
+CREATE INDEX IF NOT EXISTS evidence_sources_namespace ON evidence_sources(namespace);
 CREATE TABLE IF NOT EXISTS evidence_chunks(
     rowid INTEGER PRIMARY KEY, namespace TEXT NOT NULL, id TEXT NOT NULL,
     source_id TEXT NOT NULL, chunk_index INTEGER NOT NULL,
