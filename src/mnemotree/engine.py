@@ -587,13 +587,6 @@ class EvidenceEngine:
     def forget(self, namespace: str, source_id: str) -> bool:
         return self.store.forget(namespace, source_id)
 
-    def forget_namespace(self, namespace: str) -> int:
-        """Delete every memory, index entry and Add receipt of ``namespace``.
-
-        Returns how many sources it held.
-        """
-        return self.store.forget_namespace(namespace)
-
     def list_sources(
         self,
         namespace: str,

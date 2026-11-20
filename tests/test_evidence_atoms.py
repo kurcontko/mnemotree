@@ -8,9 +8,6 @@ from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorS
 from mnemotree.evaluation import ablate
 from mnemotree.evidence import Memory, Message, SearchOptions
 from mnemotree.providers.extraction import OpenAIExtractor
-from mnemotree.storage.atom_store import ATOM_FTS
-from mnemotree.storage.lexical import fts_table
-from mnemotree.storage.schema import CHUNK_FTS
 
 
 class Extractor:
@@ -252,57 +249,6 @@ async def test_citations_cannot_refer_to_another_batch(tmp_path):
         with pytest.raises(ProviderError, match="outside its extraction batch"):
             await ingest(memory)
         assert memory.store.stats("u")["sources"] == 0
-
-
-async def test_forget_namespace_clears_every_table_and_index_of_one_namespace(tmp_path):
-    with Memory(tmp_path / "m.db", extractor=Extractor(), embedder=Embedder()) as memory:
-        await ingest(memory, "u")
-        await ingest(memory, "v")
-        db = memory.store.db
-
-        def rows(namespace):
-            counts = {
-                table: db.execute(
-                    f"SELECT count(*) FROM {table} WHERE namespace=?", (namespace,)
-                ).fetchone()[0]
-                for table in (
-                    "evidence_sources",
-                    "evidence_chunks",
-                    "evidence_requests",
-                    "evidence_atoms",
-                    "evidence_atom_spans",
-                    "evidence_vec",
-                    "evidence_atom_vec",
-                )
-            }
-            tables = {
-                table: db.execute(
-                    "SELECT count(*) FROM sqlite_master WHERE name=?",
-                    (fts_table(table, namespace),),
-                ).fetchone()[0]
-                for table in (CHUNK_FTS, ATOM_FTS)
-            }
-            return counts, tables
-
-        before = rows("v")
-        assert all(before[0].values()) and all(before[1].values())
-        assert memory.forget_namespace("u") == 2
-        counts, tables = rows("u")
-        assert not any(counts.values()) and not any(tables.values())
-        assert rows("v") == before
-        assert memory.forget_namespace("u") == 0
-        for mode in ("lexical", "dense", "hybrid"):
-            for representation in ("raw", "atoms"):
-                options = SearchOptions(mode=mode, representation=representation)
-                assert not (await memory.search("u", "Warsaw physician", options=options)).evidence
-                assert (await memory.search("v", "Warsaw physician", options=options)).evidence
-        # The receipt went too: the same request_id stores the messages again.
-        receipt = await ingest(memory, "u")
-        assert not receipt.replayed and receipt.atom_count == 1
-        result = await memory.search(
-            "u", "physician", options=SearchOptions(mode="lexical", representation="atoms")
-        )
-        assert {item.source_id for item in result.evidence} == {"name", "job"}
 
 
 async def test_list_sources_pages_in_storage_order(tmp_path):

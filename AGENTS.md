@@ -13,7 +13,7 @@ Key locations:
 - Golden retrieval snapshots: `tests/test_golden_retrieval.py`, `tests/golden/retrieval/` (regenerate with `MNEMOTREE_UPDATE_GOLDEN=1`)
 - Packing and token counting: `src/mnemotree/retrieval/packing.py`
 - Providers: `src/mnemotree/providers/` (`embeddings.py`, `extraction.py` with `OpenAIExtractor`, `retry.py`)
-- HTTP service (AML Add/Search, plus get, delete, list, stats and delete_all): `src/mnemotree/service/` (`app.py`, `schemas.py`, `request_log.py`, `presets.py`)
+- HTTP service (AML Add/Search, plus get, delete, list and stats): `src/mnemotree/service/` (`app.py`, `schemas.py`, `request_log.py`, `presets.py`)
 - Evaluation and ablations: `src/mnemotree/evaluation.py`
 - 1.0 import paths: `src/mnemotree/evidence/` only re-exports the 1.0 names from the moved modules, and nothing else in the package may import it; 2.0 deletes the directory (`tests/test_compat_paths.py`, which pins every 1.0 name)
 - Public API: `src/mnemotree/memory.py` (`Memory`, `MemoryItem`, `Recall`)

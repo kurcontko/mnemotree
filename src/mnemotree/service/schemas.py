@@ -89,7 +89,7 @@ class DeleteRequest(Request):
 
 
 class UserRequest(Request):
-    """A request about one user's memories as a whole: stats, delete_all."""
+    """A request about one user's memories as a whole."""
 
     user_id: str
 

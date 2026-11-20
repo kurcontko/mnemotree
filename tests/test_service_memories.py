@@ -99,7 +99,6 @@ async def test_management_routes_require_the_key_and_valid_bodies(tmp_path):
                 ("delete", {"user_id": "u", "id": "a"}),
                 ("list", {"user_id": "u"}),
                 ("stats", {"user_id": "u"}),
-                ("delete_all", {"user_id": "u"}),
             ):
                 response = await client.post(f"/v1/memories/{route}", json=body)
                 assert response.status_code == 401, route
@@ -117,7 +116,7 @@ async def test_management_routes_require_the_key_and_valid_bodies(tmp_path):
                 ("list", {"user_id": "u", "limit": 0}),
                 ("list", {"user_id": "u", "session_id": ""}),
                 ("stats", {}),
-                ("delete_all", {"user_id": " "}),
+                ("stats", {"user_id": " "}),
             ):
                 response = await client.post(f"/v1/memories/{route}", json=body)
                 assert response.status_code == 422, (route, body)
@@ -133,10 +132,8 @@ async def test_request_log_records_management_routes_without_ids_or_content(tmp_
             await client.post("/v1/memories/get", json={"user_id": "u", "ids": [first, "zz"]})
             await client.post("/v1/memories/delete", json={"user_id": "u", "id": first})
             await client.post("/v1/memories/list", json={"user_id": "u", "limit": 500})
-            await client.post("/v1/memories/delete_all", json={"user_id": "u"})
-    _, get, delete, listed, wiped = [json.loads(line) for line in log.read_text().splitlines()]
+    _, get, delete, listed = [json.loads(line) for line in log.read_text().splitlines()]
     assert listed["limit"] == 100 and listed["items"] == 1 and listed["session"] is False
-    assert wiped["route"] == "/v1/memories/delete_all" and wiped["deleted"] == 1
     assert "Warsaw" not in log.read_text()
     assert get["route"] == "/v1/memories/get" and get["status"] == 200
     assert get["user_id"] == "u" and get["ids"] == 2 and get["found"] == 1
@@ -169,26 +166,18 @@ async def test_list_pages_a_users_memories_oldest_first(tmp_path):
             assert empty.json() == {"data": [], "next_cursor": None}
 
 
-async def test_delete_all_clears_one_user_and_frees_their_request_ids(tmp_path):
+async def test_stats_count_one_users_memories(tmp_path):
     with EvidenceEngine(tmp_path / "m.db") as engine:
         async with client_for(create_app(engine, api_key="k")) as client:
-            await client.post("/v1/memories/add", json=ADD)
+            first, _ = (await client.post("/v1/memories/add", json=ADD)).json()["ids"]
             await client.post("/v1/memories/add", json={**ADD, "user_id": "v"})
             stats = (await client.post("/v1/memories/stats", json={"user_id": "u"})).json()
             assert stats == {"user_id": "u", "memories": 2, "chunks": 2, "requests": 1}
-
-            response = await client.post("/v1/memories/delete_all", json={"user_id": "u"})
-            assert response.json() == {"user_id": "u", "deleted": 2}
+            await client.post("/v1/memories/delete", json={"user_id": "u", "id": first})
             stats = (await client.post("/v1/memories/stats", json={"user_id": "u"})).json()
-            assert stats == {"user_id": "u", "memories": 0, "chunks": 0, "requests": 0}
-            query = {"user_id": "u", "query": "Warsaw", "top_k": 5}
-            assert (await client.post("/v1/memories/search", json=query)).json() == {"data": []}
-            other = {**query, "user_id": "v"}
-            assert len((await client.post("/v1/memories/search", json=other)).json()["data"]) == 1
-
-            again = await client.post("/v1/memories/delete_all", json={"user_id": "u"})
-            assert again.json() == {"user_id": "u", "deleted": 0}
-            # The receipt is gone, so the same request stores the messages again.
-            replay = await client.post("/v1/memories/add", json=ADD)
-            assert replay.status_code == 200 and len(replay.json()["ids"]) == 2
-            assert len((await client.post("/v1/memories/search", json=query)).json()["data"]) == 1
+            assert stats == {"user_id": "u", "memories": 1, "chunks": 1, "requests": 1}
+            empty = (await client.post("/v1/memories/stats", json={"user_id": "w"})).json()
+            assert empty == {"user_id": "w", "memories": 0, "chunks": 0, "requests": 0}
+            # There is no route that erases a whole user.
+            gone = await client.post("/v1/memories/delete_all", json={"user_id": "u"})
+            assert gone.status_code == 404

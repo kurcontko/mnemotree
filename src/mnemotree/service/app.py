@@ -297,19 +297,6 @@ def create_app(
             "requests": counts["requests"],
         }
 
-    @app.post("/v1/memories/delete_all", dependencies=[Depends(authorize)])
-    async def delete_all(request: UserRequest, http: HTTPRequest) -> dict[str, Any]:
-        note(http, user_id=request.user_id)
-        try:
-            deleted = await asyncio.to_thread(engine.forget_namespace, request.user_id)
-        except Exception as exc:
-            note(http, **failure(exc))
-            raise HTTPException(
-                status_code=503, detail="delete failed; retry this request"
-            ) from exc
-        note(http, deleted=deleted)
-        return {"user_id": request.user_id, "deleted": deleted}
-
     return app
 
 

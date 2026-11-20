@@ -22,7 +22,7 @@ from ..core.models import (
     scope,
 )
 from ..errors import ConfigurationError, IngestConflict, ProviderError
-from .atom_store import ATOM_FTS, AtomStore
+from .atom_store import AtomStore
 from .lexical import create_fts, fts_table, index_text, match_expression
 from .schema import CHUNK_FTS, configure, connect, create_tables, stored_embedding_spec
 from .vectors import vector_blob
@@ -430,25 +430,6 @@ class SQLiteEvidenceStore:
                 )
             self.atoms.unindex(namespace, atoms)
             return cursor.rowcount > 0
-
-    def forget_namespace(self, namespace: str) -> int:
-        """Delete everything stored under ``namespace``; the number of sources it held.
-
-        Sources, chunks, atoms, vectors, both FTS5 tables and the Add receipts go in
-        one transaction, so a reused request_id afterwards is a new request.
-        """
-        scope(namespace)
-        with self.transaction():
-            # Atoms first: their cascade and triggers clear spans and atom vectors, so
-            # the per-source atom trigger below finds nothing left to look up.
-            self.db.execute("DELETE FROM evidence_atoms WHERE namespace=?", (namespace,))
-            # Chunks cascade from their sources; a trigger removes their vectors.
-            cursor = self.db.execute("DELETE FROM evidence_sources WHERE namespace=?", (namespace,))
-            self.db.execute("DELETE FROM evidence_requests WHERE namespace=?", (namespace,))
-            # Reads skip a namespace without rows, and the next write recreates these.
-            for table in (fts_table(CHUNK_FTS, namespace), fts_table(ATOM_FTS, namespace)):
-                self.db.execute(f"DROP TABLE IF EXISTS {table}")
-            return cursor.rowcount
 
     def list_sources(
         self,

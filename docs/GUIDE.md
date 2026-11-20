@@ -323,7 +323,7 @@ Multimodal payloads are rejected, and no answer is generated.
 
 Beyond the AML contract, Add returns `ids`, the memory IDs of the stored messages in
 request order (blank messages are skipped and get none), and each Search result
-carries `source_ids`, the memories its passage was cut from. Five more routes read
+carries `source_ids`, the memories its passage was cut from. Four more routes read
 and delete what is stored, behind the same key:
 
 - `POST /v1/memories/get` with `{"user_id": ..., "ids": [...]}` (1 to 100 IDs)
@@ -340,15 +340,12 @@ and delete what is stored, behind the same key:
   it is `null` on the last one.
 - `POST /v1/memories/stats` with `{"user_id": ...}` returns counts of `memories`,
   `chunks` and Add `requests`.
-- `POST /v1/memories/delete_all` with `{"user_id": ...}` deletes every memory of the
-  user, with all of its index entries and Add receipts, in one transaction, and
-  returns `{"user_id": ..., "deleted": <count>}`. With the receipts gone, a later Add
-  that reuses a `request_id` is stored as a new request.
 
 `user_id` partitions the data; it is not access control. Anyone holding the service
 key can read and delete every user's memories. Replaying an Add after one of its
 messages was deleted answers 409: the replay cannot restore it. Send the message
-again under a new `request_id` to store it again.
+again under a new `request_id` to store it again. There is no route that erases a
+whole user: list their memories and delete each one.
 
 ```bash
 pip install 'mnemotree[serve]'
