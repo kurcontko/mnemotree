@@ -1,4 +1,4 @@
-# Unreleased
+# 1.1.0 (2026-11-15)
 
 Three changes can break a 1.0 caller: one that imports from `mnemotree.evidence`,
 one that passes an engine by keyword, and one that writes to the store directly.
