@@ -113,6 +113,8 @@ async def test_management_routes_require_the_key_and_valid_bodies(tmp_path):
                 ("delete", {"user_id": "u"}),
                 ("list", {"user_id": "u", "cursor": "abc"}),
                 ("list", {"user_id": "u", "cursor": "-1"}),
+                # Fits the pattern but not a SQLite integer: 422, never a retried 503.
+                ("list", {"user_id": "u", "cursor": "9223372036854775808"}),
                 ("list", {"user_id": "u", "limit": 0}),
                 ("list", {"user_id": "u", "session_id": ""}),
                 ("stats", {}),

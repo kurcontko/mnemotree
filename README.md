@@ -178,7 +178,7 @@ curl -s localhost:8000/v1/memories/search -H "$KEY" -H 'Content-Type: applicatio
 
 Every route but `GET /health` needs the key, as `Authorization: Bearer`,
 `Authorization: Token` or `X-Api-Key`. Memory IDs are unique within a user, so get
-and delete always take the `user_id`.
+and delete always take the `user_id`. Blank messages are skipped and get no ID.
 
 The service is built for one trusted caller: run it behind your own backend, which
 authenticates your users and holds the key. `user_id` keeps users' data apart but is

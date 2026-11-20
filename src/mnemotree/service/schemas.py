@@ -15,6 +15,7 @@ from ..core.models import Message, scope
 MAX_TOP_K = 100
 MAX_GET_IDS = 100
 MAX_LIST = 100
+MAX_ROWID = 2**63 - 1
 
 
 class Request(BaseModel):
@@ -110,3 +111,12 @@ class ListRequest(UserRequest):
     @classmethod
     def valid_session(cls, value: str | None) -> str | None:
         return scope(value) if value is not None else None
+
+    @field_validator("cursor")
+    @classmethod
+    def valid_cursor(cls, value: str | None) -> str | None:
+        # A rowid is a SQLite integer; a larger cursor could only fail in the store,
+        # and the client must hear 422, not a 503 it would retry forever.
+        if value is not None and int(value) > MAX_ROWID:
+            raise ValueError("cursor is not one this service returned")
+        return value

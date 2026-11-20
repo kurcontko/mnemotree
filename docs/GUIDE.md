@@ -311,8 +311,9 @@ notebook with top-level `await`, like the API example above.
 `mnemotree-evidence serve` (the `serve` extra) implements the
 [textual Agent Memory Leaderboard API](https://agentmemoryleaderboard.ai/api-guide):
 `POST /v1/memories/add`, `POST /v1/memories/search` and unauthenticated `GET /health`.
-Add and Search require the key from `MNEMOTREE_API_KEY` (or `--key-env`), sent as
-`Authorization: Bearer <key>`, `Authorization: Token <key>` or `X-Api-Key: <key>`. It
+Every route except `/health` requires the key from `MNEMOTREE_API_KEY` (or
+`--key-env`), sent as `Authorization: Bearer <key>`, `Authorization: Token <key>` or
+`X-Api-Key: <key>`. It
 accepts ordered user/assistant messages with optional Unix-millisecond timestamps,
 echoes IDs exactly, acknowledges writes durably and synchronously, isolates by
 `user_id`, appends multiple-choice options to the retrieval query, and returns ranked
@@ -320,9 +321,11 @@ echoes IDs exactly, acknowledges writes durably and synchronously, isolates by
 Multimodal payloads are rejected, and no answer is generated.
 
 Beyond the AML contract, Add returns `ids`, the memory IDs of the stored messages in
-request order (blank messages are skipped and get none), and each Search result
-carries `source_ids`, the memories its passage was cut from. Four more routes read
-and delete what is stored, behind the same key:
+request order (blank messages are skipped and get none, so the list can be shorter
+than `messages`), and each Search result carries `source_ids`, every stored message
+its `content` shows. That includes the neighboring turns added for context, so
+deleting all of a result's `source_ids` removes more than the turn that matched.
+Four more routes read and delete what is stored, behind the same key:
 
 - `POST /v1/memories/get` with `{"user_id": ..., "ids": [...]}` (1 to 100 IDs)
   returns `{"data": [...], "missing": [...]}`. Each item is the stored message
