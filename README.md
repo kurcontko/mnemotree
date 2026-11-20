@@ -39,7 +39,7 @@ vocabulary once; see [the guide](docs/GUIDE.md#configuration) to run offline.
 | --- | --- |
 | `embeddings` | OpenAI-compatible HTTP embedder and extractor |
 | `lite` | Local SentenceTransformer embedder |
-| `serve` | AML Add/Search HTTP service |
+| `serve` | HTTP service: AML Add/Search, plus routes to list, read and delete memories |
 | `all` | All of the above |
 
 ## Quickstart

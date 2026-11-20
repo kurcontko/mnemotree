@@ -586,3 +586,23 @@ class EvidenceEngine:
 
     def forget(self, namespace: str, source_id: str) -> bool:
         return self.store.forget(namespace, source_id)
+
+    def forget_namespace(self, namespace: str) -> int:
+        """Delete every memory, index entry and Add receipt of ``namespace``.
+
+        Returns how many sources it held.
+        """
+        return self.store.forget_namespace(namespace)
+
+    def list_sources(
+        self,
+        namespace: str,
+        *,
+        limit: int = 100,
+        after: int | None = None,
+        session_id: str | None = None,
+    ) -> tuple[list[Source], int | None]:
+        """A page of stored sources, oldest first, and the cursor of the next page."""
+        if limit < 1:
+            raise InvalidInput("limit must be at least 1")
+        return self.store.list_sources(namespace, limit=limit, after=after, session_id=session_id)

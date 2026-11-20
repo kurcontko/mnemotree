@@ -22,7 +22,7 @@ from ..core.models import (
     scope,
 )
 from ..errors import ConfigurationError, IngestConflict, ProviderError
-from .atom_store import AtomStore
+from .atom_store import ATOM_FTS, AtomStore
 from .lexical import create_fts, fts_table, index_text, match_expression
 from .schema import CHUNK_FTS, configure, connect, create_tables, stored_embedding_spec
 from .vectors import vector_blob
@@ -430,6 +430,48 @@ class SQLiteEvidenceStore:
                 )
             self.atoms.unindex(namespace, atoms)
             return cursor.rowcount > 0
+
+    def forget_namespace(self, namespace: str) -> int:
+        """Delete everything stored under ``namespace``; the number of sources it held.
+
+        Sources, chunks, atoms, vectors, both FTS5 tables and the Add receipts go in
+        one transaction, so a reused request_id afterwards is a new request.
+        """
+        scope(namespace)
+        with self.transaction():
+            # Atoms first: their cascade and triggers clear spans and atom vectors, so
+            # the per-source atom trigger below finds nothing left to look up.
+            self.db.execute("DELETE FROM evidence_atoms WHERE namespace=?", (namespace,))
+            # Chunks cascade from their sources; a trigger removes their vectors.
+            cursor = self.db.execute("DELETE FROM evidence_sources WHERE namespace=?", (namespace,))
+            self.db.execute("DELETE FROM evidence_requests WHERE namespace=?", (namespace,))
+            # Reads skip a namespace without rows, and the next write recreates these.
+            for table in (fts_table(CHUNK_FTS, namespace), fts_table(ATOM_FTS, namespace)):
+                self.db.execute(f"DROP TABLE IF EXISTS {table}")
+            return cursor.rowcount
+
+    def list_sources(
+        self,
+        namespace: str,
+        *,
+        limit: int,
+        after: int | None = None,
+        session_id: str | None = None,
+    ) -> tuple[list[Source], int | None]:
+        """Sources in storage order after the ``after`` cursor, and the next cursor."""
+        scope(namespace)
+        query = "SELECT * FROM evidence_sources WHERE namespace=? AND rowid>?"
+        parameters: list[Any] = [namespace, after if after is not None else 0]
+        if session_id is not None:
+            query += " AND session_id=?"
+            parameters.append(session_id)
+        with self._lock:
+            rows = self.db.execute(
+                query + " ORDER BY rowid LIMIT ?", (*parameters, limit + 1)
+            ).fetchall()
+        more = len(rows) > limit
+        rows = rows[:limit]
+        return [self._source(row) for row in rows], rows[-1]["rowid"] if more else None
 
     def conversation_context(
         self,
