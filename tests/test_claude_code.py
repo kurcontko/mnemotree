@@ -49,7 +49,7 @@ def run(env, monkeypatch, capsys):
     def send(event, **fields):
         payload = {"hook_event_name": event, "session_id": "s1", **fields}
         monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
-        assert hooks.main([], command=("mnemotree-mcp", "hook")) == 0
+        hooks.main([], command=("mnemotree-mcp", "hook"))
         out = capsys.readouterr().out
         return json.loads(out) if out else None
 
@@ -171,9 +171,8 @@ def test_stop_starts_a_detached_flush_with_the_hook_flags(env, monkeypatch, caps
     monkeypatch.setattr(hooks, "detach", lambda command, state: started.append((command, state)))
     event = {"hook_event_name": "Stop", "session_id": "s1", "last_assistant_message": "Done."}
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(event)))
-    assert hooks.main(["--project"], command=("mnemotree-mcp", "hook")) == 0
-    session = str(env.state / "sessions" / "s1")
-    assert started == [(["mnemotree-mcp", "hook", "--project", "--flush", session], env.state)]
+    hooks.main(["--project"], command=("mnemotree-mcp", "hook"))
+    assert started == [(["mnemotree-mcp", "hook", "--project", "--flush", "s1"], env.state)]
     assert capsys.readouterr().out == ""
 
 
@@ -181,7 +180,7 @@ def test_stop_without_anything_queued_starts_nothing(env, monkeypatch):
     monkeypatch.setattr(hooks, "detach", lambda *_: pytest.fail("started"))
     event = {"hook_event_name": "Stop", "session_id": "s1", "last_assistant_message": "  "}
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(event)))
-    assert hooks.main([]) == 0
+    hooks.main([])
 
 
 @pytest.mark.parametrize(
@@ -194,8 +193,8 @@ def test_stop_without_anything_queued_starts_nothing(env, monkeypatch):
 )
 def test_a_failing_hook_exits_zero_and_logs(env, monkeypatch, capsys, argv, stdin, logged):
     monkeypatch.setattr(sys, "stdin", io.StringIO(stdin))
-    # Exit code 2 would block the user's prompt.
-    assert hooks.main(argv) == 0
+    # argparse would exit with 2, which blocks the user's prompt.
+    hooks.main(argv)
     assert capsys.readouterr().out == ""
     assert logged in (env.state / "hook.log").read_text()
 
@@ -209,14 +208,15 @@ def test_a_failed_store_keeps_the_queue_for_the_next_flush(run, env, monkeypatch
     assert len(hooks.queued(session)) == 2
     env.set("MNEMOTREE_DB", str(env.db))
     run("Stop")
-    assert len(stored(env.db)) == 2 and hooks.queued(session) == []
+    assert len(stored(env.db)) == 2
+    assert hooks.queued(session) == []
 
 
 def test_unknown_events_and_a_strange_session_id_are_handled(run, env):
     assert run("PreToolUse") is None
     run("UserPromptSubmit", session_id="../../escape", prompt="We deploy to the VM harbor-7.")
     (session,) = (env.state / "sessions").iterdir()
-    assert session.parent == env.state / "sessions" and len(session.name) == 64
+    assert len(session.name) == 64
 
 
 def test_recall_waits_for_a_local_model_that_is_not_downloaded():
@@ -247,7 +247,7 @@ def test_the_detached_flush_stores_through_a_real_process(env, monkeypatch):
         {"hook_event_name": "Stop", "session_id": "s1", "last_assistant_message": "Noted."},
     ):
         monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(event)))
-        assert hooks.main([]) == 0
+        hooks.main([])
     deadline = time.monotonic() + 30
     while len(stored(env.db)) < 2 and time.monotonic() < deadline:
         time.sleep(0.1)
@@ -296,7 +296,7 @@ def test_project_namespace_is_stable_and_tells_same_named_checkouts_apart(tmp_pa
 def test_mnemotree_mcp_hook_uses_the_local_model_and_restarts_itself(env, monkeypatch):
     mnemotree_mcp = pytest.importorskip("mnemotree_mcp")
     calls = []
-    monkeypatch.setattr(hooks, "main", lambda argv, **options: calls.append((argv, options)) or 0)
+    monkeypatch.setattr(hooks, "main", lambda argv, **options: calls.append((argv, options)))
     assert mnemotree_mcp.main(["hook", "--project"]) == 0
     ((argv, options),) = calls
     assert argv == ["--project"]

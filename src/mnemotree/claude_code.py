@@ -28,7 +28,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from .core.models import Evidence, Message, SearchOptions, digest
 from .mcp.server import build_parser, configure, open_engine, resolve_namespace
@@ -88,7 +88,8 @@ def enqueue(session: Path, session_id: str, role: str, content: str) -> None:
     }
     target = queue / f"{time.time_ns():020d}-{role}.json"
     partial = target.with_suffix(".tmp")
-    partial.write_text(json.dumps(record))
+    # session_dir() made the directory name from the session ID: a plain token or a hash.
+    partial.write_text(json.dumps(record))  # NOSONAR
     partial.rename(target)
 
 
@@ -226,7 +227,7 @@ def on_stop(event: Mapping[str, Any], state: Path, worker: Sequence[str]) -> Non
         enqueue(session, session_id, "assistant", reply.strip())
     if not queued(session):
         return
-    detach([*worker, "--flush", str(session)], state)
+    detach([*worker, "--flush", session.name], state)
 
 
 def detach(command: Sequence[str], state: Path) -> None:
@@ -238,7 +239,9 @@ def detach(command: Sequence[str], state: Path) -> None:
     """
     state.mkdir(parents=True, exist_ok=True)
     with (state / "hook.log").open("a") as errors:
-        subprocess.run(
+        # The command is this process's own command line. The shell receives it as
+        # "$@" and never parses it.
+        subprocess.run(  # NOSONAR
             ["/bin/sh", "-c", '"$@" &', "sh", *command],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -261,22 +264,34 @@ def report(state: Path, message: str) -> None:
         pass
 
 
+class UsageError(Exception):
+    """Bad flags or settings. argparse would exit with 2, which blocks the prompt."""
+
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        raise UsageError(message)
+
+
 def main(
     argv: list[str] | None = None,
     *,
     default_embedding: Mapping[str, Any] | None = None,
     command: Sequence[str] = (sys.executable, "-m", "mnemotree.claude_code"),
     prog: str = "mnemotree-mcp hook",
-) -> int:
-    """Handle one hook event from stdin, or flush one session's queue with ``--flush``.
+) -> None:
+    """Handle one hook event from stdin, or store one session's queue with ``--flush``.
 
     ``command`` starts this entry point again; the detached flush runs it with the
     same flags, so both processes open the same database and namespace.
+
+    Returns normally whatever happens: a hook that fails must not fail the session.
+    The failure, bad flags included, goes to hook.log.
     """
     argv = sys.argv[1:] if argv is None else list(argv)
-    parser = build_parser(prog)
+    parser = build_parser(prog, Parser)
     parser.description = "Claude Code hook handler: reads one hook event from stdin."
-    parser.add_argument("--flush", metavar="SESSION_DIR", help=argparse.SUPPRESS)
+    parser.add_argument("--flush", metavar="SESSION", help=argparse.SUPPRESS)
     state = state_dir()
     try:
         args = parser.parse_args(argv)
@@ -284,15 +299,17 @@ def main(
         namespace = resolve_namespace(parser, args)
 
         def opener() -> Memory:
+            # The database path is the user's own flag or setting.
             path = Path(args.db).expanduser()
-            path.parent.mkdir(parents=True, exist_ok=True)  # NOSONAR: the user's own flag
+            path.parent.mkdir(parents=True, exist_ok=True)  # NOSONAR
             engine = open_engine(path, config)
             return Memory.from_engine(engine, namespace=namespace, search=config.search)
 
         if args.flush:
-            flush(Path(args.flush), opener)
+            # A session name, never a path: it resolves inside the state directory.
+            flush(session_dir(state, args.flush), opener)
             prune(state)
-            return 0
+            return
         event = json.load(sys.stdin)
         name = event.get("hook_event_name")
         if name == "UserPromptSubmit":
@@ -301,15 +318,11 @@ def main(
                 print(json.dumps(output))
         elif name == "Stop":
             on_stop(event, state, [*command, *argv])
-    # A hook that fails must not fail the session, and exit code 2 would block the
-    # prompt: log the failure, bad flags included, and report success.
-    except SystemExit as exc:
-        if exc.code not in (0, None):
-            report(state, f"exit {exc.code}: bad arguments {argv}")
+    except UsageError as exc:
+        report(state, f"bad arguments {argv}: {exc}")
     except Exception as exc:  # noqa: BLE001
         report(state, f"{type(exc).__name__}: {exc}")
-    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

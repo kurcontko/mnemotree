@@ -15,9 +15,11 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["hook"]:
         from mnemotree.claude_code import main as hook
 
-        return hook(
+        # A hook reports success whatever happened: a failure must not block the prompt.
+        hook(
             argv[1:],
             default_embedding=DEFAULT_LOCAL_EMBEDDING,
             command=(sys.executable, "-m", "mnemotree_mcp", "hook"),
         )
+        return 0
     return serve(argv, default_embedding=DEFAULT_LOCAL_EMBEDDING)

@@ -62,4 +62,5 @@ def test_launcher_without_uv_fails_the_server_but_not_a_hook(tmp_path):
     hook = subprocess.run(["/bin/sh", LAUNCHER, "hook"], env=env, capture_output=True, text=True)
     assert (hook.returncode, hook.stdout, hook.stderr) == (0, "", "")
     server = subprocess.run(["/bin/sh", LAUNCHER], env=env, capture_output=True, text=True)
-    assert server.returncode == 127 and "uv is not installed" in server.stderr
+    assert server.returncode == 127
+    assert "uv is not installed" in server.stderr

@@ -200,10 +200,11 @@ def setting(name: str) -> str | None:
     return os.environ.get(f"MNEMOTREE_{name}") or os.environ.get(f"MNEMOTREE_MCP_{name}") or None
 
 
-def build_parser(prog: str = "mnemotree-mcp") -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="MCP stdio server for one mnemotree namespace."
-    )
+def build_parser(
+    prog: str = "mnemotree-mcp",
+    parser_class: type[argparse.ArgumentParser] = argparse.ArgumentParser,
+) -> argparse.ArgumentParser:
+    parser = parser_class(prog=prog, description="MCP stdio server for one mnemotree namespace.")
     parser.add_argument(
         "--db",
         default=setting("DB") or DEFAULT_DB,
@@ -275,6 +276,17 @@ def resolve_namespace(parser: argparse.ArgumentParser, args: argparse.Namespace)
         parser.error(str(exc))
 
 
+def read_config(parser: argparse.ArgumentParser, path: str) -> Config:
+    # S8707 is a false positive here and at mkdir in main: the operator sets these flags,
+    # no tool can.
+    try:
+        return Config.model_validate_json(Path(path).expanduser().read_text())  # NOSONAR
+    except ValidationError as exc:
+        parser.error(f"--config: {describe(exc)}")
+    except (OSError, UnicodeDecodeError) as exc:
+        parser.error(f"--config: {exc}")
+
+
 def configure(
     parser: argparse.ArgumentParser,
     args: argparse.Namespace,
@@ -285,16 +297,7 @@ def configure(
     if not args.db:
         parser.error("--db must not be empty")
     resolve_namespace(parser, args)
-    # S8707 is a false positive here and at mkdir below: the operator sets these flags, no tool can.
-    config = Config()
-    if args.config:
-        config_path = Path(args.config).expanduser()
-        try:
-            config = Config.model_validate_json(config_path.read_text())  # NOSONAR
-        except ValidationError as exc:
-            parser.error(f"--config: {describe(exc)}")
-        except (OSError, UnicodeDecodeError) as exc:
-            parser.error(f"--config: {exc}")
+    config = read_config(parser, args.config) if args.config else Config()
     # Keyword-only retrieval misses paraphrases, so it must be chosen, never a fallback.
     if config.embedding is None and not lexical:
         if default_embedding is None:
