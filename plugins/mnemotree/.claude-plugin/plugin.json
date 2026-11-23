@@ -1,0 +1,10 @@
+{
+  "name": "mnemotree",
+  "version": "1.2.0",
+  "description": "Remembers every session in a local SQLite file and recalls the original passages. No LLM calls, no API key.",
+  "author": { "name": "kurcontko" },
+  "homepage": "https://github.com/kurcontko/mnemotree/blob/main/docs/GUIDE.md#claude-code-plugin",
+  "repository": "https://github.com/kurcontko/mnemotree",
+  "license": "MIT",
+  "keywords": ["memory", "long-term-memory", "sqlite", "mcp", "local"]
+}

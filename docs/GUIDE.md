@@ -164,8 +164,16 @@ errors go to stderr.
 | --- | --- | --- |
 | `MNEMOTREE_DB` | `--db` | `~/.mnemotree/memory.sqlite` |
 | `MNEMOTREE_NAMESPACE` | `--namespace` | `default` |
+| `MNEMOTREE_PROJECT` (`1`, `true`, `yes`) | `--project` | off |
 | `MNEMOTREE_CONFIG` | `--config` | none: the local model |
 | `MNEMOTREE_LEXICAL` (`1`, `true`, `yes`) | `--lexical` | off |
+
+With `--project` and no `--namespace`, the server uses one namespace per project,
+named after the repository's directory with a hash of its path, such as
+`api-3f9c2a1b`. The project is the Git repository around `CLAUDE_PROJECT_DIR`, or
+around the working directory when the client does not set it. Linked worktrees of
+one repository share a namespace. Outside a repository the directory itself is the
+project.
 
 Flags override the environment. `MNEMOTREE_MCP_DB`, `MNEMOTREE_MCP_NAMESPACE` and
 `MNEMOTREE_MCP_CONFIG`, read by earlier releases, still work when the new name is
@@ -200,6 +208,66 @@ an untrusted page can also carry instructions into later sessions. The server
 tells clients to read memories as records, not instructions, but only the client
 can enforce that. Approval is the client's job too: `forget` is marked
 `destructiveHint` so clients can ask before deleting, and deletion is permanent.
+
+## Claude Code plugin
+
+The plugin adds two hooks to the MCP server, so Claude Code stores and recalls
+without being asked. It needs [uv](https://docs.astral.sh/uv/) and runs on macOS
+and Linux.
+
+```bash
+claude plugin marketplace add kurcontko/mnemotree
+claude plugin install mnemotree@mnemotree
+```
+
+Inside a session the same two steps are `/plugin marketplace add kurcontko/mnemotree`
+and `/plugin install mnemotree@mnemotree`.
+
+**What it stores.** After each turn, your prompt and Claude's final reply, exactly
+as written, as two consecutive messages of that session. It does not store tool
+calls, tool output, slash commands or subagent conversations. Storing runs in a
+background process after the reply, so you never wait for it. A prompt you
+interrupt is stored with the next reply.
+
+**What it recalls.** Before each prompt it searches the project's memories with
+the prompt as the query and adds up to three passages, at most 500 tokens, to
+Claude's context. It leaves out the current session, which Claude already has, and
+any passage it already added in this session. Prompts shorter than three words
+are not searched. This adds about a second to each prompt.
+
+There is no relevance cut-off. The hook adds the best matches it finds, so some
+will be unrelated to the prompt, and Claude is told to ignore those. With the
+default model, similarity scores of related and unrelated prompts overlap too
+much for a threshold to separate them. The token budget is what bounds the cost.
+
+**Where it goes.** Everything is in `~/.mnemotree/memory.sqlite`, in one namespace
+per project (`--project` above), so two repositories do not see each other's
+memories. The plugin's tools, such as `recall` and `forget`, work on the same
+namespace. Nothing leaves your machine, and no LLM is called.
+
+| Environment variable | Default | Effect |
+| --- | --- | --- |
+| `MNEMOTREE_RECALL_TOKENS` | `500` | Token budget for recalled passages; `0` turns recall off |
+| `MNEMOTREE_CAPTURE` | on | `0` stops storing turns |
+| `MNEMOTREE_NAMESPACE` | per project | One name here shares a single memory across all projects |
+| `MNEMOTREE_DB`, `MNEMOTREE_CONFIG`, `MNEMOTREE_LEXICAL` | as for the server | The hooks and the server read the same settings |
+
+Set them in your shell, or under `env` in Claude Code's `settings.json`.
+
+Things to know:
+
+- Your prompts are stored as plain text, including a secret you paste into one.
+  Use the `forget` tool to delete a memory, or set `MNEMOTREE_CAPTURE=0` first.
+- The first session downloads the embedding model in the background. Recall
+  starts once it is there, and turns are stored either way.
+- After Claude Code compacts a long session, turns from before the compaction are
+  not recalled back into that session.
+- A hook never fails your session. Errors go to `hook.log` in the plugin's data
+  directory, `~/.claude/plugins/data/`, next to the queue of turns not yet stored.
+
+The hooks run `mnemotree-mcp hook`, which reads one Claude Code hook event from
+stdin. `plugins/mnemotree/` holds the plugin, and `MNEMOTREE_MCP_COMMAND` points
+it at another command, such as a development checkout's `mnemotree-mcp`.
 
 ## Configuration
 

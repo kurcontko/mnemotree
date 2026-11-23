@@ -1,0 +1,12 @@
+{
+  "name": "mnemotree",
+  "description": "Local, source-first memory for Claude Code",
+  "owner": { "name": "kurcontko" },
+  "plugins": [
+    {
+      "name": "mnemotree",
+      "source": "./plugins/mnemotree",
+      "description": "Remembers every session in a local SQLite file and recalls the original passages. No LLM calls, no API key."
+    }
+  ]
+}

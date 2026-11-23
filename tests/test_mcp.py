@@ -384,6 +384,30 @@ def test_cli_reads_settings_from_the_environment(tmp_path, clean_env, served):
     assert (tmp_path / "new.db").exists()
 
 
+def test_project_flag_serves_the_namespace_of_the_project_directory(tmp_path, clean_env, served):
+    from mnemotree.mcp.project import project_namespace
+
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    (repo / "src").mkdir()
+    clean_env.setenv("CLAUDE_PROJECT_DIR", str(repo / "src"))
+    db = ["--lexical", "--db", str(tmp_path / "m.db")]
+    assert main([*db, "--project"]) == 0
+    assert served.server.memory.namespace == project_namespace(repo)
+    assert served.server.memory.namespace.startswith("repo-")
+    # Without the flag nothing changes, and an explicit namespace wins over it.
+    assert main(db) == 0
+    assert served.server.memory.namespace == "default"
+    assert main([*db, "--project", "--namespace", "shared"]) == 0
+    assert served.server.memory.namespace == "shared"
+    clean_env.setenv("MNEMOTREE_PROJECT", "1")
+    assert main(db) == 0
+    assert served.server.memory.namespace == project_namespace(repo)
+    clean_env.setenv("MNEMOTREE_PROJECT", "maybe")
+    with pytest.raises(SystemExit):
+        main(db)
+
+
 def test_cli_keeps_the_old_names_as_fallbacks(tmp_path, clean_env, served):
     config = tmp_path / "c.json"
     config.write_text(json.dumps({"search": {"mode": "lexical", "limit": 4}}))

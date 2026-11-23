@@ -51,7 +51,10 @@ MNEMOTREE_UPDATE_GOLDEN=1 .venv/bin/pytest tests/test_golden_retrieval.py
 
 1. On `main`, set `version` in `pyproject.toml` and in
    `packages/mnemotree-mcp/pyproject.toml`, including its `mnemotree==` pin. Set
-   both versions in `packages/mnemotree-mcp/server.json` too, and add the entry to
+   both versions in `packages/mnemotree-mcp/server.json` too. Set `version` in
+   `plugins/mnemotree/.claude-plugin/plugin.json` and the `mnemotree-mcp>=` pin in
+   `plugins/mnemotree/scripts/mnemotree-mcp.sh` to the same version, so installed
+   plugins update and start the new release. Add the entry to
    [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
 2. Tag the merged commit and push the tag:
    `git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`.

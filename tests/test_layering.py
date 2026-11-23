@@ -25,6 +25,7 @@ ALLOWED = {
     "service": LOWER | {"engine"},
     "config": LOWER | {"engine", "providers", "retrieval"},
     "mcp": LOWER | {"engine", "memory", "config", "providers"},
+    "claude_code": LOWER | {"memory", "retrieval", "mcp"},
 }
 
 

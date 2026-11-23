@@ -83,6 +83,20 @@ async def test_fetches_the_pinned_files_once_then_reads_the_cache(fake_fastembed
     assert [call.get("local_files_only") for call in fake_fastembed.downloads] == [True]
 
 
+async def test_cached_reports_whether_the_model_loads_without_the_network(fake_fastembed, tmp_path):
+    cache = tmp_path / "models"
+    model = embedder(fake_fastembed, cache)
+    assert not model.cached()
+    # Asking never downloads: only the local lookup ran.
+    assert [call.get("local_files_only") for call in fake_fastembed.downloads] == [True]
+    await model.embed_query("x")
+    assert model.cached()
+    assert embedder(fake_fastembed, cache).cached()
+    # An interrupted download left one file missing.
+    (cache / "snapshots" / "0123456789abcdef0123456789abcdef01234567" / TOY_FILES[-1]).unlink()
+    assert not embedder(fake_fastembed, cache).cached()
+
+
 async def test_an_interrupted_download_is_fetched_again(fake_fastembed, tmp_path):
     cache = tmp_path / "models"
     await embedder(fake_fastembed, cache).embed_query("x")

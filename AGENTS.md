@@ -19,6 +19,7 @@ Key locations:
 - CLI/MCP JSON config, opened as an engine with `Config.open(path)`: `src/mnemotree/config.py`
 - Exceptions (`MnemotreeError`, `InvalidInput`, `ConfigurationError`, `IngestConflict`, `ProviderError`): `src/mnemotree/errors.py`
 - MCP stdio server: `src/mnemotree/mcp/` (standard library only), run as `mnemotree mcp`; the zero-config `mnemotree-mcp` package in `packages/mnemotree-mcp/` (a uv workspace member, released at the same version) adds fastembed and defaults to a local model (`FastEmbedEmbedder`, `DEFAULT_LOCAL_EMBEDDING` in `src/mnemotree/providers/embeddings.py`)
+- Claude Code plugin: `plugins/mnemotree/` (hooks, MCP config and the launcher script), listed by `.claude-plugin/marketplace.json`; its hooks run `mnemotree-mcp hook`, handled in `src/mnemotree/claude_code.py`; the per-project namespace is in `src/mnemotree/mcp/project.py`
 - CLI: `mnemotree-evidence` (`src/mnemotree/cli/evidence.py`), `mnemotree` with `mnemotree mcp` (`src/mnemotree/cli/__init__.py`), `mnemotree-mcp` (`packages/mnemotree-mcp/`)
 - Guide: `docs/GUIDE.md` (API, MCP, configuration, retrieval, atomic projections, AML service, evaluation, limits)
 
