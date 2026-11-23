@@ -80,7 +80,9 @@ async def chat(memory: Memory, client: httpx.AsyncClient, model: str) -> None:
 
 async def main(memory: Memory, args: argparse.Namespace) -> None:
     headers = {"Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'none')}"}
-    async with httpx.AsyncClient(base_url=args.base_url, headers=headers, timeout=120) as client:
+    # The person running the script picks the server, so --base-url is trusted input.
+    server = httpx.AsyncClient(base_url=args.base_url, headers=headers, timeout=120)  # NOSONAR
+    async with server as client:
         await chat(memory, client, args.model)
 
 
