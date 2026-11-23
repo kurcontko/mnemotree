@@ -5,7 +5,22 @@ with semantic search on a local embedding model. No API key or configuration is
 needed:
 
 ```bash
-claude mcp add mnemotree -- uvx mnemotree-mcp
+claude mcp add mnemotree -- uvx mnemotree-mcp   # Claude Code
+codex mcp add mnemotree -- uvx mnemotree-mcp    # Codex
+```
+
+Claude Desktop, Cursor and VS Code take the same command as a JSON entry. The guide
+lists [the file each client reads](https://github.com/kurcontko/mnemotree/blob/main/docs/GUIDE.md#client-setup).
+
+```json
+{
+  "mcpServers": {
+    "mnemotree": {
+      "command": "uvx",
+      "args": ["mnemotree-mcp"]
+    }
+  }
+}
 ```
 
 The first start downloads

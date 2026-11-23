@@ -69,9 +69,67 @@ source metadata (ID, role, session and timestamps), without full message content
 Use `get` to fetch full messages by ID. `packed_tokens` counts the context only;
 JSON framing and source metadata add response overhead.
 
+### Client setup
+
+Claude Code and Codex register the server from the command line:
+
 ```bash
 claude mcp add mnemotree -- uvx mnemotree-mcp
+codex mcp add mnemotree -- uvx mnemotree-mcp
 ```
+
+`claude mcp add` registers the server for the current project only. Add
+`--scope user` to get the same memory in every project. Codex writes this entry to
+`~/.codex/config.toml`, which you can also edit by hand:
+
+```toml
+[mcp_servers.mnemotree]
+command = "uvx"
+args = ["mnemotree-mcp"]
+```
+
+The other clients read a JSON entry:
+
+```json
+{
+  "mcpServers": {
+    "mnemotree": {
+      "command": "uvx",
+      "args": ["mnemotree-mcp"]
+    }
+  }
+}
+```
+
+| Client | File |
+| --- | --- |
+| Claude Desktop | `claude_desktop_config.json`, opened from Settings, Developer, Edit Config |
+| Cursor | `~/.cursor/mcp.json`, or `.cursor/mcp.json` for one project |
+| VS Code with Copilot | `~/.copilot/mcp-config.json`, or `.mcp.json` at the workspace root |
+| Claude Code, shared through the repository | `.mcp.json` at the project root |
+
+For VS Code, add `"type": "stdio"` and `"tools": ["*"]` to the entry. Restart the
+client after editing a file.
+
+Flags go in `args` and settings in `env`. This entry keeps work memories in their own
+namespace:
+
+```json
+{
+  "mcpServers": {
+    "mnemotree": {
+      "command": "uvx",
+      "args": ["mnemotree-mcp", "--namespace", "work"],
+      "env": { "MNEMOTREE_DB": "~/work/memory.sqlite" }
+    }
+  }
+}
+```
+
+Desktop apps start with a shorter `PATH` than your shell. If a client reports that it
+cannot find `uvx`, put the full path printed by `which uvx` in `command`.
+
+### Options
 
 The `mnemotree-mcp` package adds `fastembed` to `mnemotree` and embeds locally with
 [granite-embedding-small-english-r2](https://huggingface.co/ibm-granite/granite-embedding-small-english-r2):

@@ -50,8 +50,9 @@ MNEMOTREE_UPDATE_GOLDEN=1 .venv/bin/pytest tests/test_golden_retrieval.py
 ## Releasing
 
 1. On `main`, set `version` in `pyproject.toml` and in
-   `packages/mnemotree-mcp/pyproject.toml`, including its `mnemotree==` pin, and
-   add the entry to [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
+   `packages/mnemotree-mcp/pyproject.toml`, including its `mnemotree==` pin. Set
+   both versions in `packages/mnemotree-mcp/server.json` too, and add the entry to
+   [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
 2. Tag the merged commit and push the tag:
    `git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`.
 
@@ -65,6 +66,19 @@ If the upload fails partway, fix the cause and re-run the failed jobs: files
 already on PyPI are skipped. A new package needs a pending publisher on PyPI
 that matches the workflow exactly (repository, `release.yml`, environment
 `pypi`); otherwise PyPI refuses to create the project.
+
+After the upload, list the new version in the
+[MCP Registry](https://registry.modelcontextprotocol.io) with its
+[publisher CLI](https://modelcontextprotocol.io/registry/quickstart):
+
+```bash
+cd packages/mnemotree-mcp
+mcp-publisher login github
+mcp-publisher publish
+```
+
+The registry checks that `server.json` names a version on PyPI whose description
+holds the `mcp-name:` line from the package README.
 
 ## Reporting issues
 

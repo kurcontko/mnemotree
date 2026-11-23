@@ -119,7 +119,22 @@ same five tools over stdio, with semantic search on a local embedding model. It
 needs no API key or configuration:
 
 ```bash
-claude mcp add mnemotree -- uvx mnemotree-mcp
+claude mcp add mnemotree -- uvx mnemotree-mcp   # Claude Code
+codex mcp add mnemotree -- uvx mnemotree-mcp    # Codex
+```
+
+Claude Desktop, Cursor and VS Code take the same command as a JSON entry. The guide
+lists [the file each client reads](docs/GUIDE.md#client-setup).
+
+```json
+{
+  "mcpServers": {
+    "mnemotree": {
+      "command": "uvx",
+      "args": ["mnemotree-mcp"]
+    }
+  }
+}
 ```
 
 The first start downloads the English-only
