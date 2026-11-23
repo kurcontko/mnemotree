@@ -1,4 +1,4 @@
-# Unreleased
+# 1.1.0 (2026-11-23)
 
 Three changes can break a 1.0 caller: one that imports from `mnemotree.evidence`,
 one that passes an engine by keyword, and one that writes to the store directly.
@@ -26,7 +26,6 @@ one that passes an engine by keyword, and one that writes to the store directly.
 - `SQLiteEvidenceStore.ingest` takes one `mnemotree.storage.store.IngestBatch` in
   place of nine arguments. Only code that writes to the store directly is affected;
   `EvidenceEngine.add` and `Memory.remember` are unchanged.
-
 - The HTTP service has four more routes behind the same key: `POST /v1/memories/get`
   (memories by ID), `/delete` (one memory by ID), `/list` (a user's memories in the
   order they were stored, paged) and `/stats` (counts). `EvidenceEngine.list_sources`
