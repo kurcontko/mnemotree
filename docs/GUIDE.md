@@ -71,16 +71,18 @@ JSON framing and source metadata add response overhead.
 
 ### Client setup
 
-Claude Code and Codex register the server from the command line:
+Claude Code, Codex and Pi register the server from the command line:
 
 ```bash
 claude mcp add mnemotree -- uvx mnemotree-mcp
 codex mcp add mnemotree -- uvx mnemotree-mcp
+pi mcp add mnemotree -- uvx mnemotree-mcp
 ```
 
 `claude mcp add` registers the server for the current project only. Add
-`--scope user` to get the same memory in every project. Codex writes this entry to
-`~/.codex/config.toml`, which you can also edit by hand:
+`--scope user` to get the same memory in every project. Pi has MCP support from
+0.99 and registers the server for every project; `--local` keeps it to one. Codex
+writes this entry to `~/.codex/config.toml`, which you can also edit by hand:
 
 ```toml
 [mcp_servers.mnemotree]
@@ -106,13 +108,30 @@ The other clients read a JSON entry:
 | Claude Desktop | `claude_desktop_config.json`, opened from Settings, Developer, Edit Config |
 | Cursor | `~/.cursor/mcp.json`, or `.cursor/mcp.json` for one project |
 | VS Code with Copilot | `~/.copilot/mcp-config.json`, or `.mcp.json` at the workspace root |
+| Pi | `~/.pi/agent/mcp.json`, or `.pi/mcp.json` for one project |
 | Claude Code, shared through the repository | `.mcp.json` at the project root |
 
 For VS Code, add `"type": "stdio"` and `"tools": ["*"]` to the entry. Restart the
 client after editing a file.
 
-Flags go in `args` and settings in `env`. This entry keeps work memories in their own
-namespace:
+OpenCode has its own shape, with the command and its arguments in one list. Put it
+in `opencode.json` in a project, or in `~/.config/opencode/opencode.json` for every
+project:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mnemotree": {
+      "type": "local",
+      "command": ["uvx", "mnemotree-mcp"]
+    }
+  }
+}
+```
+
+Flags go in `args` and settings in `env` (`command` and `environment` in OpenCode).
+This entry keeps work memories in their own namespace:
 
 ```json
 {
