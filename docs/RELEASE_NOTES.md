@@ -1,6 +1,14 @@
 # Unreleased
 
-- `ablate-retrieval` adds `merge_off`, `source_cap_off`,
+- Two search options for experiments, off by default: `merge_reach` fixes how many
+  messages apart merged anchors may be instead of deriving it from
+  `neighbor_messages`, and `complete_sources=False` keeps the per-source cap without
+  appending the unretrieved chunks of anchored messages. Default searches and the
+  AML profile return the same results.
+- `ablate-context` holds the merge reach in its off arm, so it changes only the
+  neighbour text. Before, turning neighbours off also narrowed merging; reports
+  from options with `merge_blocks=True` differ from earlier ones.
+- `ablate-retrieval` adds `merge_off`, `source_cap_off`, `completion_off`,
   `role_and_source_cap_off`, `deep_pool_off` and `plain_rag` (the equal-budget RAG
   control), runs each distinct configuration once and lists repeats under
   `aliases`. `reports` holds only distinct arms; `summary` still names every arm.

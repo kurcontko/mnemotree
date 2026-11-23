@@ -224,6 +224,10 @@ class SearchOptions(Record):
     neighbor_chars: int = Field(default=1200, ge=1, le=12000)
     # Return anchors within reach of each other in one session as a single item.
     merge_blocks: bool = False
+    # Messages apart two anchors may be and still merge. None derives it from the
+    # neighbor windows (1 + 2 * neighbor_messages); fixing it lets an experiment
+    # change the neighbors without changing which anchors share an item.
+    merge_reach: int | None = Field(default=None, ge=0, le=5)
     # Order of the returned items: by relevance, or chronologically. Selection is
     # by relevance either way; "time" only changes how the reader sees them.
     order: Literal["rank", "time"] = "rank"
@@ -233,6 +237,10 @@ class SearchOptions(Record):
     # Keep at most this many fused candidates per source message: long assistant
     # turns otherwise occupy several candidate slots and several returned items.
     chunks_per_source: int | None = Field(default=None, ge=1)
+    # Under chunks_per_source, also queue the chunks of each anchored message that no
+    # channel retrieved, after the capped overflow, so spare budget completes long
+    # messages. False keeps the cap and its overflow but adds no unretrieved chunks.
+    complete_sources: bool = True
     # Anchors of this role receive either a hard stable partition or a bounded
     # addition to their RRF score. A reranker runs after the bounded prior.
     role_first: str | None = None

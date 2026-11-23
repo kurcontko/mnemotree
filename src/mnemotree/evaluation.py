@@ -16,7 +16,7 @@ from typing import Any
 from pydantic import Field, field_validator, model_validator
 
 from .core.models import Message, Record, SearchOptions, SearchResult, digest, scope
-from .engine import EvidenceEngine
+from .engine import EvidenceEngine, effective_merge_reach
 
 
 class CorpusRecord(Record):
@@ -147,10 +147,15 @@ async def ablate_context(
 ) -> dict[str, Any]:
     ingestion = await ingest_corpus(engine, corpus)
     reports = {}
-    for name, count in (("context_off", 0), ("context_on", options.neighbor_messages or 1)):
-        settings = SearchOptions.model_validate(
-            {**options.model_dump(), "neighbor_messages": count}
-        )
+    on = SearchOptions.model_validate(
+        {**options.model_dump(), "neighbor_messages": options.neighbor_messages or 1}
+    )
+    # The off arm keeps the on arm's merge reach, so both merge the same anchors and
+    # the contrast is the neighbor text alone.
+    off = SearchOptions.model_validate(
+        {**on.model_dump(), "neighbor_messages": 0, "merge_reach": effective_merge_reach(on)}
+    )
+    for name, settings in (("context_off", off), ("context_on", on)):
         reports[name] = await score_queries(engine, corpus, queries, settings, ingestion)
     return {
         "summary": {key: report["summary"] for key, report in reports.items()},
@@ -168,8 +173,10 @@ PLAIN_RAG: dict[str, Any] = {
     "neighbor_chunks": 0,
     "neighbor_messages": 0,
     "merge_blocks": False,
+    "merge_reach": None,
     "order": "rank",
     "chunks_per_source": None,
+    "complete_sources": True,
     "role_first": None,
     "role_boost": None,
     "role_first_min_assistant_share": None,
@@ -183,20 +190,22 @@ def retrieval_variants(engine: EvidenceEngine, options: SearchOptions) -> dict[s
     Arms can coincide with the baseline (``context_on`` when it already has one
     neighbor); ``distinct_variants`` groups them before anything is run.
     """
+    with_context = SearchOptions.model_validate({**options.model_dump(), "neighbor_messages": 1})
     variants: dict[str, dict[str, Any]] = {
         "baseline": {},
         "mode_lexical": {"mode": "lexical"},
-        # With merging on, this also narrows the merge reach (1 + 2 * neighbors).
-        "context_off": {"neighbor_messages": 0},
+        # The off arm keeps the on arm's merge reach; only the neighbor text differs.
+        "context_off": {"neighbor_messages": 0, "merge_reach": effective_merge_reach(with_context)},
         "context_on": {"neighbor_messages": 1},
-        "merge_off": {"merge_blocks": False},
+        "merge_off": {"merge_blocks": False, "merge_reach": None},
         "role_off": {"role_first": None, "role_boost": None},
         "role_hard": {"role_first": options.role_first or "user", "role_boost": None},
         "role_soft": {"role_first": options.role_first or "user", "role_boost": 0.002},
         "model_query_combined": {"model_query_policy": "combined"},
         "model_query_question": {"model_query_policy": "question"},
-        # The cap and the completion of anchored messages together.
+        # The cap and source completion together; completion alone.
         "source_cap_off": {"chunks_per_source": None},
+        "completion_off": {"complete_sources": False},
         # With role_off and source_cap_off, the 2x2 of the two policies.
         "role_and_source_cap_off": {
             "role_first": None,

@@ -6,9 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from mnemotree import EvidenceEngine, SearchOptions
+from mnemotree import EvidenceEngine, Message, SearchOptions
 from mnemotree.cli.evidence import main
+from mnemotree.engine import effective_merge_reach
 from mnemotree.evaluation import (
+    ablate_context,
     distinct_variants,
     evaluate,
     paired_bootstrap,
@@ -28,6 +30,54 @@ def write_rows(path, rows):
     return path
 
 
+async def add_three(memory):
+    texts = ["kiwi start", "plain middle", "kiwi end"]
+    await memory.add(
+        "u",
+        [Message(id=f"m{i}", content=text) for i, text in enumerate(texts)],
+        request_id="r",
+        session_id="s",
+    )
+
+
+def test_merge_reach_defaults_to_the_neighbor_windows():
+    assert effective_merge_reach(SearchOptions()) is None
+    assert effective_merge_reach(SearchOptions(merge_blocks=True)) == 1
+    assert effective_merge_reach(SearchOptions(merge_blocks=True, neighbor_messages=2)) == 5
+    fixed = SearchOptions(merge_blocks=True, neighbor_messages=0, merge_reach=3)
+    assert effective_merge_reach(fixed) == 3
+    # Without merging, a fixed reach changes nothing.
+    assert effective_merge_reach(SearchOptions(merge_reach=3)) is None
+
+
+async def test_fixed_merge_reach_merges_without_adding_neighbors(tmp_path):
+    with EvidenceEngine(tmp_path / "m.db") as memory:
+        await add_three(memory)
+        result = await memory.search(
+            "u",
+            "kiwi",
+            options=SearchOptions(mode="lexical", merge_blocks=True, merge_reach=3),
+        )
+    assert len(result.evidence) == 1
+    block = result.evidence[0]
+    assert {member.source_id for member in block.members()} == {"m0", "m2"}
+    # The anchors share an item, but the message between them is not added.
+    assert set(block.source_ids()) == {"m0", "m2"}
+
+
+async def test_completion_off_keeps_the_cap_but_adds_no_unretrieved_chunks(tmp_path):
+    content = "needle opening. " + "ordinary words follow here. " * 40
+    with EvidenceEngine(tmp_path / "m.db", chunk_size=32, chunk_overlap=0) as memory:
+        await memory.add("u", [Message(id="long", content=content)], request_id="r", session_id="s")
+        on = SearchOptions(mode="lexical", limit=10, chunks_per_source=1, token_budget=4000)
+        off = SearchOptions.model_validate({**on.model_dump(), "complete_sources": False})
+        completed = await memory.search("u", "needle", options=on)
+        capped = await memory.search("u", "needle", options=off)
+    assert len(completed.evidence) > 1
+    assert len(capped.evidence) == 1
+    assert capped.evidence[0].text.startswith("needle")
+
+
 def test_aml_variants_alias_the_arms_equal_to_the_profile(tmp_path):
     with EvidenceEngine(tmp_path / "m.db") as memory:
         base = aml_options(memory)
@@ -44,12 +94,14 @@ def test_aml_variants_alias_the_arms_equal_to_the_profile(tmp_path):
         "context_off",
         "merge_off",
         "source_cap_off",
+        "completion_off",
         "role_and_source_cap_off",
         "deep_pool_off",
         "plain_rag",
     ):
         assert name in distinct
     assert distinct["context_off"].neighbor_messages == 0
+    assert effective_merge_reach(distinct["context_off"]) == effective_merge_reach(base) == 3
     rag = distinct["plain_rag"]
     assert (rag.mode, rag.token_budget, rag.candidate_limit) == (
         base.mode,
@@ -59,6 +111,35 @@ def test_aml_variants_alias_the_arms_equal_to_the_profile(tmp_path):
     assert rag.limit == 100 and rag.chunks_per_source is None and rag.role_first is None
     assert not rag.merge_blocks and rag.neighbor_messages == 0
     assert rag.deep_candidate_limit is None
+
+
+async def test_context_ablation_holds_the_merge_reach(tmp_path):
+    corpus = write_rows(
+        tmp_path / "corpus.jsonl",
+        [
+            {
+                "namespace": "u",
+                "request_id": "r",
+                "session_id": "s",
+                "messages": [
+                    {"id": f"m{i}", "content": text}
+                    for i, text in enumerate(["kiwi start", "plain middle", "kiwi end"])
+                ],
+            }
+        ],
+    )
+    queries = write_rows(
+        tmp_path / "queries.jsonl",
+        [{"id": "q", "namespace": "u", "query": "kiwi", "relevant_source_ids": ["m1"]}],
+    )
+    options = SearchOptions(mode="lexical", merge_blocks=True, neighbor_messages=1)
+    with EvidenceEngine(tmp_path / "m.db") as memory:
+        report = await ablate_context(memory, corpus, queries, options)
+    off = report["reports"]["context_off"]
+    assert off["manifest"]["search"]["merge_reach"] == 3
+    # One merged item in both arms; only the neighbor in between differs.
+    assert off["queries"][0]["packed_source_ids"] == ["m0", "m2"]
+    assert report["reports"]["context_on"]["queries"][0]["packed_source_ids"] == ["m0", "m1", "m2"]
 
 
 async def test_rows_identify_history_mechanisms_and_context(tmp_path):

@@ -503,19 +503,23 @@ tokenizer and budget:
   ingestion-cost control, run `evaluate` without extraction on another fresh database.
   Atom hits lead back to the cited source chunks, so the reader sees source text in
   every arm: this compares indexes, not raw against extracted context.
-- `ablate-context`: neighbouring messages off and on. With `merge_blocks`, the off
-  arm also narrows the merge reach (`1 + 2 × neighbor_messages`), so it measures
-  neighbours and merging together.
+- `ablate-context`: neighbouring messages off and on. The off arm keeps the on arm's
+  merge reach, so both merge the same anchors and only the neighbour text differs.
 - `ablate-retrieval`: one mechanism at a time against the base options: retrieval
-  mode, neighbours (`context_off`, which narrows merging the same way), merging
-  (`merge_off`), role policy, the per-source cap with its completion
-  (`source_cap_off`), both role and cap off (`role_and_source_cap_off`, the fourth
+  mode, neighbours (`context_off`, reach held), merging (`merge_off`), role policy,
+  the per-source cap with its completion (`source_cap_off`), completion alone
+  (`completion_off`), both role and cap off (`role_and_source_cap_off`, the fourth
   cell of a 2×2 with `role_off` and `source_cap_off`), the deep pool
   (`deep_pool_off`), query policy and budget. `plain_rag` keeps the store, channels,
   fusion, query, base candidate pool and budget and drops every evidence policy,
   filling the budget with ranked chunks: the equal-budget RAG control. Arms whose
   complete options equal an earlier arm's are run once; `aliases` maps each to that
   arm, and `summary` lists every name.
+
+Two options exist for these contrasts. `merge_reach` fixes how many messages apart
+merged anchors may be (by default `1 + 2 × neighbor_messages`), and
+`complete_sources=False` keeps the per-source cap and its overflow but stops adding
+the unretrieved chunks of anchored messages. Both defaults leave search unchanged.
 
 `compare` gives the paired difference of one metric between two arms or reports,
 with a bootstrap interval that resamples whole namespaces (one history each), since

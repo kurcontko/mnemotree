@@ -102,6 +102,16 @@ class Stopwatch:
         return self.ms
 
 
+def effective_merge_reach(options: SearchOptions) -> int | None:
+    """How many messages apart merged anchors may be; None when merging is off."""
+    if not options.merge_blocks:
+        return None
+    if options.merge_reach is not None:
+        return options.merge_reach
+    # Anchors whose neighbor windows would touch share one item.
+    return 1 + 2 * options.neighbor_messages
+
+
 def to_evidence(
     candidate: Candidate,
     window: Window,
@@ -335,8 +345,7 @@ class EvidenceEngine:
                 budget=options.token_budget,
                 limit=options.limit,
                 overflow=overflow,
-                # Anchors whose neighbor windows would touch share one item.
-                merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
+                merge_reach=effective_merge_reach(options),
                 order_key=chronological if options.order == "time" else None,
             )
         trace = self._trace(options, plan, retrieval, candidates, packed, policy)
@@ -405,7 +414,10 @@ class EvidenceEngine:
             overflow: list[Candidate] = []
             if options.chunks_per_source is not None:
                 candidates, overflow = self._cap_per_source(
-                    namespace, options.chunks_per_source, candidates
+                    namespace,
+                    options.chunks_per_source,
+                    candidates,
+                    complete=options.complete_sources,
                 )
             sources: dict[str, Source] = {}
             windows: dict[str, Window] = {}
@@ -487,10 +499,12 @@ class EvidenceEngine:
         return hits, channels, ranks
 
     def _cap_per_source(
-        self, namespace: str, per_source: int, candidates: list[Candidate]
+        self, namespace: str, per_source: int, candidates: list[Candidate], *, complete: bool
     ) -> tuple[list[Candidate], list[Candidate]]:
         """The candidates kept under the cap, and the overflow that may fill spare budget."""
         candidates, overflow = cap_per_source(candidates, per_source)
+        if not complete:
+            return candidates, overflow
         # Complete each anchored message: the chunks of a long record that no channel
         # retrieved follow its anchor, placed only into unused budget, so a trajectory
         # or document is served whole when the budget allows.
