@@ -43,46 +43,45 @@ def open_memory(args: argparse.Namespace) -> Memory:
     return Memory.from_engine(config.open(args.db), namespace=args.user, search=config.search)
 
 
-async def complete(
-    client: httpx.AsyncClient, args: argparse.Namespace, messages: list[dict[str, str]]
-) -> str:
-    response = await client.post(
-        f"{args.base_url}/chat/completions", json={"model": args.model, "messages": messages}
-    )
+async def complete(client: httpx.AsyncClient, model: str, messages: list[dict[str, str]]) -> str:
+    response = await client.post("/chat/completions", json={"model": model, "messages": messages})
     response.raise_for_status()
     return str(response.json()["choices"][0]["message"]["content"])
 
 
-async def main(args: argparse.Namespace) -> None:
+async def chat(memory: Memory, client: httpx.AsyncClient, model: str) -> None:
     session = uuid.uuid4().hex  # one session per run keeps a turn next to its reply
     history: list[dict[str, str]] = []
+    while True:
+        try:
+            text = (await asyncio.to_thread(input, "you> ")).strip()
+        except EOFError:
+            break
+        if not text:
+            continue
+        recall = await memory.recall(text)
+        system = SYSTEM.format(context=recall.context or "(nothing relevant yet)")
+        turn = {"role": "user", "content": text}
+        answer = await complete(
+            client, model, [{"role": "system", "content": system}, *history, turn]
+        )
+        print(f"bot> {answer}")
+        print(f"     [{len(recall.items)} memories, {recall.trace.packed_tokens} tokens]")
+        now = datetime.now(UTC)
+        await memory.remember_many(
+            [
+                Message(content=text, role="user", timestamp=now),
+                Message(content=answer, role="assistant", timestamp=now),
+            ],
+            session=session,
+        )
+        history += [turn, {"role": "assistant", "content": answer}]
+
+
+async def main(memory: Memory, args: argparse.Namespace) -> None:
     headers = {"Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'none')}"}
-    with open_memory(args) as memory:
-        async with httpx.AsyncClient(headers=headers, timeout=120) as client:
-            while True:
-                try:
-                    text = (await asyncio.to_thread(input, "you> ")).strip()
-                except EOFError:
-                    break
-                if not text:
-                    continue
-                recall = await memory.recall(text)
-                system = SYSTEM.format(context=recall.context or "(nothing relevant yet)")
-                turn = {"role": "user", "content": text}
-                answer = await complete(
-                    client, args, [{"role": "system", "content": system}, *history, turn]
-                )
-                print(f"bot> {answer}")
-                print(f"     [{len(recall.items)} memories, {recall.trace.packed_tokens} tokens]")
-                now = datetime.now(UTC)
-                await memory.remember_many(
-                    [
-                        Message(content=text, role="user", timestamp=now),
-                        Message(content=answer, role="assistant", timestamp=now),
-                    ],
-                    session=session,
-                )
-                history += [turn, {"role": "assistant", "content": answer}]
+    async with httpx.AsyncClient(base_url=args.base_url, headers=headers, timeout=120) as client:
+        await chat(memory, client, args.model)
 
 
 if __name__ == "__main__":
@@ -92,4 +91,6 @@ if __name__ == "__main__":
     parser.add_argument("--db", type=Path, default=Path("chat.sqlite"))
     parser.add_argument("--user", default="me", help="namespace that owns the memories")
     parser.add_argument("--config", type=Path, help="JSON config with an embedding model")
-    asyncio.run(main(parser.parse_args()))
+    args = parser.parse_args()
+    with open_memory(args) as memory:
+        asyncio.run(main(memory, args))

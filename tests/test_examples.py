@@ -33,7 +33,7 @@ async def test_chat_recalls_what_an_earlier_run_was_told(tmp_path, monkeypatch):
     chat = load("chat_with_memory")
     prompts = []
 
-    async def complete(client, args, messages):
+    async def complete(client, model, messages):
         prompts.append(messages)
         return "Noted."
 
@@ -52,7 +52,8 @@ async def test_chat_recalls_what_an_earlier_run_was_told(tmp_path, monkeypatch):
                 raise EOFError from None
 
         monkeypatch.setattr("builtins.input", read)
-        await chat.main(args)
+        with chat.open_memory(args) as memory:
+            await chat.main(memory, args)
 
     await run("I grow orchids on my balcony.", "")
     await run("What do I grow on my balcony?")
