@@ -15,8 +15,9 @@ Local, source-first memory for LLM agents: SQLite, FTS5 and sqlite-vec.
   <img src="assets/mnemotree-logo.png" alt="Mnemotree Logo" width="300">
 </p>
 
-Mnemotree keeps every message exactly as written and recalls attributed source spans
-instead of rewritten summaries.
+Mnemotree stores every message exactly as written and recalls the original passages
+with their speaker and time. By default it runs no LLM on write or on recall, so you
+get back what was said, not a model's summary of it.
 
 - **Durable:** sources, chunks, both indexes and an idempotency receipt commit in one
   transaction.
@@ -30,7 +31,19 @@ The default install needs only Pydantic, sqlite-vec and tiktoken. See
 [Benchmarks](#benchmarks) for the Agent Memory Leaderboard result and end-to-end
 results on LoCoMo and LongMemEval.
 
+## Try it in Claude Code
+
+```bash
+claude mcp add mnemotree -- uvx mnemotree-mcp
+```
+
+This needs no API key. The embedding model runs on your machine, and memories go to
+`~/.mnemotree/memory.sqlite`. Ask Claude to remember something, start a new session
+and ask about it. [MCP server](#mcp-server) has the options and other clients.
+
 ## Install
+
+For the Python library:
 
 ```bash
 pip install mnemotree
@@ -64,6 +77,15 @@ asyncio.run(main())
 
 `Memory` binds one namespace and offers `remember`, `remember_many`, `recall`, `get`
 and `forget`. Pass an `embedder` for hybrid retrieval.
+
+[examples/](examples) has three scripts to start from:
+
+- [chat_with_memory.py](examples/chat_with_memory.py) is a chat loop that remembers
+  across runs, against any OpenAI-compatible server, Ollama included.
+- [multi_user.py](examples/multi_user.py) keeps one memory per user in a single
+  database, with idempotent writes and deletion. It runs offline.
+- [service_backend.py](examples/service_backend.py) calls the HTTP service from your
+  own backend.
 
 ## Benchmarks
 
