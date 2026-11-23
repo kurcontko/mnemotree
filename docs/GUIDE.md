@@ -483,14 +483,55 @@ Empty-gold queries are counted separately and excluded from recall averages. Sou
 coverage is a coarse retrieval proxy, not answer accuracy: a partial chunk of a
 relevant source counts as a hit even when it misses the answer-bearing span.
 
+Without `search` in the config, `evaluate` and the ablations start from the
+engine default (10 items, no neighbours, merging or role policy), while `serve`
+starts from the AML profile. Pass `--preset aml` to evaluate the profile the service
+runs; the report records the preset, the complete options and their hash
+(`search_sha256`). `--preset` with a config that sets `search` is an error.
+
+Each query row carries its `namespace`, the mechanisms the search actually used
+(`candidate_limit`, `chunk_density`, `assistant_share`, `role_first_applied`,
+`role_boost_applied`) and a hash of the packed context, so a reader's answer can be
+joined to the exact context it read. `evaluate --save-context` stores the context
+itself.
+
 Ablations ingest once into a fresh database and compare variants on the same corpus,
 tokenizer and budget:
 
 - `ablate`: raw, atoms and combined representations. Reports shared Add latency, atom
   count, extractor configuration and token usage when the provider reports it. For the
   ingestion-cost control, run `evaluate` without extraction on another fresh database.
-- `ablate-context`: neighbouring messages off and on.
-- `ablate-retrieval`: retrieval, role, query, context and budget policies.
+  Atom hits lead back to the cited source chunks, so the reader sees source text in
+  every arm: this compares indexes, not raw against extracted context.
+- `ablate-context`: neighbouring messages off and on. With `merge_blocks`, the off
+  arm also narrows the merge reach (`1 + 2 × neighbor_messages`), so it measures
+  neighbours and merging together.
+- `ablate-retrieval`: one mechanism at a time against the base options: retrieval
+  mode, neighbours (`context_off`, which narrows merging the same way), merging
+  (`merge_off`), role policy, the per-source cap with its completion
+  (`source_cap_off`), both role and cap off (`role_and_source_cap_off`, the fourth
+  cell of a 2×2 with `role_off` and `source_cap_off`), the deep pool
+  (`deep_pool_off`), query policy and budget. `plain_rag` keeps the store, channels,
+  fusion, query, base candidate pool and budget and drops every evidence policy,
+  filling the budget with ranked chunks: the equal-budget RAG control. Arms whose
+  complete options equal an earlier arm's are run once; `aliases` maps each to that
+  arm, and `summary` lists every name.
+
+`compare` gives the paired difference of one metric between two arms or reports,
+with a bootstrap interval that resamples whole namespaces (one history each), since
+questions about one history are not independent. It also reports the difference
+with each namespace left out. The left and right inputs may be report JSON (name
+`--left-arm`/`--right-arm` for an ablation) or JSONL rows with `id`, `namespace`
+and the metric, such as judged answers:
+
+```bash
+mnemotree-evidence compare full.json full.json --left-arm baseline \
+  --right-arm plain_rag --metric packed_answer_span_coverage --resamples 10000
+```
+
+The interval covers which histories were sampled, not rerunning the reader or judge.
+From Python, `mnemotree.evaluation.paired_bootstrap` takes a `statistic` for
+benchmarks that average by category or conversation instead of by question.
 
 Compare lexical, dense and hybrid with the same corpus, model, chunking, candidate
 depth and budget. Measure the loss between candidate and packed recall before adding

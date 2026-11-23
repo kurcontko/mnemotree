@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from ..config import Config, secret
 from ..core.models import SearchOptions
@@ -23,8 +24,11 @@ from ..evaluation import (
     ablate_context,
     ablate_retrieval,
     evaluate,
+    paired_bootstrap,
     read_jsonl,
 )
+
+EVALUATIONS = ("evaluate", "ablate", "ablate-context", "ablate-retrieval")
 
 
 def positive(value: str) -> int:
@@ -82,10 +86,66 @@ def code_identity() -> dict[str, str | None]:
     return {"code_revision": revision or None, "source_digest": source_digest}
 
 
+def preset_options(engine: EvidenceEngine, preset: str) -> SearchOptions:
+    if preset == "aml":
+        # The service profile, so an experiment can start from what AML ran.
+        from ..service.presets import aml_options
+
+        return aml_options(engine)
+    return engine.default_options()
+
+
+def report_rows(path: Path, arm: str | None) -> list[dict[str, Any]]:
+    """Per-query rows from an evaluate report, one arm of an ablation, or JSONL."""
+    if path.suffix == ".jsonl":
+        if arm is not None:
+            raise SystemExit(f"mnemotree-evidence: {path} has no arms")
+        return list(read_jsonl(path))
+    report: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    if "reports" in report:
+        if arm is None:
+            raise SystemExit(f"mnemotree-evidence: {path} is an ablation; name an arm")
+        arm = report.get("aliases", {}).get(arm, arm)
+        if arm not in report["reports"]:
+            raise SystemExit(f"mnemotree-evidence: {path} has no arm {arm}")
+        report = report["reports"][arm]
+    elif arm is not None:
+        raise SystemExit(f"mnemotree-evidence: {path} has no arms")
+    rows: list[dict[str, Any]] = report["queries"]
+    return rows
+
+
+def compare_reports(args: argparse.Namespace) -> None:
+    try:
+        result = paired_bootstrap(
+            report_rows(args.left, args.left_arm),
+            report_rows(args.right, args.right_arm),
+            args.metric,
+            cluster=args.cluster,
+            resamples=args.resamples,
+            seed=args.seed,
+        )
+    except (KeyError, ValueError) as exc:
+        raise SystemExit(f"mnemotree-evidence: {exc}") from None
+    text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(text, encoding="utf-8")
+    print(text, end="")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", required=True, type=Path)
+    parser.add_argument("--db", type=Path, help="required by every command but compare")
     parser.add_argument("--config", type=Path, help="JSON settings; defaults to lexical-only")
+    parser.add_argument(
+        "--preset",
+        choices=("engine", "aml"),
+        help=(
+            "search options when the config has none: the engine default, or the AML "
+            "service profile (default: aml for serve, engine otherwise)"
+        ),
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     add = commands.add_parser("add", help="ingest native corpus JSONL")
     add.add_argument("corpus", type=Path)
@@ -98,6 +158,9 @@ def main() -> None:
     evaluation.add_argument("queries", type=Path)
     evaluation.add_argument("--output", type=Path, required=True)
     evaluation.add_argument("--candidate-k", type=positive, default=100)
+    evaluation.add_argument(
+        "--save-context", action="store_true", help="store each query's packed context"
+    )
     ablation = commands.add_parser(
         "ablate", help="ingest once; compare raw, atoms, and combined retrieval"
     )
@@ -118,6 +181,19 @@ def main() -> None:
     retrieval_ablation.add_argument("queries", type=Path)
     retrieval_ablation.add_argument("--output", type=Path, required=True)
     retrieval_ablation.add_argument("--candidate-k", type=positive, default=100)
+    compare = commands.add_parser(
+        "compare",
+        help="paired difference of two reports' rows, bootstrapped over namespaces",
+    )
+    compare.add_argument("left", type=Path, help="report JSON, or JSONL rows")
+    compare.add_argument("right", type=Path, help="report JSON, or JSONL rows")
+    compare.add_argument("--metric", required=True)
+    compare.add_argument("--left-arm", help="arm of an ablation report")
+    compare.add_argument("--right-arm", help="arm of an ablation report")
+    compare.add_argument("--cluster", default="namespace", help="row field to resample")
+    compare.add_argument("--resamples", type=positive, default=10_000)
+    compare.add_argument("--seed", type=int, default=0)
+    compare.add_argument("--output", type=Path)
     serve = commands.add_parser("serve", help="requires the serve extra and a bearer key")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
@@ -130,7 +206,20 @@ def main() -> None:
         help="append one metadata-only JSON line per request (default: $AML_REQUEST_LOG)",
     )
     args = parser.parse_args()
+    if args.command == "compare":
+        compare_reports(args)
+        return
+    if args.db is None:
+        parser.error("--db is required")
     config = Config.model_validate_json(args.config.read_text()) if args.config else Config()
+    if config.search is not None and args.preset is not None:
+        parser.error("--preset applies only when the config has no search options")
+    # Which defaults the base options come from; None when the config sets them.
+    args.preset_used = (
+        None
+        if config.search is not None
+        else args.preset or ("aml" if args.command == "serve" else "engine")
+    )
     try:
         api_key = secret(args.key_env) if args.command == "serve" else None
         engine = config.open(args.db)
@@ -141,10 +230,9 @@ def main() -> None:
             import uvicorn
 
             from ..service.app import create_app
-            from ..service.presets import aml_options
             from ..service.request_log import BOOT, emit, utc_now
 
-            options = config.search or aml_options(engine)
+            options = config.search or preset_options(engine, args.preset_used)
             app = create_app(
                 engine,
                 api_key=api_key,
@@ -175,7 +263,7 @@ def main() -> None:
                 access_log=False,
             )
         else:
-            options = config.search or engine.default_options()
+            options = config.search or preset_options(engine, args.preset_used)
             asyncio.run(run(args, engine, options))
 
 
@@ -195,10 +283,18 @@ async def run(args: argparse.Namespace, engine: EvidenceEngine, options: SearchO
             args.namespace, args.query, options=options, query_options=args.option
         )
         print(result.model_dump_json(indent=2))
-    elif args.command in ("evaluate", "ablate", "ablate-context", "ablate-retrieval"):
-        if args.command in ("evaluate", "ablate-retrieval"):
-            evaluator = evaluate if args.command == "evaluate" else ablate_retrieval
-            report = await evaluator(
+    elif args.command in EVALUATIONS:
+        if args.command == "evaluate":
+            report = await evaluate(
+                engine,
+                args.corpus,
+                args.queries,
+                options,
+                candidate_k=args.candidate_k,
+                include_context=args.save_context,
+            )
+        elif args.command == "ablate-retrieval":
+            report = await ablate_retrieval(
                 engine, args.corpus, args.queries, options, candidate_k=args.candidate_k
             )
         else:
@@ -206,6 +302,7 @@ async def run(args: argparse.Namespace, engine: EvidenceEngine, options: SearchO
                 engine, args.corpus, args.queries, options
             )
         report["code_identity"] = code_identity()
+        report["preset"] = args.preset_used
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

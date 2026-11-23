@@ -78,8 +78,13 @@ def test_retrieval_ablation_cli_writes_span_metrics_and_reproducibility(
     assert baseline["summary"]["packed_answer_span_coverage"] == 0
     assert baseline["manifest"]["candidate_k"] == 1
     assert len(report["code_identity"]["source_digest"]) == 64
-    assert {"role_off", "role_hard", "role_soft", "token_budget_2000"} <= report["reports"].keys()
-    assert "mode_dense" not in report["reports"]
+    assert {"role_off", "role_hard", "role_soft", "token_budget_2000"} <= report["summary"].keys()
+    # Without a role policy, role_off is the baseline: aliased, scored once.
+    assert report["aliases"]["role_off"] == "baseline"
+    assert "role_off" not in report["reports"]
+    assert {"role_hard", "role_soft", "plain_rag"} <= report["reports"].keys()
+    assert "mode_dense" not in report["summary"]
+    assert report["preset"] is None
 
 
 def test_cli_search_routes_explicit_options(tmp_path, monkeypatch, capsys):

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 import sqlite3
-from collections.abc import Collection, Iterable, Iterator
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from statistics import mean
@@ -108,9 +109,18 @@ async def evaluate(
     options: SearchOptions,
     *,
     candidate_k: int = 100,
+    include_context: bool = False,
 ) -> dict[str, Any]:
     ingestion = await ingest_corpus(engine, corpus)
-    return await score_queries(engine, corpus, queries, options, ingestion, candidate_k=candidate_k)
+    return await score_queries(
+        engine,
+        corpus,
+        queries,
+        options,
+        ingestion,
+        candidate_k=candidate_k,
+        include_context=include_context,
+    )
 
 
 async def ablate(
@@ -149,18 +159,52 @@ async def ablate_context(
     }
 
 
+# Ranked retrieval that fills the budget, without the evidence policies: the same
+# store, chunking, embeddings, channels, fusion, query and token budget as the arm
+# it is derived from, and that arm's base candidate pool. Its item limit is the
+# largest the pool allows, so the budget, not the limit, stops it.
+PLAIN_RAG: dict[str, Any] = {
+    "representation": "raw",
+    "neighbor_chunks": 0,
+    "neighbor_messages": 0,
+    "merge_blocks": False,
+    "order": "rank",
+    "chunks_per_source": None,
+    "role_first": None,
+    "role_boost": None,
+    "role_first_min_assistant_share": None,
+    "deep_candidate_limit": None,
+}
+
+
 def retrieval_variants(engine: EvidenceEngine, options: SearchOptions) -> dict[str, SearchOptions]:
-    """One policy dimension at a time; every arm is validated, never model_copy."""
+    """One policy dimension at a time; every arm is validated, never model_copy.
+
+    Arms can coincide with the baseline (``context_on`` when it already has one
+    neighbor); ``distinct_variants`` groups them before anything is run.
+    """
     variants: dict[str, dict[str, Any]] = {
         "baseline": {},
         "mode_lexical": {"mode": "lexical"},
+        # With merging on, this also narrows the merge reach (1 + 2 * neighbors).
         "context_off": {"neighbor_messages": 0},
         "context_on": {"neighbor_messages": 1},
+        "merge_off": {"merge_blocks": False},
         "role_off": {"role_first": None, "role_boost": None},
         "role_hard": {"role_first": options.role_first or "user", "role_boost": None},
         "role_soft": {"role_first": options.role_first or "user", "role_boost": 0.002},
         "model_query_combined": {"model_query_policy": "combined"},
         "model_query_question": {"model_query_policy": "question"},
+        # The cap and the completion of anchored messages together.
+        "source_cap_off": {"chunks_per_source": None},
+        # With role_off and source_cap_off, the 2x2 of the two policies.
+        "role_and_source_cap_off": {
+            "role_first": None,
+            "role_boost": None,
+            "chunks_per_source": None,
+        },
+        "deep_pool_off": {"deep_candidate_limit": None},
+        "plain_rag": {**PLAIN_RAG, "limit": min(100, options.candidate_limit)},
         **{
             f"token_budget_{budget}": {"token_budget": budget}
             for budget in (1000, 2000, 4000, 8000)
@@ -185,17 +229,47 @@ async def ablate_retrieval(
     candidate_k: int = 100,
 ) -> dict[str, Any]:
     variants = retrieval_variants(engine, options)
+    distinct, aliases = distinct_variants(variants)
     ingestion = await ingest_corpus(engine, corpus)
     reports = {}
-    for name, settings in variants.items():
+    for name, settings in distinct.items():
         reports[name] = await score_queries(
             engine, corpus, queries, settings, ingestion, candidate_k=candidate_k
         )
     return {
-        "summary": {key: report["summary"] for key, report in reports.items()},
+        # Every arm by name; an alias repeats the summary of the arm it equals.
+        "summary": {name: reports[aliases.get(name, name)]["summary"] for name in variants},
+        # Arms whose complete options equal an earlier arm's, and that arm's name.
+        "aliases": aliases,
         "shared_ingestion": ingestion,
         "reports": reports,
     }
+
+
+def options_digest(options: SearchOptions) -> str:
+    """Identity of a complete search configuration."""
+    return digest(options.model_dump(mode="json"))
+
+
+def distinct_variants(
+    variants: Mapping[str, SearchOptions],
+) -> tuple[dict[str, SearchOptions], dict[str, str]]:
+    """The first arm of each distinct configuration, and every repeat's first arm.
+
+    Arms are equal when every option is equal, so a repeat would only rerun (and
+    re-answer, re-judge) the same method under another name.
+    """
+    first: dict[str, str] = {}
+    distinct: dict[str, SearchOptions] = {}
+    aliases: dict[str, str] = {}
+    for name, settings in variants.items():
+        key = options_digest(settings)
+        if key in first:
+            aliases[name] = first[key]
+        else:
+            first[key] = name
+            distinct[name] = settings
+    return distinct, aliases
 
 
 async def ingest_corpus(engine: EvidenceEngine, corpus: Path) -> dict[str, Any]:
@@ -319,7 +393,12 @@ def _gold_sources(engine: EvidenceEngine, query: QueryRecord) -> set[str]:
 
 
 def _score(
-    query: QueryRecord, gold: set[str], result: SearchResult, candidate_k: int
+    query: QueryRecord,
+    gold: set[str],
+    result: SearchResult,
+    candidate_k: int,
+    *,
+    include_context: bool = False,
 ) -> dict[str, Any]:
     """One query's report row: where its gold sources and answer spans survived."""
 
@@ -362,8 +441,11 @@ def _score(
     candidate_coverage = coverage(candidate_spans)
     packed_coverage = coverage(packed_spans)
     retained_coverage = coverage(common_spans)
-    return {
+    trace = result.trace
+    row = {
         "id": query.id,
+        # One history per namespace: the unit to resample in paired_bootstrap.
+        "namespace": query.namespace,
         "category": query.category,
         "has_gold": bool(gold),
         "has_answer_spans": bool(query.answer_spans),
@@ -393,9 +475,21 @@ def _score(
         "candidate_count": len(candidates),
         "atom_hit_count": len(result.trace.atom_hits),
         "packed_context_count": sum(len(member.neighbors) for member in members),
-        "packed_tokens": result.trace.packed_tokens,
-        "timings_ms": result.trace.timings_ms,
+        "packed_tokens": trace.packed_tokens,
+        "evidence_tokens": trace.evidence_tokens,
+        # Which history-dependent mechanisms this search actually used.
+        "candidate_limit": trace.candidate_limit,
+        "chunk_density": trace.chunk_density,
+        "assistant_share": trace.assistant_share,
+        "role_first_applied": trace.role_first_applied,
+        "role_boost_applied": trace.role_boost_applied,
+        # Joins a reader's answer to the exact context it read.
+        "context_sha256": hashlib.sha256(result.context.encode()).hexdigest(),
+        "timings_ms": trace.timings_ms,
     }
+    if include_context:
+        row["context"] = result.context
+    return row
 
 
 def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -416,6 +510,9 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             for key in _SPAN_METRICS
         },
         "mean_packed_tokens": mean(row["packed_tokens"] for row in rows),
+        "mean_candidate_limit": mean(row["candidate_limit"] for row in rows),
+        "role_first_applied_rate": mean(int(row["role_first_applied"]) for row in rows),
+        "role_boost_applied_rate": mean(int(row["role_boost_applied"]) for row in rows),
         "mean_search_ms": mean(row["timings_ms"]["total"] for row in rows),
     }
 
@@ -447,6 +544,7 @@ def _manifest(
         "chunk_size": engine.chunk_size,
         "chunk_overlap": engine.chunk_overlap,
         "search": options.model_dump(),
+        "search_sha256": options_digest(options),
         "candidate_k": candidate_k,
         "metric_notes": {
             "candidate_rank": (
@@ -472,6 +570,7 @@ async def score_queries(
     ingestion: dict[str, Any],
     *,
     candidate_k: int = 100,
+    include_context: bool = False,
 ) -> dict[str, Any]:
     if isinstance(candidate_k, bool) or not isinstance(candidate_k, int) or candidate_k < 1:
         raise ValueError("candidate_k must be a positive integer")
@@ -481,7 +580,7 @@ async def score_queries(
         result = await engine.search(
             query.namespace, query.query, options=options, query_options=query.query_options
         )
-        rows.append(_score(query, gold, result, candidate_k))
+        rows.append(_score(query, gold, result, candidate_k, include_context=include_context))
     return {
         "manifest": _manifest(engine, corpus, queries, options, ingestion, candidate_k),
         "summary": _aggregate(rows),
@@ -490,4 +589,94 @@ async def score_queries(
             for category in sorted({row["category"] for row in rows})
         },
         "queries": rows,
+    }
+
+
+def _mean_of(metric: str) -> Callable[[Sequence[Mapping[str, Any]]], float]:
+    def statistic(rows: Sequence[Mapping[str, Any]]) -> float:
+        return mean(float(row[metric]) for row in rows)
+
+    return statistic
+
+
+def paired_bootstrap(
+    left: Sequence[Mapping[str, Any]],
+    right: Sequence[Mapping[str, Any]],
+    metric: str,
+    *,
+    cluster: str = "namespace",
+    statistic: Callable[[Sequence[Mapping[str, Any]]], float] | None = None,
+    resamples: int = 10_000,
+    confidence: float = 0.95,
+    seed: int = 0,
+) -> dict[str, Any]:
+    """The paired difference ``left - right`` with a cluster bootstrap interval.
+
+    Rows pair by ``id``; both sides must hold the same IDs. Pairs where either side
+    lacks ``metric`` (None, e.g. a query without gold) are dropped on both. Each
+    resample draws whole clusters with replacement, carrying all their pairs, and
+    recomputes ``statistic`` on each side: by default the mean of ``metric`` over
+    the drawn rows. A benchmark that averages per category or per conversation passes
+    its own ``statistic``. Questions from one history are not independent, so the
+    interval is over clusters, and ``leave_one_out`` shows the difference with each
+    cluster removed. The interval comes from one set of answers: it covers which
+    histories were sampled, not reader or judge resampling.
+    """
+    if resamples < 1:
+        raise ValueError("resamples must be a positive count")
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between 0 and 1")
+    by_id = {row["id"]: row for row in right}
+    if len(by_id) != len(right) or len({row["id"] for row in left}) != len(left):
+        raise ValueError("duplicate row id")
+    if set(by_id) != {row["id"] for row in left}:
+        raise ValueError("both sides must score the same query IDs")
+    statistic = statistic or _mean_of(metric)
+    clusters: dict[Any, list[tuple[Mapping[str, Any], Mapping[str, Any]]]] = {}
+    dropped = 0
+    for row in left:
+        other = by_id[row["id"]]
+        if row.get(metric) is None or other.get(metric) is None:
+            dropped += 1
+            continue
+        if row[cluster] != other[cluster]:
+            raise ValueError(f"query {row['id']} has different {cluster} values")
+        clusters.setdefault(row[cluster], []).append((row, other))
+    if not clusters:
+        raise ValueError(f"no pair has a value for {metric}")
+
+    def difference(groups: Iterable[list[tuple[Mapping[str, Any], Mapping[str, Any]]]]) -> float:
+        pairs = [pair for group in groups for pair in group]
+        return statistic([a for a, _ in pairs]) - statistic([b for _, b in pairs])
+
+    groups = list(clusters.values())
+    pairs = [pair for group in groups for pair in group]
+    rng = random.Random(seed)
+    draws = sorted(difference(rng.choices(groups, k=len(groups))) for _ in range(resamples))
+    tail = (1 - confidence) / 2
+    low = draws[min(int(tail * resamples), resamples - 1)]
+    high = draws[min(int((1 - tail) * resamples), resamples - 1)]
+    leave_one_out = {
+        str(name): difference(group for other, group in clusters.items() if other != name)
+        for name in clusters
+        if len(clusters) > 1
+    }
+    return {
+        "metric": metric,
+        "cluster": cluster,
+        "clusters": len(groups),
+        "pairs": len(pairs),
+        "dropped_pairs": dropped,
+        "left": statistic([a for a, _ in pairs]),
+        "right": statistic([b for _, b in pairs]),
+        "difference": difference(groups),
+        "interval": [low, high],
+        "confidence": confidence,
+        "resamples": resamples,
+        "seed": seed,
+        "leave_one_out": {
+            "min": min(leave_one_out.values()) if leave_one_out else None,
+            "max": max(leave_one_out.values()) if leave_one_out else None,
+            "by_cluster": leave_one_out,
+        },
     }

@@ -170,7 +170,8 @@ async def test_lexical_ablation_skips_unsupported_modes_and_validates_settings(t
             8000,
         }
         report = await ablate_retrieval(memory, corpus, queries, baseline, candidate_k=1)
-    assert len(report["reports"]) == len(settings)
+    assert report["summary"].keys() == settings.keys()
+    assert len(report["reports"]) + len(report["aliases"]) == len(settings)
     assert report["reports"]["baseline"]["manifest"]["candidate_k"] == 1
 
 

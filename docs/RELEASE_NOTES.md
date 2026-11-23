@@ -1,3 +1,17 @@
+# Unreleased
+
+- `ablate-retrieval` adds `merge_off`, `source_cap_off`,
+  `role_and_source_cap_off`, `deep_pool_off` and `plain_rag` (the equal-budget RAG
+  control), runs each distinct configuration once and lists repeats under
+  `aliases`. `reports` holds only distinct arms; `summary` still names every arm.
+- Query rows add `namespace`, `evidence_tokens`, `candidate_limit`,
+  `chunk_density`, `assistant_share`, `role_first_applied`, `role_boost_applied`
+  and `context_sha256`; summaries add the role-policy rates and mean pool size;
+  manifests add `search_sha256`. `evaluate --save-context` keeps the packed context.
+- The evidence CLI takes `--preset engine|aml` for the base options, records it in
+  reports, and has a `compare` command: a paired difference with a bootstrap
+  interval over namespaces (`mnemotree.evaluation.paired_bootstrap`).
+
 # 1.1.0 (2026-11-23)
 
 Three changes can break a 1.0 caller: one that imports from `mnemotree.evidence`,

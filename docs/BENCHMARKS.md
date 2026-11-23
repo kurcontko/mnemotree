@@ -189,9 +189,11 @@ scores above, and we haven't scored Mnemotree with `ef7f230`.
 
 ## Limitations
 
-- **One draw per score.** Re-answering identical contexts flips a few percent of
-  judgments, which moves a score by one to two points. Treat differences under
-  about two points as noise.
+- **One draw per score.** In our reruns, re-answering identical contexts flipped a
+  few percent of judgments and moved those scores by one to two points. That
+  describes those runs; it is not a threshold. Compare arms with a paired interval
+  clustered by conversation (`mnemotree-evidence compare`), and rerun the reader
+  and judge where that variation could decide the comparison.
 - **Published rows are not reruns.** The README's reference numbers come from the
   Mem0 and Zep papers, with their own prompts, judges and context sizes. The Zep
   paper judges LongMemEval with gpt-4o.
