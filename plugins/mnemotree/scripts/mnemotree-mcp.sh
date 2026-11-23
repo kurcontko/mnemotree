@@ -1,18 +1,41 @@
 #!/bin/sh
-# Starts mnemotree-mcp for the plugin's MCP server and for its hooks, so both run
-# the same version against the same database.
-#
-# MNEMOTREE_MCP_COMMAND replaces the command, for example with a development
-# checkout: MNEMOTREE_MCP_COMMAND="/path/to/.venv/bin/mnemotree-mcp".
+# Start the same executable for the MCP server and both Claude Code hooks.
+set -f
+hook=false
+[ "${1:-}" = hook ] && hook=true
 if [ -n "${MNEMOTREE_MCP_COMMAND:-}" ]; then
-  # Unquoted on purpose: the variable may hold a command with arguments.
-  exec $MNEMOTREE_MCP_COMMAND "$@"
+  if [ -x "$MNEMOTREE_MCP_COMMAND" ]; then
+    set -- "$MNEMOTREE_MCP_COMMAND" "$@"
+  else
+    # The development override also accepts a command with arguments.
+    set -- $MNEMOTREE_MCP_COMMAND "$@"
+  fi
+else
+  set -- uvx --from "mnemotree-mcp>=1.2.0" mnemotree-mcp "$@"
 fi
-if ! command -v uvx >/dev/null 2>&1; then
-  # A hook must not fail the session over a missing tool. The MCP server does
-  # fail, which is where Claude Code shows the reason.
-  [ "${1:-}" = "hook" ] && exit 0
-  echo "mnemotree: uv is not installed. See https://docs.astral.sh/uv/getting-started/installation/" >&2
-  exit 127
+
+if [ "$hook" = false ]; then
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "mnemotree: cannot start $1. Install uv or set MNEMOTREE_MCP_COMMAND." >&2
+    exit 127
+  fi
+  exec "$@"
 fi
-exec uvx --from "mnemotree-mcp>=1.2.0" mnemotree-mcp "$@"
+
+# Exit 2 vetoes a Claude prompt, even when it came from uv before Python started.
+# Only a successful handler's stdout is hook output. Keep startup diagnostics too.
+umask 077
+state=${CLAUDE_PLUGIN_DATA:-"$HOME/.mnemotree/claude-code"}
+run_hook() {
+  if output=$("$@"); then
+    [ -z "$output" ] || printf '%s\n' "$output"
+  else
+    printf 'mnemotree: hook launcher exited %s\n' "$?" >&2
+  fi
+}
+if { [ -d "$state" ] || mkdir -p "$state"; } && ( : >> "$state/hook.log" ); then
+  run_hook "$@" 2>> "$state/hook.log"
+else
+  run_hook "$@"
+fi
+exit 0

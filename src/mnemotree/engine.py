@@ -23,6 +23,7 @@ from .core.models import (
     SearchResult,
     SearchTrace,
     Source,
+    SourceSpan,
     digest,
     identifier,
     scope,
@@ -44,6 +45,7 @@ from .retrieval.ranking import (
     role_first,
     role_policy,
 )
+from .storage.selection import RowFilter, eligible_chunks
 from .storage.store import IngestBatch, SQLiteEvidenceStore, Window, now
 from .storage.vectors import vector_blob
 
@@ -291,6 +293,8 @@ class EvidenceEngine:
         *,
         options: SearchOptions | None = None,
         query_options: Sequence[str] | None = None,
+        exclude_session: str | None = None,
+        exclude_spans: Sequence[SourceSpan] = (),
     ) -> SearchResult:
         scope(namespace)
         if not isinstance(query, str) or not query.strip():
@@ -302,7 +306,8 @@ class EvidenceEngine:
         with watch.stage("embedding"):
             plan = await self._plan_query(query, query_options, options)
         with watch.stage("retrieval"):
-            retrieval = await asyncio.to_thread(self._retrieve, namespace, plan, options)
+            rows = eligible_chunks(namespace, exclude_session, exclude_spans)
+            retrieval = await asyncio.to_thread(self._retrieve, namespace, plan, options, rows)
 
         policy = role_policy(options, retrieval.assistant_share)
         candidates = retrieval.candidates
@@ -335,6 +340,7 @@ class EvidenceEngine:
                 budget=options.token_budget,
                 limit=options.limit,
                 overflow=overflow,
+                exclude_spans=exclude_spans,
                 # Anchors whose neighbor windows would touch share one item.
                 merge_reach=1 + 2 * options.neighbor_messages if options.merge_blocks else None,
                 order_key=chronological if options.order == "time" else None,
@@ -378,7 +384,9 @@ class EvidenceEngine:
             vector=vector,
         )
 
-    def _retrieve(self, namespace: str, plan: QueryPlan, options: SearchOptions) -> Retrieval:
+    def _retrieve(
+        self, namespace: str, plan: QueryPlan, options: SearchOptions, rows: RowFilter
+    ) -> Retrieval:
         """Every store read of one search; blocking, so it runs on a worker thread.
 
         One read transaction, holding the store's lock, covers all channels and the
@@ -394,9 +402,9 @@ class EvidenceEngine:
             assistant_share = (
                 self.store.assistant_share(namespace) if options.role_first is not None else None
             )
-            channels = self._chunk_channels(namespace, plan, options, candidate_limit)
+            channels = self._chunk_channels(namespace, plan, options, candidate_limit, rows)
             atom_hits, atom_channels, atom_ranks = self._atom_channels(
-                namespace, plan, options, candidate_limit
+                namespace, plan, options, candidate_limit, rows
             )
             channels.update(atom_channels)
             candidates = fuse(
@@ -438,7 +446,7 @@ class EvidenceEngine:
         )
 
     def _chunk_channels(
-        self, namespace: str, plan: QueryPlan, options: SearchOptions, limit: int
+        self, namespace: str, plan: QueryPlan, options: SearchOptions, limit: int, rows: RowFilter
     ) -> dict[str, list[tuple[Chunk, float]]]:
         """Chunks ranked by each raw channel the options ask for."""
         channels: dict[str, list[tuple[Chunk, float]]] = {}
@@ -446,14 +454,14 @@ class EvidenceEngine:
             return channels
         if options.mode in ("lexical", "hybrid"):
             channels["lexical"] = self.store.lexical(
-                namespace, plan.text, limit, options=plan.options
+                namespace, plan.text, limit, options=plan.options, rows=rows
             )
         if plan.vector is not None:
-            channels["dense"] = self.store.dense(namespace, plan.vector, limit)
+            channels["dense"] = self.store.dense(namespace, plan.vector, limit, rows=rows)
         return channels
 
     def _atom_channels(
-        self, namespace: str, plan: QueryPlan, options: SearchOptions, limit: int
+        self, namespace: str, plan: QueryPlan, options: SearchOptions, limit: int, rows: RowFilter
     ) -> tuple[list[AtomHit], dict[str, list[tuple[Chunk, float]]], dict[str, dict[str, int]]]:
         """Atom hits, the chunks they cite per channel, and each chunk's rank there."""
         hits: list[AtomHit] = []
@@ -461,10 +469,11 @@ class EvidenceEngine:
         ranks: dict[str, dict[str, int]] = {}
         if options.representation == "raw":
             return hits, channels, ranks
+        atom_rows = rows.atoms(namespace)
         found = {}
         if options.mode in ("lexical", "hybrid"):
             found["atom_lexical"] = self.store.atoms.lexical(
-                namespace, plan.text, limit, options=plan.options
+                namespace, plan.text, limit, options=plan.options, rows=atom_rows
             )
         if plan.vector is not None:
             assert self.store.embedding_spec is not None
@@ -472,6 +481,7 @@ class EvidenceEngine:
                 namespace,
                 vector_blob(plan.vector, self.store.embedding_spec.dimensions),
                 limit,
+                rows=atom_rows,
             )
         # An atom ranks the chunks its citations fall in; each chunk keeps the rank
         # and score of the best atom that reached it.
@@ -480,7 +490,7 @@ class EvidenceEngine:
             channel_ranks = ranks[channel] = {}
             for rank, (atom, score) in enumerate(atoms, 1):
                 hits.append(AtomHit(atom=atom, channel=channel, rank=rank, score=score))
-                for chunk in self.store.atoms.chunks(namespace, atom):
+                for chunk in self.store.atoms.chunks(namespace, atom, rows=rows):
                     expanded.setdefault(chunk.id, (chunk, score))
                     channel_ranks.setdefault(chunk.id, rank)
             channels[channel] = list(expanded.values())

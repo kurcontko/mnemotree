@@ -1,7 +1,10 @@
 # Mnemotree for Claude Code
 
 Long-term memory for Claude Code that keeps what was said, word for word, in a
-SQLite file on your machine. It calls no LLM and needs no API key.
+SQLite file on your machine. The default embedder runs locally without an API key.
+Claude Code includes recalled passages in requests to its model provider.
+
+Marketplace installation requires `mnemotree-mcp` 1.2.0 or later on PyPI.
 
 ```bash
 claude plugin marketplace add kurcontko/mnemotree
@@ -16,7 +19,7 @@ Or, in one step on Claude Code 2.1.275 or later:
 
 It needs [uv](https://docs.astral.sh/uv/) and runs on macOS and Linux.
 
-- After each turn it stores your prompt and Claude's reply, in the background.
+- After each completed turn it verifies your prompt in the transcript and stores the turn in the background.
 - Before each prompt it adds up to three matching passages from earlier sessions
   in the same project, at most 500 tokens.
 - It adds the `remember`, `recall`, `get` and `forget` tools for the same memory.

@@ -50,7 +50,11 @@ def test_hooks_and_the_mcp_server_start_through_the_launcher():
 
 
 def test_launcher_runs_the_override_command_with_its_arguments(tmp_path):
-    env = {"PATH": os.environ["PATH"], "MNEMOTREE_MCP_COMMAND": "echo started with"}
+    env = {
+        "PATH": os.environ["PATH"],
+        "CLAUDE_PLUGIN_DATA": str(tmp_path),
+        "MNEMOTREE_MCP_COMMAND": "echo started with",
+    }
     out = subprocess.run(
         [LAUNCHER, "hook", "--project"], env=env, capture_output=True, text=True, check=True
     )
@@ -58,9 +62,22 @@ def test_launcher_runs_the_override_command_with_its_arguments(tmp_path):
 
 
 def test_launcher_without_uv_fails_the_server_but_not_a_hook(tmp_path):
-    env = {"PATH": str(tmp_path)}
+    env = {"PATH": str(tmp_path), "CLAUDE_PLUGIN_DATA": str(tmp_path)}
     hook = subprocess.run(["/bin/sh", LAUNCHER, "hook"], env=env, capture_output=True, text=True)
     assert (hook.returncode, hook.stdout, hook.stderr) == (0, "", "")
     server = subprocess.run(["/bin/sh", LAUNCHER], env=env, capture_output=True, text=True)
     assert server.returncode == 127
-    assert "uv is not installed" in server.stderr
+    assert "uvx" in server.stderr
+
+
+def test_launcher_keeps_exit_two_and_partial_output_out_of_hook_responses(tmp_path):
+    broken = tmp_path / "failing uvx"
+    broken.write_text("#!/bin/sh\necho partial\necho unavailable >&2\nexit 2\n")
+    broken.chmod(0o755)
+    env = {**os.environ, "CLAUDE_PLUGIN_DATA": str(tmp_path), "MNEMOTREE_MCP_COMMAND": str(broken)}
+    hook = subprocess.run([LAUNCHER, "hook", "--project"], env=env, capture_output=True, text=True)
+    assert (hook.returncode, hook.stdout, hook.stderr) == (0, "", "")
+    log = (tmp_path / "hook.log").read_text()
+    assert "unavailable" in log and "exited 2" in log
+    server = subprocess.run([LAUNCHER, "--project"], env=env, capture_output=True, text=True)
+    assert (server.returncode, server.stdout, server.stderr) == (2, "partial\n", "unavailable\n")

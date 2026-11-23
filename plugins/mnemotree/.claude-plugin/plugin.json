@@ -1,7 +1,7 @@
 {
   "name": "mnemotree",
   "version": "1.2.0",
-  "description": "Remembers every session in a local SQLite file and recalls the original passages. No LLM calls, no API key.",
+  "description": "Stores confirmed turns in local SQLite and adds earlier project passages to Claude’s context. The default embedding model runs locally.",
   "author": { "name": "kurcontko" },
   "homepage": "https://github.com/kurcontko/mnemotree/blob/main/docs/GUIDE.md#claude-code-plugin",
   "repository": "https://github.com/kurcontko/mnemotree",

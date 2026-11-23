@@ -212,8 +212,10 @@ can enforce that. Approval is the client's job too: `forget` is marked
 ## Claude Code plugin
 
 The plugin adds two hooks to the MCP server, so Claude Code stores and recalls
-without being asked. It needs [uv](https://docs.astral.sh/uv/) and runs on macOS
-and Linux.
+without being asked. It runs on macOS and Linux with [uv](https://docs.astral.sh/uv/).
+The following marketplace commands require `mnemotree-mcp` 1.2.0 or later on
+[PyPI](https://pypi.org/project/mnemotree-mcp/). Until that release, the MCP server
+above provides the published memory tools.
 
 ```bash
 claude plugin marketplace add kurcontko/mnemotree
@@ -223,11 +225,14 @@ claude plugin install mnemotree@mnemotree
 Inside a session the same two steps are `/plugin marketplace add kurcontko/mnemotree`
 and `/plugin install mnemotree@mnemotree`.
 
-**What it stores.** After each turn, your prompt and Claude's final reply, exactly
-as written, as two consecutive messages of that session. It does not store tool
-calls, tool output, slash commands or subagent conversations. Storing runs in a
-background process after the reply, so you never wait for it. A prompt you
-interrupt is stored with the next reply.
+**What it stores.** The submit hook records a fingerprint of your prompt. At the end
+of the turn, the plugin matches it to your user message in Claude Code's saved
+transcript and queues the original text with Claude's final reply. It skips slash
+commands, tool results, subagent messages and prompts another hook rejected. An
+interrupted prompt can be recovered with the next turn when the transcript links
+an assistant response to it. An unavailable transcript disables capture for that turn.
+Embedding and storage run in the background. A later Stop in the same database and
+project namespace retries pending turns, including ones from a closed session.
 
 **What it recalls.** Before each prompt it searches the project's memories with
 the prompt as the query and adds up to three passages, at most 500 tokens, to
@@ -240,10 +245,13 @@ will be unrelated to the prompt, and Claude is told to ignore those. With the
 default model, similarity scores of related and unrelated prompts overlap too
 much for a threshold to separate them. The token budget is what bounds the cost.
 
-**Where it goes.** Everything is in `~/.mnemotree/memory.sqlite`, in one namespace
-per project (`--project` above), so two repositories do not see each other's
-memories. The plugin's tools, such as `recall` and `forget`, work on the same
-namespace. Nothing leaves your machine, and no LLM is called.
+**Where it goes.** Confirmed messages are stored in `~/.mnemotree/memory.sqlite`,
+in the same project namespace as the plugin's MCP tools. By default, indexing
+and search use a local embedding model. Claude Code sends recalled passages in
+the request to its configured model provider. Set `MNEMOTREE_RECALL_TOKENS=0` to
+disable that automatic sharing. If you configure an HTTP embedder or extractor,
+it can receive accepted turns during ingestion. With an HTTP embedder, the submit
+hook uses local keyword search while other hooks are evaluating the prompt.
 
 | Environment variable | Default | Effect |
 | --- | --- | --- |
@@ -258,12 +266,15 @@ Things to know:
 
 - Your prompts are stored as plain text, including a secret you paste into one.
   Use the `forget` tool to delete a memory, or set `MNEMOTREE_CAPTURE=0` first.
+- If you tested an earlier plugin checkout, its `sessions/*/queue` files contain
+  unconfirmed submissions with no recorded destination. Review them individually
+  before importing any of those messages.
 - The first session downloads the embedding model in the background. Recall
   starts once it is there, and turns are stored either way.
 - After Claude Code compacts a long session, turns from before the compaction are
   not recalled back into that session.
 - A hook never fails your session. Errors go to `hook.log` in the plugin's data
-  directory, `~/.claude/plugins/data/`, next to the queue of turns not yet stored.
+  directory, `~/.claude/plugins/data/`, alongside the local queue of confirmed turns.
 
 The hooks run `mnemotree-mcp hook`, which reads one Claude Code hook event from
 stdin. `plugins/mnemotree/` holds the plugin, and `MNEMOTREE_MCP_COMMAND` points

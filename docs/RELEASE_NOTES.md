@@ -1,8 +1,8 @@
 # 1.2.0 (unreleased)
 
-- A Claude Code plugin, in `plugins/mnemotree/`. Its hooks store each prompt and
-  reply as written and add matching passages from earlier sessions to the next
-  prompts, with no LLM call. Install it with
+- A Claude Code plugin, in `plugins/mnemotree/`. Its hooks store confirmed turns as
+  written and add matching passages from earlier sessions to Claude's model
+  context. Marketplace installation requires the 1.2.0 package release. Use
   `claude plugin marketplace add kurcontko/mnemotree` and
   `claude plugin install mnemotree@mnemotree`. See
   [the guide](GUIDE.md#claude-code-plugin).

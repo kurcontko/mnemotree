@@ -14,6 +14,7 @@ from ..errors import InvalidInput
 from .temporal import annotate
 
 MAX_IDENTIFIER_CHARS = 256
+MAX_TOKEN_BUDGET = 117760
 
 
 class Record(BaseModel):
@@ -218,7 +219,7 @@ class SearchOptions(Record):
     mode: Literal["lexical", "dense", "hybrid"] = "hybrid"
     limit: int = Field(default=10, ge=1, le=100)
     candidate_limit: int = Field(default=100, ge=1, le=2000)
-    token_budget: int = Field(default=8000, ge=0, le=117760)
+    token_budget: int = Field(default=8000, ge=0, le=MAX_TOKEN_BUDGET)
     neighbor_chunks: int = Field(default=0, ge=0, le=2)
     neighbor_messages: int = Field(default=0, ge=0, le=2)
     neighbor_chars: int = Field(default=1200, ge=1, le=12000)

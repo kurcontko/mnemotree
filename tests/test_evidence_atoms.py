@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from mnemotree import EvidenceEngine, InvalidInput, Message, ProviderError, SearchOptions
-from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec
+from mnemotree.core.models import AtomDraft, Citation, EmbeddingSpec, ExtractorSpec, SourceSpan
 from mnemotree.evaluation import ablate
 from mnemotree.providers.extraction import OpenAIExtractor
 
@@ -278,3 +278,38 @@ async def test_list_sources_pages_in_storage_order(tmp_path):
             assert "evidence_sources_namespace" in details and "TEMP B-TREE" not in details
         with pytest.raises(InvalidInput):
             memory.list_sources("u", limit=0)
+
+
+@pytest.mark.parametrize("mode", ["lexical", "dense", "hybrid"])
+@pytest.mark.parametrize("representation", ["raw", "atoms", "combined"])
+async def test_exclusions_apply_before_each_channel_limit(tmp_path, mode, representation):
+    with EvidenceEngine(
+        tmp_path / "filtered.db", extractor=Extractor(), embedder=Embedder()
+    ) as memory:
+        for i in range(6):
+            await memory.add(
+                "u",
+                [Message(id=f"skip{i}", content="physician")],
+                session_id="current",
+                request_id=f"recent{i}",
+            )
+        await memory.add(
+            "u", [Message(id="seen", content="physician")], session_id="older", request_id="seen"
+        )
+        await memory.add(
+            "u",
+            [Message(id="fresh", content="our older physician notes")],
+            session_id="older",
+            request_id="fresh",
+        )
+        options = SearchOptions(
+            mode=mode, representation=representation, candidate_limit=1, limit=1
+        )
+        result = await memory.search(
+            "u",
+            "physician",
+            options=options,
+            exclude_session="current",
+            exclude_spans=[SourceSpan(source_id="seen", start=0, end=9)],
+        )
+        assert [item.source_id for item in result.evidence] == ["fresh"]

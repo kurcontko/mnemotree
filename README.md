@@ -33,24 +33,19 @@ results on LoCoMo and LongMemEval.
 
 ## Try it in Claude Code
 
-```bash
-claude plugin marketplace add kurcontko/mnemotree
-claude plugin install mnemotree@mnemotree
-```
-
-The plugin stores every prompt and reply as written, and adds matching passages from
-earlier sessions to your next prompts. It makes no LLM call and needs no API key. The
-embedding model runs on your machine, and memories go to `~/.mnemotree/memory.sqlite`,
-kept apart per project. Tell Claude something, start a new session and ask about it.
-[The guide](docs/GUIDE.md#claude-code-plugin) says what it stores and how to change that.
-
-For the tools alone, without the automatic capture and recall:
+Add the published MCP server to give Claude local memory tools.
 
 ```bash
 claude mcp add mnemotree -- uvx mnemotree-mcp
 ```
 
-[MCP server](#mcp-server) has the options and other clients.
+Ask Claude to remember something, start a new session, and ask about it.
+The default embedding model runs locally and needs no API key.
+[MCP server](#mcp-server) covers configuration and other clients.
+
+The Claude Code plugin adds automatic capture and recall per project. Its marketplace
+launcher requires `mnemotree-mcp` 1.2.0 or later on PyPI. Recalled passages become part
+of the context sent to Claude. [Plugin setup and data handling](docs/GUIDE.md#claude-code-plugin)
 
 ## Install
 
