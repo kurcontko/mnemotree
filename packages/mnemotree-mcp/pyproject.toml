@@ -13,6 +13,23 @@ dependencies = [
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
+keywords = ["mcp", "mcp-server", "model-context-protocol", "llm", "agents", "memory", "long-term-memory", "claude-code", "sqlite", "fastembed"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 
 [project.scripts]
 mnemotree-mcp = "mnemotree_mcp:main"
@@ -21,6 +38,8 @@ mnemotree-mcp = "mnemotree_mcp:main"
 Homepage = "https://github.com/kurcontko/mnemotree"
 Repository = "https://github.com/kurcontko/mnemotree.git"
 Issues = "https://github.com/kurcontko/mnemotree/issues"
+Documentation = "https://github.com/kurcontko/mnemotree/blob/main/docs/GUIDE.md"
+Changelog = "https://github.com/kurcontko/mnemotree/blob/main/docs/RELEASE_NOTES.md"
 
 [tool.uv.sources]
 mnemotree = { workspace = true }
