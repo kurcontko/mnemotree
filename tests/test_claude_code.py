@@ -453,7 +453,8 @@ def test_merged_blocks_and_their_neighbors_are_counted_as_delivered(run, env):
     env.set("MNEMOTREE_CONFIG", str(cfg))
     turn(run, "old", "The staging compiler is maple.", "The staging compiler target is silver.")
     text = context(run("UserPromptSubmit", session_id="new", prompt="staging compiler target"))
-    assert "maple" in text and "silver" in text
+    assert "maple" in text
+    assert "silver" in text
     run("Stop", session_id="new", last_assistant_message="Thanks.")
     assert run("UserPromptSubmit", session_id="new", prompt="staging compiler target") is None
 
@@ -535,7 +536,8 @@ def test_transcript_matches_text_parts_and_ignores_unrelated_records(env):
     assert accepted_prompts(path, "s", [receipt]) is None
     append_record(path, "s", **record)
     uuid, messages = accepted_prompts(path, "s", [receipt])
-    assert uuid == "u1" and [m.content for m in messages] == [prompt]
+    assert uuid == "u1"
+    assert [m.content for m in messages] == [prompt]
 
 
 def test_project_root_is_the_repository_and_worktrees_share_it(tmp_path):

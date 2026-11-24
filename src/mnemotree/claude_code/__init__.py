@@ -141,18 +141,25 @@ def on_prompt(
         return None
     if capture and isinstance(path, str):
         state.submit(session, key, prompt, Path(path))
-    budget = recall_tokens()
-    if budget == 0 or len(prompt.split()) < MIN_QUERY_WORDS:
-        return None
-    with opener() as memory:
-        if not local_query and not ready(memory):
-            return None
-        context = recall(memory, prompt, state, session, key, budget, local_query=local_query)
+    context = search(prompt, opener, state, session, key, local_query=local_query)
     if not context:
         return None
     return {
         "hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": context}
     }
+
+
+def search(
+    prompt: str, opener: Opener, state: HookState, session: str, key: str, *, local_query: bool
+) -> str:
+    """The text to add for this prompt, or "" when recall is off or cannot run yet."""
+    budget = recall_tokens()
+    if budget == 0 or len(prompt.split()) < MIN_QUERY_WORDS:
+        return ""
+    with opener() as memory:
+        if not local_query and not ready(memory):
+            return ""
+        return recall(memory, prompt, state, session, key, budget, local_query=local_query)
 
 
 def on_stop(event: Mapping[str, Any], state: HookState) -> None:

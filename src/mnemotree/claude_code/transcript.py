@@ -25,9 +25,12 @@ def fingerprint(prompt: str) -> str:
     return hashlib.sha256(prompt.encode()).hexdigest()
 
 
+# The transcript path below is the one Claude Code names in its own hook event. The
+# hook only reads it, and keeps a line only when it belongs to the session and
+# carries text whose SHA-256 the submit hook already recorded.
 def transcript_size(path: Path) -> int:
     try:
-        return path.stat().st_size
+        return path.stat().st_size  # NOSONAR
     except OSError:
         return 0  # The first submit can precede a readable transcript.
 
@@ -47,13 +50,13 @@ def matching_text(content: Any, expected: str) -> str | None:
 
 
 def transcript_records(path: Path, session: str, offset: int) -> Iterator[dict[str, Any]]:
-    with path.open("rb") as stream:
+    with path.open("rb") as stream:  # NOSONAR
         size = stream.seek(0, 2)
         stream.seek(offset if offset <= size else 0)
         for line in stream:
             try:
                 record = json.loads(line)
-            except (ValueError, UnicodeError):
+            except ValueError:  # Bad JSON or bad UTF-8: UnicodeError is a ValueError.
                 continue
             if (
                 isinstance(record, dict)
@@ -62,6 +65,24 @@ def transcript_records(path: Path, session: str, offset: int) -> Iterator[dict[s
                 and not record.get("isMeta")
             ):
                 yield record
+
+
+def submitted_message(
+    record: Mapping[str, Any], submitted: Mapping[str, Submission]
+) -> tuple[str, str, str] | None:
+    """The prompt ID, message UUID and text of a user record that matches a submission."""
+    message = record.get("message")
+    if (
+        record.get("type") != "user"
+        or not isinstance(message, Mapping)
+        or message.get("role") != "user"
+    ):
+        return None
+    key, uuid = record.get("promptId") or "", record.get("uuid")
+    if not isinstance(key, str) or key not in submitted or not isinstance(uuid, str):
+        return None
+    text = matching_text(message.get("content"), submitted[key].fingerprint)
+    return None if text is None else (key, uuid, text)
 
 
 def accepted_prompts(
@@ -80,23 +101,11 @@ def accepted_prompts(
         if record.get("type") == "assistant" and not record.get("isApiErrorMessage"):
             answered.add(record.get("parentUuid"))
             continue
-        message = record.get("message")
-        if (
-            record.get("type") != "user"
-            or not isinstance(message, Mapping)
-            or message.get("role") != "user"
-        ):
-            continue
-        key, uuid = record.get("promptId") or "", record.get("uuid")
-        if not isinstance(key, str) or key not in submitted or not isinstance(uuid, str):
-            continue
-        prompt = submitted[key]
-        text = matching_text(message.get("content"), prompt.fingerprint)
-        if text is not None:
-            found[key] = (
-                uuid,
-                Message(content=text, timestamp=datetime.fromisoformat(prompt.submitted)),
-            )
+        match = submitted_message(record, submitted)
+        if match is not None:
+            key, uuid, text = match
+            sent = datetime.fromisoformat(submitted[key].submitted)
+            found[key] = (uuid, Message(content=text, timestamp=sent))
 
     if current not in found or (not current and found[current][0] not in answered):
         return None

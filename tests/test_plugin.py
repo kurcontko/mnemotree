@@ -80,6 +80,7 @@ def test_launcher_keeps_exit_two_and_partial_output_out_of_hook_responses(tmp_pa
     hook = subprocess.run([LAUNCHER, "hook", "--project"], env=env, capture_output=True, text=True)
     assert (hook.returncode, hook.stdout, hook.stderr) == (0, "", "")
     log = (tmp_path / "hook.log").read_text()
-    assert "unavailable" in log and "exited 2" in log
+    assert "unavailable" in log
+    assert "exited 2" in log
     server = subprocess.run([LAUNCHER, "--project"], env=env, capture_output=True, text=True)
     assert (server.returncode, server.stdout, server.stderr) == (2, "partial\n", "unavailable\n")
