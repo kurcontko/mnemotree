@@ -60,7 +60,7 @@ class HookState:
         with closing(sqlite3.connect(directory / "hooks.sqlite", timeout=5)) as db:
             db.execute("PRAGMA secure_delete=ON")
             db.executescript(SCHEMA)
-            yield cls(directory, db)
+            yield HookState(directory, db)
 
     def submit(self, session: str, key: str, prompt: str, transcript: Path) -> None:
         # Another hook may still reject this submission. Only the digest is staged.
