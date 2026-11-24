@@ -1,0 +1,12 @@
+{
+  "name": "mnemotree",
+  "description": "Local, source-first memory for Claude Code",
+  "owner": { "name": "kurcontko" },
+  "plugins": [
+    {
+      "name": "mnemotree",
+      "source": "./plugins/mnemotree",
+      "description": "Stores confirmed turns in local SQLite and adds earlier project passages to Claude’s context. The default embedding model runs locally."
+    }
+  ]
+}

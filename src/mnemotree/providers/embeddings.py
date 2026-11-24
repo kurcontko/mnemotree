@@ -386,27 +386,39 @@ class FastEmbedEmbedder:
         )
         return model
 
-    def _fetch(self, files: list[str]) -> str:
-        from huggingface_hub import snapshot_download
+    def cached(self) -> bool:
+        """Whether the model can load now, without the network."""
+        return self._model is not None or self._local(self.files()) is not None
 
-        options: dict[str, Any] = {
+    def _options(self, files: list[str]) -> dict[str, Any]:
+        return {
             "repo_id": self.source,
             "revision": self.revision,
             "cache_dir": str(self.cache_dir),
             "allow_patterns": files,
         }
-        # Cached files first, so a restart neither needs the network nor waits on it.
+
+    def _local(self, files: list[str]) -> str | None:
+        from huggingface_hub import snapshot_download
+
         # An interrupted download leaves the snapshot incomplete, so check every file.
         try:
-            path = snapshot_download(**options, local_files_only=True)
-            if all((Path(path) / name).is_file() for name in files):
-                return str(path)
+            path = snapshot_download(**self._options(files), local_files_only=True)
         except OSError:
-            pass
+            return None
+        return str(path) if all((Path(path) / name).is_file() for name in files) else None
+
+    def _fetch(self, files: list[str]) -> str:
+        from huggingface_hub import snapshot_download
+
+        # Cached files first, so a restart neither needs the network nor waits on it.
+        path = self._local(files)
+        if path is not None:
+            return path
         logger.info(
             "downloading embedding model %s@%s to %s", self.source, self.revision, self.cache_dir
         )
-        return str(snapshot_download(**options))
+        return str(snapshot_download(**self._options(files)))
 
     def _encode(self, texts: Sequence[str], prompt: str) -> list[list[float]]:
         model = self._load()

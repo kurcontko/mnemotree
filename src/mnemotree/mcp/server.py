@@ -26,6 +26,7 @@ from ..config import Config
 from ..core.models import scope
 from ..memory import Memory
 from ..providers.embeddings import EmbedderUnavailable
+from .project import project_namespace
 from .tools import TOOLS
 
 if TYPE_CHECKING:
@@ -199,10 +200,11 @@ def setting(name: str) -> str | None:
     return os.environ.get(f"MNEMOTREE_{name}") or os.environ.get(f"MNEMOTREE_MCP_{name}") or None
 
 
-def build_parser(prog: str = "mnemotree-mcp") -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="MCP stdio server for one mnemotree namespace."
-    )
+def build_parser(
+    prog: str = "mnemotree-mcp",
+    parser_class: type[argparse.ArgumentParser] = argparse.ArgumentParser,
+) -> argparse.ArgumentParser:
+    parser = parser_class(prog=prog, description="MCP stdio server for one mnemotree namespace.")
     parser.add_argument(
         "--db",
         default=setting("DB") or DEFAULT_DB,
@@ -210,9 +212,16 @@ def build_parser(prog: str = "mnemotree-mcp") -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--namespace",
-        default=setting("NAMESPACE") or DEFAULT_NAMESPACE,
+        default=setting("NAMESPACE"),
         help=f"isolation scope served by this process (MNEMOTREE_NAMESPACE, default "
         f"{DEFAULT_NAMESPACE!r})",
+    )
+    parser.add_argument(
+        "--project",
+        action="store_true",
+        help="without --namespace, use one namespace per project directory: the "
+        "repository around CLAUDE_PROJECT_DIR, else around the working directory "
+        "(MNEMOTREE_PROJECT=1)",
     )
     parser.add_argument(
         "--config",
@@ -249,6 +258,62 @@ def warm_up(warm: Callable[[], object]) -> None:
         log.error("%s; calls that embed will retry", exc)
 
 
+def switch(parser: argparse.ArgumentParser, name: str) -> bool:
+    """A boolean environment setting; anything but a known word is an error."""
+    flag = os.environ.get(name, "").strip().lower()
+    if flag not in TRUE + FALSE:
+        parser.error(f"{name} must be one of {', '.join(TRUE + FALSE[1:])}")
+    return flag in TRUE
+
+
+def resolve_namespace(parser: argparse.ArgumentParser, args: argparse.Namespace) -> str:
+    """--namespace, else the project's with --project, else the default."""
+    project = args.project or switch(parser, "MNEMOTREE_PROJECT")
+    namespace = args.namespace or (project_namespace() if project else DEFAULT_NAMESPACE)
+    try:
+        return scope(namespace)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+
+def read_config(parser: argparse.ArgumentParser, path: str) -> Config:
+    # S8707 is a false positive here and at mkdir in main: the operator sets these flags,
+    # no tool can.
+    try:
+        return Config.model_validate_json(Path(path).expanduser().read_text())  # NOSONAR
+    except ValidationError as exc:
+        parser.error(f"--config: {describe(exc)}")
+    except (OSError, UnicodeDecodeError) as exc:
+        parser.error(f"--config: {exc}")
+
+
+def configure(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    default_embedding: Mapping[str, Any] | None,
+) -> Config:
+    """The config the flags and environment select, validated before any file is opened."""
+    lexical = args.lexical or switch(parser, "MNEMOTREE_LEXICAL")
+    if not args.db:
+        parser.error("--db must not be empty")
+    resolve_namespace(parser, args)
+    config = read_config(parser, args.config) if args.config else Config()
+    # Keyword-only retrieval misses paraphrases, so it must be chosen, never a fallback.
+    if config.embedding is None and not lexical:
+        if default_embedding is None:
+            parser.error("no embedding configured: pass --config with an embedding, or --lexical")
+        # Validated, unlike model_copy(update=...), so the default becomes a typed provider config.
+        config = Config.model_validate(
+            {**config.model_dump(exclude_unset=True), "embedding": dict(default_embedding)}
+        )
+    chosen = "--lexical" if args.lexical else "MNEMOTREE_LEXICAL"
+    if config.embedding is not None and lexical:
+        parser.error(f"{chosen} conflicts with the configured embedding")
+    if lexical and config.search is not None and config.search.mode != "lexical":
+        parser.error(f"{chosen} conflicts with search mode {config.search.mode!r}")
+    return config
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -265,39 +330,8 @@ def main(
             f"{default_embedding.get('cache_dir')}."
         )
     args = parser.parse_args(argv)
-    flag = os.environ.get("MNEMOTREE_LEXICAL", "").strip().lower()
-    if flag not in TRUE + FALSE:
-        parser.error(f"MNEMOTREE_LEXICAL must be one of {', '.join(TRUE + FALSE[1:])}")
-    lexical = args.lexical or flag in TRUE
-    if not args.db:
-        parser.error("--db must not be empty")
-    try:
-        scope(args.namespace)
-    except ValueError as exc:
-        parser.error(str(exc))
-    # S8707 is a false positive here and at mkdir below: the operator sets these flags, no tool can.
-    config = Config()
-    if args.config:
-        config_path = Path(args.config).expanduser()
-        try:
-            config = Config.model_validate_json(config_path.read_text())  # NOSONAR
-        except ValidationError as exc:
-            parser.error(f"--config: {describe(exc)}")
-        except (OSError, UnicodeDecodeError) as exc:
-            parser.error(f"--config: {exc}")
-    # Keyword-only retrieval misses paraphrases, so it must be chosen, never a fallback.
-    if config.embedding is None and not lexical:
-        if default_embedding is None:
-            parser.error("no embedding configured: pass --config with an embedding, or --lexical")
-        # Validated, unlike model_copy(update=...), so the default becomes a typed provider config.
-        config = Config.model_validate(
-            {**config.model_dump(exclude_unset=True), "embedding": dict(default_embedding)}
-        )
-    chosen = "--lexical" if args.lexical else "MNEMOTREE_LEXICAL"
-    if config.embedding is not None and lexical:
-        parser.error(f"{chosen} conflicts with the configured embedding")
-    if lexical and config.search is not None and config.search.mode != "lexical":
-        parser.error(f"{chosen} conflicts with search mode {config.search.mode!r}")
+    config = configure(parser, args, default_embedding)
+    namespace = resolve_namespace(parser, args)
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="%(name)s: %(message)s")
     # Libraries only from WARNING: httpx alone logs every request of a model download.
     logging.getLogger("mnemotree").setLevel(logging.INFO)
@@ -315,7 +349,7 @@ def main(
         threading.Thread(
             target=warm_up, args=(warm,), name="mnemotree-mcp-embedder", daemon=True
         ).start()
-    memory = Memory.from_engine(engine, namespace=args.namespace, search=config.search)
+    memory = Memory.from_engine(engine, namespace=namespace, search=config.search)
     with memory:
         asyncio.run(serve_stdio(Server(memory)))
     return 0

@@ -33,13 +33,19 @@ results on LoCoMo and LongMemEval.
 
 ## Try it in Claude Code
 
+Add the published MCP server to give Claude local memory tools.
+
 ```bash
 claude mcp add mnemotree -- uvx mnemotree-mcp
 ```
 
-This needs no API key. The embedding model runs on your machine, and memories go to
-`~/.mnemotree/memory.sqlite`. Ask Claude to remember something, start a new session
-and ask about it. [MCP server](#mcp-server) has the options and other clients.
+Ask Claude to remember something, start a new session, and ask about it.
+The default embedding model runs locally and needs no API key.
+[MCP server](#mcp-server) covers configuration and other clients.
+
+The Claude Code plugin adds automatic capture and recall per project. Its marketplace
+launcher requires `mnemotree-mcp` 1.2.0 or later on PyPI. Recalled passages become part
+of the context sent to Claude. [Plugin setup and data handling](docs/GUIDE.md#claude-code-plugin)
 
 ## Install
 
@@ -168,6 +174,7 @@ model (about 200 MB) to `~/.mnemotree/models`; the server answers while it loads
 | --- | --- | --- |
 | `MNEMOTREE_DB` | `--db` | `~/.mnemotree/memory.sqlite` |
 | `MNEMOTREE_NAMESPACE` | `--namespace` | `default` |
+| `MNEMOTREE_PROJECT=1` | `--project` | off: one namespace per project when on |
 | `MNEMOTREE_CONFIG` | `--config` | local model |
 | `MNEMOTREE_LEXICAL=1` | `--lexical` | off |
 

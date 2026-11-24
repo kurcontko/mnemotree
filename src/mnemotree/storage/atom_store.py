@@ -10,6 +10,7 @@ from typing import Any
 from ..core.models import Atom, Chunk, scope
 from ..errors import ConfigurationError
 from .lexical import create_fts, fts_table, index_text, match_expression
+from .selection import ALL_ROWS, RowFilter
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS evidence_atoms(
@@ -91,7 +92,13 @@ class AtomStore:
                 )
 
     def lexical(
-        self, namespace: str, query: str, limit: int, *, options: Sequence[str] | None = None
+        self,
+        namespace: str,
+        query: str,
+        limit: int,
+        *,
+        options: Sequence[str] | None = None,
+        rows: RowFilter = ALL_ROWS,
     ) -> list[tuple[Atom, float]]:
         scope(namespace)
         match = match_expression(query, options=options)
@@ -102,13 +109,15 @@ class AtomStore:
         ).fetchone():
             return []
         table = fts_table(ATOM_FTS, namespace)
-        rows = self.db.execute(
+        matches = self.db.execute(
             f"SELECT a.payload, bm25({table}) AS score FROM {table} "
             f"JOIN evidence_atoms a ON a.rowid={table}.rowid "
-            f"WHERE {table} MATCH ? AND a.namespace=? ORDER BY score,a.id LIMIT ?",
-            (match, namespace, limit),
+            f"WHERE {table} MATCH ? AND a.namespace=?"
+            + rows.condition("a.rowid")
+            + " ORDER BY score,a.id LIMIT ?",
+            (match, namespace, *rows.params, limit),
         ).fetchall()
-        return [(Atom.model_validate_json(row[0]), -float(row[1])) for row in rows]
+        return [(Atom.model_validate_json(row[0]), -float(row[1])) for row in matches]
 
     def source_rows(self, namespace: str, source_id: str) -> list[tuple[int]]:
         """Rowids of the atoms that deleting this source removes."""
@@ -123,23 +132,29 @@ class AtomStore:
         if rows:
             self.db.executemany(f"DELETE FROM {fts_table(ATOM_FTS, namespace)} WHERE rowid=?", rows)
 
-    def dense(self, namespace: str, blob: bytes, limit: int) -> list[tuple[Atom, float]]:
+    def dense(
+        self, namespace: str, blob: bytes, limit: int, *, rows: RowFilter = ALL_ROWS
+    ) -> list[tuple[Atom, float]]:
         scope(namespace)
-        rows = self.db.execute(
+        matches = self.db.execute(
             "SELECT a.payload, v.distance FROM (SELECT atom_rowid, distance FROM evidence_atom_vec "
-            "WHERE embedding MATCH ? AND namespace=? AND k=?) v "
+            "WHERE embedding MATCH ? AND namespace=? AND k=?"
+            + rows.condition("atom_rowid")
+            + ") v "
             "JOIN evidence_atoms a ON a.rowid=v.atom_rowid ORDER BY v.distance,a.id",
-            (blob, namespace, limit),
+            (blob, namespace, limit, *rows.params),
         ).fetchall()
-        return [(Atom.model_validate_json(row[0]), 1.0 - float(row[1])) for row in rows]
+        return [(Atom.model_validate_json(row[0]), 1.0 - float(row[1])) for row in matches]
 
-    def chunks(self, namespace: str, atom: Atom) -> list[Chunk]:
+    def chunks(self, namespace: str, atom: Atom, *, rows: RowFilter = ALL_ROWS) -> list[Chunk]:
         scope(namespace)
-        rows = self.db.execute(
+        matches = self.db.execute(
             "SELECT DISTINCT c.* FROM evidence_atom_spans s JOIN evidence_chunks c "
             "ON c.namespace=s.namespace AND c.source_id=s.source_id AND c.start<s.end AND c.end>s.start "
-            "WHERE s.namespace=? AND s.atom_id=? ORDER BY c.source_id,c.chunk_index",
-            (namespace, atom.id),
+            "WHERE s.namespace=? AND s.atom_id=?"
+            + rows.condition("c.rowid")
+            + " ORDER BY c.source_id,c.chunk_index",
+            (namespace, atom.id, *rows.params),
         ).fetchall()
         return [
             Chunk(
@@ -150,5 +165,5 @@ class AtomStore:
                 end=row["end"],
                 text=row["text"],
             )
-            for row in rows
+            for row in matches
         ]

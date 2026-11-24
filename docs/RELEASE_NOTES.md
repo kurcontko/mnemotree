@@ -1,3 +1,20 @@
+# 1.2.0 (unreleased)
+
+- A Claude Code plugin, in `plugins/mnemotree/`. Its hooks store confirmed turns as
+  written and add matching passages from earlier sessions to Claude's model
+  context. Marketplace installation requires the 1.2.0 package release. Use
+  `claude plugin marketplace add kurcontko/mnemotree` and
+  `claude plugin install mnemotree@mnemotree`. See
+  [the guide](GUIDE.md#claude-code-plugin). After a compaction or `/clear`, the
+  session's earlier turns and the passages it was given can be recalled again.
+- `mnemotree-mcp hook` handles a Claude Code hook event from stdin. The plugin
+  runs it; it is not meant to be called by hand.
+- `--project` (`MNEMOTREE_PROJECT=1`) gives the MCP server one namespace per
+  project directory. Without it nothing changes: the namespace is still
+  `default` unless `--namespace` sets it.
+- `FastEmbedEmbedder.cached()` reports whether the model can load without the
+  network.
+
 # 1.1.0 (2026-11-23)
 
 Three changes can break a 1.0 caller: one that imports from `mnemotree.evidence`,

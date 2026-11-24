@@ -164,8 +164,16 @@ errors go to stderr.
 | --- | --- | --- |
 | `MNEMOTREE_DB` | `--db` | `~/.mnemotree/memory.sqlite` |
 | `MNEMOTREE_NAMESPACE` | `--namespace` | `default` |
+| `MNEMOTREE_PROJECT` (`1`, `true`, `yes`) | `--project` | off |
 | `MNEMOTREE_CONFIG` | `--config` | none: the local model |
 | `MNEMOTREE_LEXICAL` (`1`, `true`, `yes`) | `--lexical` | off |
+
+With `--project` and no `--namespace`, the server uses one namespace per project,
+named after the repository's directory with a hash of its path, such as
+`api-3f9c2a1b`. The project is the Git repository around `CLAUDE_PROJECT_DIR`, or
+around the working directory when the client does not set it. Linked worktrees of
+one repository share a namespace. Outside a repository the directory itself is the
+project.
 
 Flags override the environment. `MNEMOTREE_MCP_DB`, `MNEMOTREE_MCP_NAMESPACE` and
 `MNEMOTREE_MCP_CONFIG`, read by earlier releases, still work when the new name is
@@ -200,6 +208,82 @@ an untrusted page can also carry instructions into later sessions. The server
 tells clients to read memories as records, not instructions, but only the client
 can enforce that. Approval is the client's job too: `forget` is marked
 `destructiveHint` so clients can ask before deleting, and deletion is permanent.
+
+## Claude Code plugin
+
+The plugin adds hooks to the MCP server, so Claude Code stores and recalls
+without being asked. It runs on macOS and Linux with [uv](https://docs.astral.sh/uv/).
+The following marketplace commands require `mnemotree-mcp` 1.2.0 or later on
+[PyPI](https://pypi.org/project/mnemotree-mcp/). Until that release, the MCP server
+above provides the published memory tools.
+
+```bash
+claude plugin marketplace add kurcontko/mnemotree
+claude plugin install mnemotree@mnemotree
+```
+
+Inside a session the same two steps are `/plugin marketplace add kurcontko/mnemotree`
+and `/plugin install mnemotree@mnemotree`.
+
+**What it stores.** The submit hook records a fingerprint of your prompt. At the end
+of the turn, the plugin matches it to your user message in Claude Code's saved
+transcript and queues the original text with Claude's final reply. It skips slash
+commands, tool results, subagent messages and prompts another hook rejected. A
+prompt that starts with a path, such as `/srv/app/server.py:42 fails`, is a message
+and is stored. An interrupted prompt can be recovered with the next turn when the
+transcript links an assistant response to it. Claude Code writes the transcript in
+the background, so the plugin reads it again for up to 0.7 seconds before it gives
+up on a turn. An unavailable transcript disables capture for that turn.
+Embedding and storage run in the background. A later Stop in the same database and
+project namespace retries pending turns, including ones from a closed session.
+
+**What it recalls.** Before each prompt it searches the project's memories with
+the prompt as the query and adds up to three passages, at most 500 tokens, to
+Claude's context. It leaves out the current session, which Claude already has, and
+any passage it already added in this session. Prompts shorter than three words
+are not searched. This adds about a second to each prompt.
+
+A compaction or `/clear` removes that text from Claude's context. From then on the
+plugin can add those passages again, and it can recall the session's own turns
+from before that point.
+
+There is no relevance cut-off. The hook adds the best matches it finds, so some
+will be unrelated to the prompt, and Claude is told to ignore those. With the
+default model, similarity scores of related and unrelated prompts overlap too
+much for a threshold to separate them. The token budget is what bounds the cost.
+
+**Where it goes.** Confirmed messages are stored in `~/.mnemotree/memory.sqlite`,
+in the same project namespace as the plugin's MCP tools. By default, indexing
+and search use a local embedding model. Claude Code sends recalled passages in
+the request to its configured model provider. Set `MNEMOTREE_RECALL_TOKENS=0` to
+disable that automatic sharing. If you configure an HTTP embedder or extractor,
+it can receive accepted turns during ingestion. With an HTTP embedder, the submit
+hook uses local keyword search while other hooks are evaluating the prompt.
+
+| Environment variable | Default | Effect |
+| --- | --- | --- |
+| `MNEMOTREE_RECALL_TOKENS` | `500` | Token budget for recalled passages; `0` turns recall off |
+| `MNEMOTREE_CAPTURE` | on | `0` stops storing turns |
+| `MNEMOTREE_NAMESPACE` | per project | One name here shares a single memory across all projects |
+| `MNEMOTREE_DB`, `MNEMOTREE_CONFIG`, `MNEMOTREE_LEXICAL` | as for the server | The hooks and the server read the same settings |
+
+Set them in your shell, or under `env` in Claude Code's `settings.json`.
+
+Things to know:
+
+- Your prompts are stored as plain text, including a secret you paste into one.
+  Use the `forget` tool to delete a memory, or set `MNEMOTREE_CAPTURE=0` first.
+- If you tested an earlier plugin checkout, its `sessions/*/queue` files contain
+  unconfirmed submissions with no recorded destination. Review them individually
+  before importing any of those messages.
+- The first session downloads the embedding model in the background. Recall
+  starts once it is there, and turns are stored either way.
+- A hook never fails your session. Errors go to `hook.log` in the plugin's data
+  directory, `~/.claude/plugins/data/`, alongside the local queue of confirmed turns.
+
+The hooks run `mnemotree-mcp hook`, which reads one Claude Code hook event from
+stdin. `plugins/mnemotree/` holds the plugin, and `MNEMOTREE_MCP_COMMAND` points
+it at another command, such as a development checkout's `mnemotree-mcp`.
 
 ## Configuration
 

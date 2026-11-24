@@ -8,7 +8,7 @@ from typing import NamedTuple
 
 import tiktoken
 
-from ..core.models import ContextSpan, Evidence
+from ..core.models import ContextSpan, Evidence, SourceSpan
 from ..core.protocols import TokenCounter
 
 # In these encodings no pre-token runs past a line break followed by anything but
@@ -52,6 +52,7 @@ def pack(
     limit: int,
     merge_reach: int | None = None,
     overflow: Sequence[Evidence] = (),
+    exclude_spans: Sequence[SourceSpan] = (),
     order_key: Callable[[Evidence], tuple[int, float, int]] | None = None,
 ) -> Packed:
     """Select ranked anchors, then add their neighbors while the budget allows.
@@ -68,6 +69,8 @@ def pack(
     """
     selected: list[Evidence] = []
     covered: dict[str, list[tuple[int, int]]] = {}
+    for span in exclude_spans:
+        covered.setdefault(span.source_id, []).append((span.start, span.end))
     omitted = []
     by_id = {item.id: item for item in (*evidence, *overflow)}
     rendered: dict[str, tuple[Evidence, str, int]] = {}

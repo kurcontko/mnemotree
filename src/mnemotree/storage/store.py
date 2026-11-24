@@ -25,6 +25,7 @@ from ..errors import ConfigurationError, IngestConflict, ProviderError
 from .atom_store import AtomStore
 from .lexical import create_fts, fts_table, index_text, match_expression
 from .schema import CHUNK_FTS, configure, connect, create_tables, stored_embedding_spec
+from .selection import ALL_ROWS, RowFilter
 from .vectors import vector_blob
 
 
@@ -348,7 +349,13 @@ class SQLiteEvidenceStore:
         return chunks
 
     def lexical(
-        self, namespace: str, query: str, limit: int, *, options: Sequence[str] | None = None
+        self,
+        namespace: str,
+        query: str,
+        limit: int,
+        *,
+        options: Sequence[str] | None = None,
+        rows: RowFilter = ALL_ROWS,
     ) -> list[tuple[Chunk, float]]:
         scope(namespace)
         match = match_expression(query, options=options)
@@ -360,29 +367,33 @@ class SQLiteEvidenceStore:
                 "SELECT 1 FROM evidence_chunks WHERE namespace=? LIMIT 1", (namespace,)
             ).fetchone():
                 return []
-            rows = self.db.execute(
+            matches = self.db.execute(
                 f"SELECT c.*, bm25({table}) AS score FROM {table} "
                 f"JOIN evidence_chunks c ON c.rowid={table}.rowid "
-                f"WHERE {table} MATCH ? AND c.namespace=? ORDER BY score,c.id LIMIT ?",
-                (match, namespace, limit),
+                f"WHERE {table} MATCH ? AND c.namespace=?"
+                + rows.condition("c.rowid")
+                + " ORDER BY score,c.id LIMIT ?",
+                (match, namespace, *rows.params, limit),
             ).fetchall()
-        return [(self._chunk(row), -float(row["score"])) for row in rows]
+        return [(self._chunk(row), -float(row["score"])) for row in matches]
 
     def dense(
-        self, namespace: str, vector: Sequence[float], limit: int
+        self, namespace: str, vector: Sequence[float], limit: int, *, rows: RowFilter = ALL_ROWS
     ) -> list[tuple[Chunk, float]]:
         scope(namespace)
         if self.embedding_spec is None:
             raise ConfigurationError("dense retrieval needs an indexed embedding model")
         blob = vector_blob(vector, self.embedding_spec.dimensions)
         with self._lock:
-            rows = self.db.execute(
+            matches = self.db.execute(
                 "SELECT c.*, v.distance FROM (SELECT chunk_rowid, distance FROM evidence_vec "
-                "WHERE embedding MATCH ? AND namespace=? AND k=?) v "
+                "WHERE embedding MATCH ? AND namespace=? AND k=?"
+                + rows.condition("chunk_rowid")
+                + ") v "
                 "JOIN evidence_chunks c ON c.rowid=v.chunk_rowid ORDER BY v.distance,c.id",
-                (blob, namespace, limit),
+                (blob, namespace, limit, *rows.params),
             ).fetchall()
-        return [(self._chunk(row), 1.0 - float(row["distance"])) for row in rows]
+        return [(self._chunk(row), 1.0 - float(row["distance"])) for row in matches]
 
     def window(
         self,
