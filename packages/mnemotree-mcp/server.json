@@ -3,7 +3,7 @@
   "name": "io.github.kurcontko/mnemotree",
   "title": "Mnemotree",
   "description": "Local long-term memory. Keeps messages verbatim in SQLite and recalls them by hybrid search.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "websiteUrl": "https://github.com/kurcontko/mnemotree/blob/main/docs/GUIDE.md#mcp-server",
   "repository": {
     "url": "https://github.com/kurcontko/mnemotree",
@@ -15,7 +15,7 @@
     {
       "registryType": "pypi",
       "identifier": "mnemotree-mcp",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -29,6 +29,11 @@
         {
           "name": "MNEMOTREE_NAMESPACE",
           "description": "Namespace this server reads and writes. Defaults to \"default\"."
+        },
+        {
+          "name": "MNEMOTREE_PROJECT",
+          "description": "Set to 1 for one namespace per project: the Git repository around the client's project directory.",
+          "format": "boolean"
         },
         {
           "name": "MNEMOTREE_LEXICAL",
