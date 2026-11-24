@@ -1,6 +1,6 @@
 [project]
 name = "mnemotree"
-version = "1.1.0"
+version = "1.2.0"
 description = "Persistent, source-first memory for LLM agents"
 authors = [
     { name = "kurcontko", email = "mikeqrc@gmail.com" }
