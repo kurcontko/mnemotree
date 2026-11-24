@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import httpx
 import pytest
@@ -313,3 +314,33 @@ async def test_exclusions_apply_before_each_channel_limit(tmp_path, mode, repres
             exclude_spans=[SourceSpan(source_id="seen", start=0, end=9)],
         )
         assert [item.source_id for item in result.evidence] == ["fresh"]
+
+
+async def test_a_session_exclusion_can_start_at_a_time(tmp_path):
+    with EvidenceEngine(tmp_path / "since.db") as memory:
+        # 10:00+02:00 is 08:00 UTC: before the cut, though its text sorts after it.
+        for name, stamp in (
+            ("early", "2026-01-01T10:00:00+02:00"),
+            ("late", "2026-01-01T09:00:00+00:00"),
+            ("undated", None),
+        ):
+            await memory.add(
+                "u",
+                [
+                    Message(
+                        id=name,
+                        content=f"physician note {name}",
+                        timestamp=datetime.fromisoformat(stamp) if stamp else None,
+                    )
+                ],
+                session_id="current",
+                request_id=name,
+            )
+        result = await memory.search(
+            "u",
+            "physician note",
+            options=SearchOptions(mode="lexical"),
+            exclude_session="current",
+            exclude_session_since=datetime.fromisoformat("2026-01-01T08:30:00+00:00"),
+        )
+        assert [item.source_id for item in result.evidence] == ["early"]

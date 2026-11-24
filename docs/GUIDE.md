@@ -211,7 +211,7 @@ can enforce that. Approval is the client's job too: `forget` is marked
 
 ## Claude Code plugin
 
-The plugin adds two hooks to the MCP server, so Claude Code stores and recalls
+The plugin adds hooks to the MCP server, so Claude Code stores and recalls
 without being asked. It runs on macOS and Linux with [uv](https://docs.astral.sh/uv/).
 The following marketplace commands require `mnemotree-mcp` 1.2.0 or later on
 [PyPI](https://pypi.org/project/mnemotree-mcp/). Until that release, the MCP server
@@ -228,9 +228,12 @@ and `/plugin install mnemotree@mnemotree`.
 **What it stores.** The submit hook records a fingerprint of your prompt. At the end
 of the turn, the plugin matches it to your user message in Claude Code's saved
 transcript and queues the original text with Claude's final reply. It skips slash
-commands, tool results, subagent messages and prompts another hook rejected. An
-interrupted prompt can be recovered with the next turn when the transcript links
-an assistant response to it. An unavailable transcript disables capture for that turn.
+commands, tool results, subagent messages and prompts another hook rejected. A
+prompt that starts with a path, such as `/srv/app/server.py:42 fails`, is a message
+and is stored. An interrupted prompt can be recovered with the next turn when the
+transcript links an assistant response to it. Claude Code writes the transcript in
+the background, so the plugin reads it again for up to 0.7 seconds before it gives
+up on a turn. An unavailable transcript disables capture for that turn.
 Embedding and storage run in the background. A later Stop in the same database and
 project namespace retries pending turns, including ones from a closed session.
 
@@ -239,6 +242,10 @@ the prompt as the query and adds up to three passages, at most 500 tokens, to
 Claude's context. It leaves out the current session, which Claude already has, and
 any passage it already added in this session. Prompts shorter than three words
 are not searched. This adds about a second to each prompt.
+
+A compaction or `/clear` removes that text from Claude's context. From then on the
+plugin can add those passages again, and it can recall the session's own turns
+from before that point.
 
 There is no relevance cut-off. The hook adds the best matches it finds, so some
 will be unrelated to the prompt, and Claude is told to ignore those. With the
@@ -271,8 +278,6 @@ Things to know:
   before importing any of those messages.
 - The first session downloads the embedding model in the background. Recall
   starts once it is there, and turns are stored either way.
-- After Claude Code compacts a long session, turns from before the compaction are
-  not recalled back into that session.
 - A hook never fails your session. Errors go to `hook.log` in the plugin's data
   directory, `~/.claude/plugins/data/`, alongside the local queue of confirmed turns.
 

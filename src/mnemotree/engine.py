@@ -7,6 +7,7 @@ import math
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
@@ -294,8 +295,14 @@ class EvidenceEngine:
         options: SearchOptions | None = None,
         query_options: Sequence[str] | None = None,
         exclude_session: str | None = None,
+        exclude_session_since: datetime | None = None,
         exclude_spans: Sequence[SourceSpan] = (),
     ) -> SearchResult:
+        """Search one namespace.
+
+        ``exclude_session`` leaves a session's messages out, from ``exclude_session_since``
+        on when that is given. ``exclude_spans`` leaves out text already delivered.
+        """
         scope(namespace)
         if not isinstance(query, str) or not query.strip():
             raise InvalidInput("query must not be blank")
@@ -306,7 +313,7 @@ class EvidenceEngine:
         with watch.stage("embedding"):
             plan = await self._plan_query(query, query_options, options)
         with watch.stage("retrieval"):
-            rows = eligible_chunks(namespace, exclude_session, exclude_spans)
+            rows = eligible_chunks(namespace, exclude_session, exclude_spans, exclude_session_since)
             retrieval = await asyncio.to_thread(self._retrieve, namespace, plan, options, rows)
 
         policy = role_policy(options, retrieval.assistant_share)

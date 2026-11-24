@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from ..core.models import SourceSpan
 
@@ -34,8 +35,16 @@ ALL_ROWS = RowFilter()
 
 
 def eligible_chunks(
-    namespace: str, exclude_session: str | None, spans: Sequence[SourceSpan]
+    namespace: str,
+    exclude_session: str | None,
+    spans: Sequence[SourceSpan],
+    since: datetime | None = None,
 ) -> RowFilter:
+    """Every chunk except the excluded session's and the excluded spans.
+
+    With ``since``, the session loses only its messages from that time on. A message
+    without a timestamp cannot be placed, so it stays excluded.
+    """
     excluded = []
     params = [namespace]
     if exclude_session is not None:
@@ -44,6 +53,10 @@ def eligible_chunks(
             "ON c.namespace=s.namespace AND c.source_id=s.id WHERE s.namespace=? AND s.session_id=?"
         )
         params.extend((namespace, exclude_session))
+        if since is not None:
+            # julianday() reads the stored ISO text with its offset; text order would not.
+            excluded[-1] += " AND (s.timestamp IS NULL OR julianday(s.timestamp)>=julianday(?))"
+            params.append(since.isoformat())
     if spans:
         excluded.append(
             "SELECT c.rowid FROM json_each(?) r JOIN evidence_chunks c "

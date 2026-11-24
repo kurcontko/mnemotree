@@ -32,6 +32,8 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setenv("MNEMOTREE_DB", str(tmp_path / "m.db"))
     monkeypatch.setenv("MNEMOTREE_NAMESPACE", "project")
     monkeypatch.setenv("MNEMOTREE_LEXICAL", "1")
+    # No test waits for a transcript unless it is about the wait.
+    monkeypatch.setattr(hooks.state, "TRANSCRIPT_WAITS", ())
     return types.SimpleNamespace(
         state=tmp_path / "state", db=tmp_path / "m.db", set=monkeypatch.setenv, tmp=tmp_path
     )
@@ -144,10 +146,74 @@ def test_the_current_session_is_not_recalled_into_itself(run):
 
 def test_slash_commands_and_blank_prompts_are_ignored(run, env):
     turn(run, "s1", "We deploy to the VM harbor-7.", "Noted.")
-    for prompt in ("/clear the VM deploy notes", "   "):
+    for prompt in (
+        "/clear the VM deploy notes",
+        "/ops:deploy VM notes",
+        "/apps/web:deploy the VM",
+        "   ",
+    ):
         assert run("UserPromptSubmit", session_id="s2", prompt=prompt) is None
     run("Stop", session_id="s2", last_assistant_message="Command output.")
     assert all(row[0] != "s2" for row in stored(env.db))
+
+
+@pytest.mark.parametrize("path", ["/srv/app/deploy.py", "/srv/app/deploy.py:42"])
+def test_a_prompt_that_starts_with_a_path_is_a_message(run, env, path):
+    turn(run, "s1", "We deploy to the VM harbor-7.", "Noted.")
+    prompt = f"{path} fails on the VM deploy, why?"
+    assert "harbor-7" in context(run("UserPromptSubmit", session_id="s2", prompt=prompt))
+    run("Stop", session_id="s2", last_assistant_message="It reads the wrong host.")
+    assert ("s2", "user", prompt) in stored(env.db)
+
+
+def test_a_transcript_that_trails_the_stop_is_read_again(run, env, monkeypatch):
+    path = env.tmp / "late.jsonl"
+    path.touch()
+    ids = {"session_id": "s1", "prompt_id": "p1", "transcript_path": str(path)}
+    run("UserPromptSubmit", prompt="The cache TTL is 90 seconds.", accepted=False, **ids)
+
+    def written_meanwhile(seconds):
+        append_record(
+            path,
+            "s1",
+            type="user",
+            uuid="u1",
+            promptId="p1",
+            message={"role": "user", "content": "The cache TTL is 90 seconds."},
+        )
+
+    monkeypatch.setattr(hooks.state, "TRANSCRIPT_WAITS", (0.2,))
+    monkeypatch.setattr(hooks.state.time, "sleep", written_meanwhile)
+    run("Stop", last_assistant_message="Noted.", **ids)
+    assert [row[2] for row in stored(env.db)] == ["The cache TTL is 90 seconds.", "Noted."]
+
+
+def test_after_a_compaction_earlier_passages_and_turns_can_be_recalled_again(run, env):
+    compiler, train = "what is the staging compiler", "release train Thursdays schedule"
+    turn(run, "old", "The staging compiler is maple.", "Updated.")
+    turn(run, "s1", "Our release train leaves on Thursdays.", "Noted.")
+    assert "maple" in context(run("UserPromptSubmit", session_id="s1", prompt=compiler))
+    run("Stop", session_id="s1", last_assistant_message="Understood.")
+    # Claude still holds the session's own turn, and a resume replays the context.
+    assert run("UserPromptSubmit", session_id="s1", prompt=train) is None
+    run("Stop", session_id="s1", last_assistant_message="Understood.")
+    assert run("SessionStart", session_id="s1", source="resume") is None
+    assert run("UserPromptSubmit", session_id="s1", prompt=train) is None
+    run("Stop", session_id="s1", last_assistant_message="Understood.")
+
+    time.sleep(0.01)
+    assert run("SessionStart", session_id="s1", source="compact") is None
+    time.sleep(0.01)
+    given_again = context(run("UserPromptSubmit", session_id="s1", prompt=compiler))
+    assert "The staging compiler is maple." in given_again
+    run("Stop", session_id="s1", last_assistant_message="Understood.")
+    own_turn = context(run("UserPromptSubmit", session_id="s1", prompt=train))
+    assert "Our release train leaves on Thursdays." in own_turn
+    run("Stop", session_id="s1", last_assistant_message="Understood.")
+    # A turn after the compaction is in the context, so it stays out.
+    turn(run, "s1", "The pager rotation swaps on Mondays.", "Understood.")
+    later = run("UserPromptSubmit", session_id="s1", prompt="pager rotation swaps Mondays")
+    assert later is None or "swaps on Mondays" not in context(later)
 
 
 def test_a_short_prompt_is_stored_but_not_searched(run, env):

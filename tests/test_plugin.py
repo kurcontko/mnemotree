@@ -36,7 +36,9 @@ def test_the_launcher_requires_the_release_the_plugin_was_built_for():
 def test_hooks_and_the_mcp_server_start_through_the_launcher():
     assert os.access(LAUNCHER, os.X_OK)
     hooks = json.loads((PLUGIN / "hooks" / "hooks.json").read_text())["hooks"]
-    assert set(hooks) == {"UserPromptSubmit", "Stop"}
+    assert set(hooks) == {"SessionStart", "UserPromptSubmit", "Stop"}
+    # Only a compaction or /clear changes what the hooks may recall.
+    assert [group.get("matcher") for group in hooks["SessionStart"]] == ["compact|clear"]
     for groups in hooks.values():
         ((handler,),) = (group["hooks"] for group in groups)
         assert (

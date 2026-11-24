@@ -5,7 +5,8 @@
   context. Marketplace installation requires the 1.2.0 package release. Use
   `claude plugin marketplace add kurcontko/mnemotree` and
   `claude plugin install mnemotree@mnemotree`. See
-  [the guide](GUIDE.md#claude-code-plugin).
+  [the guide](GUIDE.md#claude-code-plugin). After a compaction or `/clear`, the
+  session's earlier turns and the passages it was given can be recalled again.
 - `mnemotree-mcp hook` handles a Claude Code hook event from stdin. The plugin
   runs it; it is not meant to be called by hand.
 - `--project` (`MNEMOTREE_PROJECT=1`) gives the MCP server one namespace per

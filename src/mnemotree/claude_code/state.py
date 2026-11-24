@@ -19,6 +19,9 @@ from .transcript import Submission, accepted_prompts, fingerprint, transcript_si
 
 MESSAGES = TypeAdapter(list[Message])
 STALE_SECONDS = 30 * 24 * 3600
+# Claude Code writes the transcript asynchronously, so a Stop can arrive before the
+# turn's records are on disk. Seconds to wait between the attempts to read them.
+TRANSCRIPT_WAITS = (0.2, 0.5)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS submissions(
@@ -37,6 +40,7 @@ CREATE TABLE IF NOT EXISTS seen(
     session TEXT, source TEXT, start INTEGER, end INTEGER, used INTEGER,
     PRIMARY KEY(session, source, start, end)
 );
+CREATE TABLE IF NOT EXISTS context_resets(session TEXT PRIMARY KEY, at TEXT);
 """
 
 
@@ -87,7 +91,7 @@ class HookState:
         pending = [Submission(*row) for row in rows]
         if not pending:
             return
-        result = accepted_prompts(transcript, session, pending)
+        result = self._read_transcript(transcript, session, pending)
         if result is None:
             return
         uuid, messages = result
@@ -110,6 +114,44 @@ class HookState:
                 "INSERT OR IGNORE INTO turns(session,request_id,messages) VALUES(?,?,?)",
                 (session, digest(["claude-code", session, uuid]), MESSAGES.dump_json(messages)),
             )
+
+    @staticmethod
+    def _read_transcript(
+        transcript: Path, session: str, pending: Sequence[Submission]
+    ) -> tuple[str, list[Message]] | None:
+        """The confirmed prompts, waiting briefly for a transcript that trails the Stop."""
+        for wait in (*TRANSCRIPT_WAITS, None):
+            try:
+                result = accepted_prompts(transcript, session, pending)
+            except OSError:
+                if wait is None:
+                    raise
+                result = None
+            if result is not None or wait is None:
+                return result
+            time.sleep(wait)
+        return None
+
+    def reset_context(self, session: str) -> None:
+        """Claude's context was compacted or cleared: what it held is no longer there.
+
+        Passages delivered before can be delivered again, and from now on only the
+        session's later turns count as already in front of Claude.
+        """
+        with self.db:
+            self.db.execute("DELETE FROM seen WHERE session=?", (session,))
+            self.db.execute("DELETE FROM offered WHERE session=?", (session,))
+            self.db.execute(
+                "INSERT OR REPLACE INTO context_resets VALUES(?,?)",
+                (session, datetime.now(UTC).isoformat()),
+            )
+
+    def context_start(self, session: str) -> datetime | None:
+        """When the session's context last started over, or None if it never did."""
+        row = self.db.execute(
+            "SELECT at FROM context_resets WHERE session=?", (session,)
+        ).fetchone()
+        return datetime.fromisoformat(row[0]) if row else None
 
     def has_turns(self) -> bool:
         return (
@@ -163,11 +205,10 @@ class HookState:
 
     def prune(self) -> None:
         cutoff = time.time() - STALE_SECONDS
+        stale = datetime.fromtimestamp(cutoff, UTC).isoformat()
         with self.db:
-            self.db.execute(
-                "DELETE FROM submissions WHERE submitted<?",
-                (datetime.fromtimestamp(cutoff, UTC).isoformat(),),
-            )
+            self.db.execute("DELETE FROM submissions WHERE submitted<?", (stale,))
+            self.db.execute("DELETE FROM context_resets WHERE at<?", (stale,))
             self.db.execute("DELETE FROM seen WHERE used<?", (cutoff,))
             self.db.execute("DELETE FROM offered WHERE used<?", (cutoff,))
             self.db.execute("DELETE FROM turns WHERE finished<?", (cutoff,))

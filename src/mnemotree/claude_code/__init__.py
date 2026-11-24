@@ -5,6 +5,8 @@ sends the event's JSON on stdin.
 
 Submit hooks search earlier sessions. A matching Stop confirms the original user
 message in the transcript and queues it with the final reply for a detached worker.
+A SessionStart after compaction or ``/clear`` makes what Claude no longer holds
+eligible for recall again.
 
 A hook must never break the session it runs in, so every failure is logged to
 ``hook.log`` in the state directory and the process still exits 0.
@@ -16,6 +18,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -41,6 +44,13 @@ HEADER = (
     "Ignore them if they do not help. The recall tool searches for more."
 )
 
+# What a typed command looks like: /deploy, /plugin:skill, or a skill scoped to a
+# directory such as /apps/web:deploy. A path is not one, even with a line number:
+# /srv/app/server.py or /srv/app/server.py:42.
+COMMAND = re.compile(r"/[\w-]+(:[\w-]+)*|/[\w./-]+:[A-Za-z][\w-]*")
+# SessionStart sources after which Claude no longer holds the earlier conversation.
+CONTEXT_RESETS = ("compact", "clear")
+
 Opener = Callable[[], Memory]
 
 
@@ -56,6 +66,12 @@ def recall_tokens() -> int:
 
 def capturing() -> bool:
     return os.environ.get("MNEMOTREE_CAPTURE", "").strip().lower() not in ("0", "false", "no")
+
+
+def is_command(prompt: str) -> bool:
+    """Whether the prompt is a slash command: an instruction to the client, not a message."""
+    words = prompt.split(maxsplit=1)
+    return bool(words) and COMMAND.fullmatch(words[0]) is not None
 
 
 def ready(memory: Memory) -> bool:
@@ -94,6 +110,8 @@ def recall(
             query,
             options=options,
             exclude_session=session,
+            # After a compaction, the session's earlier turns are gone from the context.
+            exclude_session_since=state.context_start(session),
             exclude_spans=state.seen(session),
         )
     )
@@ -117,7 +135,7 @@ def on_prompt(
     capture = capturing()
     if not capture:
         state.discard(session)
-    if not prompt.strip() or prompt.lstrip().startswith("/"):
+    if not prompt.strip() or is_command(prompt):
         if not key:
             state.discard(session)
         return None
@@ -148,6 +166,12 @@ def on_stop(event: Mapping[str, Any], state: HookState) -> None:
     elif isinstance(path, str):
         reply = event.get("last_assistant_message")
         state.confirm(session, key, Path(path), reply if isinstance(reply, str) else None)
+
+
+def on_session_start(event: Mapping[str, Any], state: HookState) -> None:
+    session = event.get("session_id")
+    if isinstance(session, str) and event.get("source") in CONTEXT_RESETS:
+        state.reset_context(session)
 
 
 def detach(command: Sequence[str], state: Path) -> None:
@@ -239,6 +263,8 @@ def main(
                 output = on_prompt(event, opener, queue, local_query=local_query)
                 if output is not None:
                     print(json.dumps(output))
+            elif name == "SessionStart":
+                on_session_start(event, queue)
             elif name == "Stop":
                 try:
                     on_stop(event, queue)
