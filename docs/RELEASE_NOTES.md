@@ -1,4 +1,4 @@
-# 1.2.0 (unreleased)
+# 1.2.0 (2026-11-24)
 
 - A Claude Code plugin, in `plugins/mnemotree/`. Its hooks store confirmed turns as
   written and add matching passages from earlier sessions to Claude's model
