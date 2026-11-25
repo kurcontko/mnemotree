@@ -94,6 +94,9 @@ async def test_remember_recall_get_forget_through_tools(server):
     assert gone["structuredContent"] == {"forgotten": True}
     recalled = (await server.handle(call(5, "recall", {"query": "orchids"})))["result"]
     assert recalled["structuredContent"]["memories"] == []
+    again = (await server.handle(call(6, "forget", {"id": "orchids"})))["result"]
+    assert again["isError"] is False
+    assert again["structuredContent"] == {"forgotten": False}
 
 
 async def test_recall_large_source_returns_metadata_and_get_fetches_full_text(server):
@@ -150,6 +153,22 @@ async def test_bad_arguments_and_conflicts_are_tool_errors(server):
     ]
     assert conflict["isError"] is True
     assert "different payload" in conflict["content"][0]["text"]
+
+
+async def test_an_id_in_use_is_rejected_and_a_batch_is_stored_whole_or_not_at_all(server):
+    await server.handle(call(1, "remember", {"content": "first", "id": "taken"}))
+    reused = (await server.handle(call(2, "remember", {"content": "second", "id": "taken"})))[
+        "result"
+    ]
+    assert reused["isError"] is True
+    turns = [{"content": "a new turn", "id": "new"}, {"content": "a clash", "id": "taken"}]
+    batch = (await server.handle(call(3, "remember_many", {"session": "chat", "messages": turns})))[
+        "result"
+    ]
+    assert batch["isError"] is True
+    got = (await server.handle(call(4, "get", {"ids": ["new", "taken"]})))["result"]
+    assert got["structuredContent"]["missing"] == ["new"]
+    assert got["structuredContent"]["memories"][0]["content"] == "first"
 
 
 async def test_recall_limit_and_retried_writes_through_tools(server):

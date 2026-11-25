@@ -1,3 +1,11 @@
+# 1.2.1 (unreleased)
+
+- The MCP tool descriptions say what each call returns and when to use which
+  tool. `get` lists unknown IDs under `missing`, `forget` returns
+  `forgotten: false` for one, `remember_many` stores all turns or none, and an ID
+  already in use is rejected. Behaviour is unchanged; the tool list grows from
+  about 1,150 to 1,280 tokens.
+
 # 1.2.0 (2026-11-24)
 
 - A Claude Code plugin, in `plugins/mnemotree/`. Its hooks store confirmed turns as
