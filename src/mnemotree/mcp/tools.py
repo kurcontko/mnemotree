@@ -42,7 +42,10 @@ class RememberArguments(Arguments):
         description="Conversation it belongs to. Omit for a standalone memory.",
     )
     timestamp: datetime | None = Field(default=None, description=TIMESTAMP)
-    id: str | None = Field(default=None, description="Stable ID; generated when omitted.")
+    id: str | None = Field(
+        default=None,
+        description="Stable ID; generated when omitted. An ID already in use is rejected.",
+    )
     request_id: str | None = Field(
         default=None,
         description="Reuse to retry safely: the same request is stored once.",
@@ -81,11 +84,18 @@ class RecallArguments(Arguments):
 
 
 class GetArguments(Arguments):
-    ids: list[str] = Field(min_length=1, max_length=100, description="Memory IDs to fetch.")
+    ids: list[str] = Field(
+        min_length=1,
+        max_length=100,
+        description="Memory IDs to fetch, as returned by recall or remember.",
+    )
 
 
 class ForgetArguments(Arguments):
-    id: str = Field(min_length=1, description="ID of the memory to delete.")
+    id: str = Field(
+        min_length=1,
+        description="ID of the memory to delete, as returned by recall, get or remember.",
+    )
 
 
 def item(memory: MemoryItem) -> dict[str, Any]:
@@ -167,14 +177,17 @@ TOOLS = {
     for tool in (
         Tool(
             "remember",
-            "Store one message in long-term memory, verbatim.",
+            "Store one message in long-term memory, verbatim. Returns the stored memory with "
+            "its ID. Use remember_many for several turns of one conversation.",
             RememberArguments,
             remember,
             WRITE,
         ),
         Tool(
             "remember_many",
-            "Store consecutive turns of one conversation, in order, as one write.",
+            "Store consecutive turns of one conversation, in order, as one write: all turns "
+            "are stored or none. Returns the stored memories with their IDs. Use remember for "
+            "a single message.",
             RememberManyArguments,
             remember_many,
             WRITE,
@@ -187,10 +200,19 @@ TOOLS = {
             recall,
             READ,
         ),
-        Tool("get", "Fetch memories by ID. Read-only.", GetArguments, get, READ),
+        Tool(
+            "get",
+            "Fetch full stored messages by ID. Use recall to search by content. IDs that match "
+            "no memory are listed under missing, not reported as an error. Read-only.",
+            GetArguments,
+            get,
+            READ,
+        ),
         Tool(
             "forget",
-            "Delete a memory permanently.",
+            "Delete one memory permanently, with its index entries. This cannot be undone, so "
+            "use it only to remove a memory the user wants gone or one that is wrong. Returns "
+            "forgotten: false when no memory has that ID.",
             ForgetArguments,
             forget,
             {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True},
